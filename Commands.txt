@@ -1,0 +1,8 @@
+
+Windows:
+
+.\jmSudoku.exe ..\..\..\data\puzzles02_17_clue
+
+Linux:
+
+jmSudoku ./data/puzzles02_17_clue
