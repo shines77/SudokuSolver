@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <string.h>
 #include <memory.h>
 #include <assert.h>
@@ -293,13 +294,11 @@ void test_sudoku_files(const char * filename, const char * name)
 
     printf("Total puzzle count = %u\n\n", (uint32_t)puzzleCount);
     printf("Total elapsed time: %0.3f ms\n\n", total_time);
-    printf("recur_counter: %u\n\n"
-           "num_guesses: %u, num_impossibles: %u, no_guess: %u\n"
-           "guess%% = %0.1f %%, impossible%% = %0.1f %%, no_guess%% = %0.1f %%\n\n",
-           (uint32_t)recur_counter,
-           (uint32_t)num_guesses,
-           (uint32_t)num_impossibles,
-           (uint32_t)num_no_guess,
+    printf("recur_counter: %" PRIuPTR "\n\n"
+           "num_guesses: %" PRIuPTR ", num_impossibles: %" PRIuPTR ", no_guess: %" PRIuPTR "\n"
+           "guess %% = %0.1f %%, impossible %% = %0.1f %%, no_guess %% = %0.1f %%\n\n",
+           recur_counter,
+           num_guesses, num_impossibles, num_no_guess,
            guesses_percent, impossibles_percent, no_guess_percent);
 
     if (puzzleCount != 0) {

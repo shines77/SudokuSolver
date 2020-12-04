@@ -7,6 +7,7 @@
 #endif
 
 #include <stdint.h>
+#include <inttypes.h>
 #include <string.h>
 #include <memory.h>
 #include <assert.h>
@@ -573,14 +574,14 @@ public:
                 solver_.display_answers(board);
             else
                 solver_.display_answer(board);
-            printf("Elapsed time: %0.3f ms, init_counter: %u, recur_counter: %u\n\n"
-                   "num_guesses: %u, num_impossibles: %u, no_guess: %u\n"
-                   "guess%% = %0.1f %%, impossible%% = %0.1f %%, no_guess%% = %0.1f %%\n\n",
-                   elapsed_time, (uint32_t)DancingLinks::get_init_counter(),
-                   (uint32_t)DancingLinks::get_search_counter(),
-                   (uint32_t)DancingLinks::get_num_guesses(),
-                   (uint32_t)DancingLinks::get_num_impossibles(),
-                   (uint32_t)DancingLinks::get_num_no_guess(),
+            printf("Elapsed time: %0.3f ms, init_counter: %" PRIuPTR ", recur_counter: %" PRIuPTR "\n\n"
+                   "num_guesses: %" PRIuPTR ", num_impossibles: %" PRIuPTR ", no_guess: %" PRIuPTR "\n"
+                   "guess %% = %0.1f %%, impossible %% = %0.1f %%, no_guess %% = %0.1f %%\n\n",
+                   elapsed_time, DancingLinks::get_init_counter(),
+                   DancingLinks::get_search_counter(),
+                   DancingLinks::get_num_guesses(),
+                   DancingLinks::get_num_impossibles(),
+                   DancingLinks::get_num_no_guess(),
                    DancingLinks::get_guess_percent(),
                    DancingLinks::get_impossible_percent(),
                    DancingLinks::get_no_guess_percent());
