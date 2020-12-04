@@ -322,11 +322,22 @@ void test_one_case(size_t index)
     printf("--------------------------------\n\n");
 }
 
+double calc_percent(size_t num_val, size_t num_total) {
+    if (num_total != 0)
+        return (num_val * 100.0) / num_total;
+    else
+        return 0.0;
+}
+
 template <typename SudokuSolver>
 void test_sudoku_files(const char * filename, const char * name)
 {
     printf("--------------------------------\n\n");
     printf("jmSudoku: %s::Solver\n\n", name);
+
+    size_t num_guesses = 0;
+    size_t num_no_guess = 0;
+    size_t num_impossibles = 0;
 
     size_t puzzleCount = 0;
     double total_time = 0.0;
@@ -349,6 +360,10 @@ void test_sudoku_files(const char * filename, const char * name)
                     bool success = solver.solve(board, elapsed_time, false);
                     total_time += elapsed_time;
                     if (success) {
+                        num_guesses += typename SudokuSolver::algorithm::num_guesses;
+                        num_no_guess += typename SudokuSolver::algorithm::num_no_guess;
+                        num_impossibles += typename SudokuSolver::algorithm::num_impossibles;
+
                         puzzleCount++;
 #ifndef NDEBUG
                         if (puzzleCount > 1000)
@@ -365,8 +380,28 @@ void test_sudoku_files(const char * filename, const char * name)
         std::cout << "Exception info: " << ex.what() << std::endl << std::endl;
     }
 
+    size_t recur_counter = num_guesses + num_no_guess + num_impossibles;
+    double no_guess_percent = calc_percent(num_no_guess, recur_counter);
+    double impossibles_percent = calc_percent(num_impossibles, recur_counter);
+    double guesses_percent = calc_percent(num_guesses, recur_counter);
+
     printf("Total puzzle count = %u\n\n", (uint32_t)puzzleCount);
     printf("Total elapsed time: %0.3f ms\n\n", total_time);
+    printf("recur_counter: %u\n\n"
+           "num_guesses: %u, num_impossibles: %u, no_guess: %u\n"
+           "guess%% = %0.1f %%, impossible%% = %0.1f %%, no_guess%% = %0.1f %%\n\n",
+           (uint32_t)recur_counter,
+           (uint32_t)num_guesses,
+           (uint32_t)num_impossibles,
+           (uint32_t)num_no_guess,
+           guesses_percent, impossibles_percent, no_guess_percent);
+
+    if (puzzleCount != 0) {
+        printf("%0.1f usec/puzzle, %0.2f guesses/puzzle, %0.1f puzzles/sec\n\n",
+               total_time * 1000.0 / puzzleCount,
+               (double)num_guesses / puzzleCount,
+               puzzleCount / (total_time / 1000.0));
+    }
 }
 
 int main(int argc, char * argv[])

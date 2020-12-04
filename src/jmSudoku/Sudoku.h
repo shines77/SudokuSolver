@@ -18,7 +18,18 @@
 #include <bitset>
 #include <type_traits>
 
+#define SEARCH_MODE_ONE_ANSWER              0
+#define SEARCH_MODE_MORE_THAN_ONE_ANSWER    1
+#define SEARCH_MODE_ALL_ANSWERS             2
+
 namespace jmSudoku {
+
+enum SearchMode {
+    OneAnswer = SEARCH_MODE_ONE_ANSWER,
+    MoreThanOneAnswer = SEARCH_MODE_MORE_THAN_ONE_ANSWER,
+    AllAnswers = SEARCH_MODE_ALL_ANSWERS,
+    SearchModeLast
+};
 
 template <size_t Rows, size_t Cols>
 class SmallBitMatrix {

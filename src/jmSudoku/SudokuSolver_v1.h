@@ -19,16 +19,20 @@
 #include "Sudoku.h"
 #include "StopWatch.h"
 
-#define V1_SEARCH_ALL_ANSWERS  0
+/************************************************
+
+#define SEARCH_MODE_ONE_ANSWER              0
+#define SEARCH_MODE_MORE_THAN_ONE_ANSWER    1
+#define SEARCH_MODE_ALL_ANSWERS             2
+
+************************************************/
+
+#define V1_SEARCH_MODE      SEARCH_MODE_ONE_ANSWER
 
 namespace jmSudoku {
 namespace v1 {
 
-#if V1_SEARCH_ALL_ANSWERS
-static const bool kSearchAllAnswers = true;
-#else
-static const bool kSearchAllAnswers = false;
-#endif
+static const size_t kSearchMode = V1_SEARCH_MODE;
 
 template <size_t Capacity>
 struct FixedDlxNodeList {
@@ -130,6 +134,11 @@ public:
     static const size_t TotalSize = Sudoku::TotalSize;
     static const size_t TotalSize2 = Sudoku::TotalSize2;
 
+    static size_t init_counter;
+    static size_t num_guesses;
+    static size_t num_no_guess;
+    static size_t num_impossibles;
+
 private:    
 #if 0
     DlxNodeList         list_;
@@ -150,9 +159,6 @@ private:
     SmallBitMatrix2<9, 9>  bit_palaces;     // [palace][num]
 
     std::vector<std::vector<int>> answers_;
-
-    static size_t recur_counter;
-    static size_t init_counter;
 
     struct StackInfo {
         int index;
@@ -185,42 +191,49 @@ public:
 
     int cols() const { return (int)Sudoku::TotalConditions; }
 
-    static size_t get_recur_counter() { return DancingLinks::recur_counter; }
     static size_t get_init_counter() { return DancingLinks::init_counter; }
-
-private:
-    size_t get_one_columns(int one_columns[324]) const {
-        size_t count = 0;
-        for (int i = list_.next[0]; i != 0 ; i = list_.next[i]) {
-            if (col_size_[i] == 1) {
-                one_columns[count] = i;
-                count++;
-            }
-        }
-        return count;
+    static size_t get_num_guesses() { return DancingLinks::num_guesses; }
+    static size_t get_num_no_guess() { return DancingLinks::num_no_guess; }
+    static size_t get_num_impossibles() { return DancingLinks::num_impossibles; }
+    static size_t get_search_counter() {
+        return (DancingLinks::num_guesses + DancingLinks::num_no_guess + DancingLinks::num_impossibles);
     }
 
-    int get_min_column() const {
+    static double get_no_guess_percent() {
+        if (DancingLinks::get_search_counter() != 0)
+            return (DancingLinks::num_no_guess * 100.0 / DancingLinks::get_search_counter());
+        else
+            return 0.0;
+    }
+
+private:
+    int get_min_column(int & out_min_col) const {
         int first = list_.next[0];
         int min_col = col_size_[first];
         assert(min_col >= 0);
-        if (min_col <= 1)
+        if (min_col <= 1) {
+            out_min_col = min_col;
             return first;
+        }
         int min_col_index = first;
         for (int i = list_.next[first]; i != 0 ; i = list_.next[i]) {
             int col_size = col_size_[i];
             if (col_size < min_col) {
                 assert(col_size >= 0);
                 if (col_size <= 1) {
-                    if (col_size == 0)
+                    if (col_size == 0) {
                         return 0;
-                    else
+                    }
+                    else {
+                        out_min_col = 1;
                         return i;
+                    }
                 }
                 min_col = col_size;
                 min_col_index = i;
             }
         }
+        out_min_col = min_col;
         return min_col_index;
     }
 
@@ -265,11 +278,13 @@ public:
 
         this->answers_.clear();
         this->answer_.reserve(81);
-#if V1_SEARCH_ALL_ANSWERS
+#if (V1_SEARCH_MODE >= SEARCH_MODE_ONE_ANSWER)
         this->answers_.clear();
 #endif
-        recur_counter = 0;
         init_counter = 0;
+        num_guesses = 0;
+        num_no_guess = 0;
+        num_impossibles = 0;
     }
 
     void build(const std::vector<std::vector<char>> & board) {
@@ -410,20 +425,25 @@ public:
 
     bool search() {
         if (this->is_empty()) {
-            if (kSearchAllAnswers) {
+            if (kSearchMode > SearchMode::OneAnswer) {
                 this->answers_.push_back(this->answer_);
-                if (this->answers_.size() > 1)
+                if (kSearchMode == SearchMode::MoreThanOneAnswer) {
+                    if (this->answers_.size() > 1)
                     return true;
+                }
             }
             else {
                 return true;
             }
         }
-
-        recur_counter++;
         
-        int index = get_min_column();
+        int min_col;
+        int index = get_min_column(min_col);
         if (index > 0) {
+            if (min_col == 1)
+                num_no_guess++;
+            else
+                num_guesses++;
             this->remove(index);
             for (int row = list_.down[index]; row != index; row = list_.down[row]) {
                 this->answer_.push_back(list_.row[row]);
@@ -432,10 +452,10 @@ public:
                 }
 
                 if (this->search()) {
-                    if (!kSearchAllAnswers) {
+                    if (kSearchMode == SearchMode::OneAnswer) {
                         return true;
                     }
-                    else {
+                    else if (kSearchMode == SearchMode::MoreThanOneAnswer) {
                         if (this->answers_.size() > 1)
                             return true;
                     }
@@ -448,17 +468,18 @@ public:
             }
             this->restore(index);
         }
+        else {
+            num_impossibles++;
+        }
 
         return false;
     }
 
     bool solve() {
-        int one_columns[324];
-        size_t columns = get_one_columns(one_columns);
-
-SOLVE_RETRY:
+RETRY_LOCKED_CANDIDATES:
         for (int index = list_.next[0]; index != 0 ; index = list_.next[index]) {
-            if (col_size_[index] == 1) {
+            size_t col_size = col_size_[index];
+            if (col_size == 1) {
                 assert(index > 0);
 
                 this->remove(index);
@@ -470,7 +491,10 @@ SOLVE_RETRY:
                 }
 
                 init_counter++;
-                goto SOLVE_RETRY;
+                goto RETRY_LOCKED_CANDIDATES;
+            }
+            else if (col_size == 0) {
+                return false;
             }
         }
 
@@ -505,10 +529,15 @@ SOLVE_RETRY:
     }
 };
 
-size_t DancingLinks::recur_counter = 0;
 size_t DancingLinks::init_counter = 0;
+size_t DancingLinks::num_guesses = 0;
+size_t DancingLinks::num_no_guess = 0;
+size_t DancingLinks::num_impossibles = 0;
 
 class Solver {
+public:
+    typedef DancingLinks algorithm;
+
 private:
     DancingLinks solver_;
 
@@ -536,13 +565,19 @@ public:
         elapsed_time = sw.getElapsedMillisec();
 
         if (verbose) {
-            if (kSearchAllAnswers)
+            if (kSearchMode > SearchMode::OneAnswer)
                 solver_.display_answers(board);
             else
                 solver_.display_answer(board);
-            printf("Elapsed time: %0.3f ms, init_counter: %u, recur_counter: %u\n\n",
+            printf("Elapsed time: %0.3f ms, init_counter: %u, recur_counter: %u\n"
+                   "no_guess: %u, num_impossibles: %u, num_guesses: %u\n"
+                   "no_guess%% = %0.1f %%\n\n",
                    elapsed_time, (uint32_t)DancingLinks::get_init_counter(),
-                   (uint32_t)DancingLinks::get_recur_counter());
+                   (uint32_t)DancingLinks::get_search_counter(),
+                   (uint32_t)DancingLinks::get_num_no_guess(),
+                   (uint32_t)DancingLinks::get_num_impossibles(),
+                   (uint32_t)DancingLinks::get_num_guesses(),
+                   DancingLinks::get_no_guess_percent());
         }
 
         return success;
