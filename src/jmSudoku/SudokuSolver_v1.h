@@ -282,7 +282,7 @@ public:
         this->bit_cols.reset();
         this->bit_palaces.reset();
 
-        this->answers_.clear();
+        this->answer_.clear();
         this->answer_.reserve(81);
 #if (V1_SEARCH_MODE >= SEARCH_MODE_ONE_ANSWER)
         this->answers_.clear();
