@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstddef>
+#include <memory>
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -235,6 +236,8 @@ void test_one_case(size_t index)
 template <typename SudokuSolver>
 void test_sudoku_files(const char * filename, const char * name)
 {
+    typedef typename SudokuSolver::algorithm algorithm;
+
     printf("--------------------------------\n\n");
     printf("jmSudoku: %s::Solver\n\n", name);
 
@@ -263,13 +266,13 @@ void test_sudoku_files(const char * filename, const char * name)
                     bool success = solver.solve(board, elapsed_time, false);
                     total_time += elapsed_time;
                     if (success) {
-                        num_guesses += typename SudokuSolver::algorithm::num_guesses;
-                        num_no_guess += typename SudokuSolver::algorithm::num_no_guess;
-                        num_impossibles += typename SudokuSolver::algorithm::num_impossibles;
+                        num_guesses += algorithm::num_guesses;
+                        num_no_guess += algorithm::num_no_guess;
+                        num_impossibles += algorithm::num_impossibles;
 
                         puzzleCount++;
 #ifndef NDEBUG
-                        if (puzzleCount > 1000)
+                        if (puzzleCount > 100)
                             break;
 #endif
                     }
