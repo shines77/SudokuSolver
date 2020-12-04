@@ -158,6 +158,7 @@
     <ClInclude Include="..\..\..\src\jmSudoku\StopWatch.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\Sudoku.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v1.h" />
+    <ClInclude Include="..\..\..\src\jmSudoku\TestCase.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\jmSudoku\jmSudokuMain.cpp" />

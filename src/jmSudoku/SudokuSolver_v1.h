@@ -293,12 +293,12 @@ public:
         num_impossibles = 0;
     }
 
-    void build(const std::vector<std::vector<char>> & board) {
+    void build(char board[Sudoku::BoardSize]) {
         size_t empties = 0;
-        for (size_t row = 0; row < board.size(); row++) {
-            const std::vector<char> & line = board[row];
-            for (size_t col = 0; col < line.size(); col++) {
-                char val = line[col];
+        size_t pos = 0;
+        for (size_t row = 0; row < Rows; row++) {
+            for (size_t col = 0; col < Cols; col++) {
+                char val = board[pos++];
                 if (val == '.') {
                     empties++;
                 }
@@ -317,13 +317,11 @@ public:
 
         int row_idx = 1;
 
-        assert(Rows == board.size());
-        for (size_t row = 0; row < board.size(); row++) {
-            const std::vector<char> & line = board[row];
-            assert(Cols == line.size());
-            for (size_t col = 0; col < line.size(); col++) {
+        pos = 0;
+        for (size_t row = 0; row < Rows; row++) {
+            for (size_t col = 0; col < Cols; col++) {
                 size_t palace = row / 3 * 3 + col / 3;
-                char val = line[col];
+                char val = board[pos++];
                 if (val == '.') {
                     std::bitset<9> numsUsable = getUsable(row, col, palace);
                     for (size_t number = 0; number <= (Numbers - 1); number++) {
@@ -507,17 +505,17 @@ RETRY_LOCKED_CANDIDATES:
         return this->search();
     }
 
-    void display_answer(std::vector<std::vector<char>> & board) {
+    void display_answer(char board[Sudoku::BoardSize]) {
         for (auto idx : this->answer_) {
             if (idx > 0) {
-                board[this->rows_[idx]][this->cols_[idx]] = (char)this->numbers_[idx] + '1';
+                board[this->rows_[idx] * Rows + this->cols_[idx]] = (char)this->numbers_[idx] + '1';
             }
         }
 
         Sudoku::display_board(board);
     }
 
-    void display_answers(std::vector<std::vector<char>> & board) {
+    void display_answers(char board[Sudoku::BoardSize]) {
         printf("Total answers: %d\n\n", (int)this->answers_.size());
 #if 0
         int i = 0;
@@ -525,7 +523,7 @@ RETRY_LOCKED_CANDIDATES:
             Sudoku::clear_board(board);
             for (auto idx : answer) {
                 if (idx > 0) {
-                    board[this->rows_[idx]][this->cols_[idx]] = (char)this->numbers_[idx] + '1';
+                    board[this->rows_[idx] * Rows + this->cols_[idx]] = (char)this->numbers_[idx] + '1';
                 }
             }
             Sudoku::display_board(board, false, i);
@@ -553,7 +551,7 @@ public:
     ~Solver() {}
 
 public:
-    bool solve(std::vector<std::vector<char>> & board,
+    bool solve(char board[Sudoku::BoardSize],
                double & elapsed_time,
                bool verbose = true) {
         if (verbose) {
