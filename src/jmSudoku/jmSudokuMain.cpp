@@ -10,9 +10,9 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstddef>
-#include <memory>
 #include <iostream>
 #include <fstream>
+#include <cstring>      // For std::memset()
 #include <vector>
 #include <bitset>
 
