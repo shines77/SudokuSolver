@@ -31,6 +31,13 @@ enum SearchMode {
     SearchModeLast
 };
 
+double calc_percent(size_t num_val, size_t num_total) {
+    if (num_total != 0)
+        return (num_val * 100.0) / num_total;
+    else
+        return 0.0;
+}
+
 template <size_t Rows, size_t Cols>
 class SmallBitMatrix {
 private:

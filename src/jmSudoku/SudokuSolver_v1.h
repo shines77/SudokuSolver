@@ -195,15 +195,21 @@ public:
     static size_t get_num_guesses() { return DancingLinks::num_guesses; }
     static size_t get_num_no_guess() { return DancingLinks::num_no_guess; }
     static size_t get_num_impossibles() { return DancingLinks::num_impossibles; }
+
     static size_t get_search_counter() {
         return (DancingLinks::num_guesses + DancingLinks::num_no_guess + DancingLinks::num_impossibles);
     }
 
+    static double get_guess_percent() {
+        return calc_percent(DancingLinks::num_guesses, DancingLinks::get_search_counter());
+    }
+
+    static double get_impossible_percent() {
+        return calc_percent(DancingLinks::num_impossibles, DancingLinks::get_search_counter());
+    }
+
     static double get_no_guess_percent() {
-        if (DancingLinks::get_search_counter() != 0)
-            return (DancingLinks::num_no_guess * 100.0 / DancingLinks::get_search_counter());
-        else
-            return 0.0;
+        return calc_percent(DancingLinks::num_no_guess, DancingLinks::get_search_counter());
     }
 
 private:
@@ -569,14 +575,16 @@ public:
                 solver_.display_answers(board);
             else
                 solver_.display_answer(board);
-            printf("Elapsed time: %0.3f ms, init_counter: %u, recur_counter: %u\n"
-                   "no_guess: %u, num_impossibles: %u, num_guesses: %u\n"
-                   "no_guess%% = %0.1f %%\n\n",
+            printf("Elapsed time: %0.3f ms, init_counter: %u, recur_counter: %u\n\n"
+                   "num_guesses: %u, num_impossibles: %u, no_guess: %u\n"
+                   "guess%% = %0.1f %%, impossible%% = %0.1f %%, no_guess%% = %0.1f %%\n\n",
                    elapsed_time, (uint32_t)DancingLinks::get_init_counter(),
                    (uint32_t)DancingLinks::get_search_counter(),
-                   (uint32_t)DancingLinks::get_num_no_guess(),
-                   (uint32_t)DancingLinks::get_num_impossibles(),
                    (uint32_t)DancingLinks::get_num_guesses(),
+                   (uint32_t)DancingLinks::get_num_impossibles(),
+                   (uint32_t)DancingLinks::get_num_no_guess(),
+                   DancingLinks::get_guess_percent(),
+                   DancingLinks::get_impossible_percent(),
                    DancingLinks::get_no_guess_percent());
         }
 

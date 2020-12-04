@@ -322,13 +322,6 @@ void test_one_case(size_t index)
     printf("--------------------------------\n\n");
 }
 
-double calc_percent(size_t num_val, size_t num_total) {
-    if (num_total != 0)
-        return (num_val * 100.0) / num_total;
-    else
-        return 0.0;
-}
-
 template <typename SudokuSolver>
 void test_sudoku_files(const char * filename, const char * name)
 {
