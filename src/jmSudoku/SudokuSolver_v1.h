@@ -228,8 +228,8 @@ private:
     }
 
     std::bitset<9> getUsable(size_t row, size_t col) {
-        // size_t palace = row / 3 * 3 + col / 3;
-        size_t palace = tables.roundTo3[row] + tables.div3[col];
+        size_t palace = row / 3 * 3 + col / 3;
+        // size_t palace = tables.roundTo3[row] + tables.div3[col];
         return ~(this->bit_rows[row] | this->bit_cols[col] | this->bit_palaces[palace]);
     }
 
@@ -238,8 +238,8 @@ private:
     }
 
     void fillNum(size_t row, size_t col, size_t num) {
-        // size_t palace = row / 3 * 3 + col / 3;
-        size_t palace = tables.roundTo3[row] + tables.div3[col];
+        size_t palace = row / 3 * 3 + col / 3;
+        // size_t palace = tables.roundTo3[row] + tables.div3[col];
         this->bit_rows[row].set(num);
         this->bit_cols[col].set(num);
         this->bit_palaces[palace].set(num);
@@ -251,6 +251,7 @@ public:
 
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
+            size_t palace_base = row / 3 * 3;
             for (size_t col = 0; col < Cols; col++) {
                 unsigned char val = board[pos];
                 if (val != '.') {
@@ -258,8 +259,9 @@ public:
                     this->col_index_[0      + pos           + 1] = 0xFFFF;
                     this->col_index_[81 * 1 + row * 9 + num + 1] = 0xFFFF;
                     this->col_index_[81 * 2 + col * 9 + num + 1] = 0xFFFF;
-                    size_t palace_x_9 = tables.palace_x_9[pos];
-                    this->col_index_[81 * 3 + palace_x_9 + num + 1] = 0xFFFF;
+                    size_t palace = palace_base + col / 3;
+                    // size_t palace_x_9 = tables.palace_x_9[pos];
+                    this->col_index_[81 * 3 + palace * 9 + num + 1] = 0xFFFF;
                 }
                 pos++;
             }
@@ -289,7 +291,7 @@ public:
         list_.next[cols] = 0;
 
         last_idx_ = cols + 1;
-        for (size_t i = 0; i <= cols; i++) {
+        for (int i = 0; i <= cols; i++) {
             col_size_[i] = 0;
         }
 
@@ -334,12 +336,13 @@ public:
 
         pos = 0;
         for (size_t row = 0; row < Rows; row++) {
+            size_t palace_base = row / 3 * 3;
             for (size_t col = 0; col < Cols; col++) {
-                // size_t palace = row / 3 * 3 + col / 3;
                 unsigned char val = board[pos];
                 if (val == '.') {
-                    size_t palace = tables.palace[pos];
-                    size_t palace_x_9 = tables.palace_x_9[pos];
+                    size_t palace = palace_base + col / 3;
+                    // size_t palace = tables.palace[pos];
+                    // size_t palace_x_9 = tables.palace_x_9[pos];
                     std::bitset<9> numsUsable = getUsable(row, col, palace);
                     for (size_t number = 0; number < Numbers; number++) {
                         if (numsUsable.test(number)) {
@@ -349,7 +352,7 @@ public:
                             this->insert(index + 0, row_idx, (int)(0      + pos              + 1));
                             this->insert(index + 1, row_idx, (int)(81 * 1 + row * 9 + number + 1));
                             this->insert(index + 2, row_idx, (int)(81 * 2 + col * 9 + number + 1));
-                            this->insert(index + 3, row_idx, (int)(81 * 3 + palace_x_9 + number + 1));
+                            this->insert(index + 3, row_idx, (int)(81 * 3 + palace * 9 + number + 1));
 
                             this->rows_[row_idx] = (unsigned short)row;
                             this->cols_[row_idx] = (unsigned short)col;
