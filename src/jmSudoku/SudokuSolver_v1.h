@@ -251,7 +251,7 @@ public:
 
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
-            size_t palace_base = row / 3 * 3;
+            size_t palace_row = row / 3 * 3;
             for (size_t col = 0; col < Cols; col++) {
                 unsigned char val = board[pos];
                 if (val != '.') {
@@ -259,7 +259,7 @@ public:
                     this->col_index_[0      + pos           + 1] = 0xFFFF;
                     this->col_index_[81 * 1 + row * 9 + num + 1] = 0xFFFF;
                     this->col_index_[81 * 2 + col * 9 + num + 1] = 0xFFFF;
-                    size_t palace = palace_base + col / 3;
+                    size_t palace = palace_row + col / 3;
                     // size_t palace_x_9 = tables.palace_x_9[pos];
                     this->col_index_[81 * 3 + palace * 9 + num + 1] = 0xFFFF;
                 }
@@ -336,11 +336,11 @@ public:
 
         pos = 0;
         for (size_t row = 0; row < Rows; row++) {
-            size_t palace_base = row / 3 * 3;
+            size_t palace_row = row / 3 * 3;
             for (size_t col = 0; col < Cols; col++) {
                 unsigned char val = board[pos];
                 if (val == '.') {
-                    size_t palace = palace_base + col / 3;
+                    size_t palace = palace_row + col / 3;
                     // size_t palace = tables.palace[pos];
                     // size_t palace_x_9 = tables.palace_x_9[pos];
                     std::bitset<9> numsUsable = getUsable(row, col, palace);
@@ -423,10 +423,9 @@ public:
         list_.prev[next] = prev;
 
         for (int row = list_.down[index]; row != index; row = list_.down[row]) {
-            int up, down;
             for (int col = list_.next[row]; col != row; col = list_.next[col]) {
-                up = list_.up[col];
-                down = list_.down[col];
+                int up = list_.up[col];
+                int down = list_.down[col];
                 list_.down[up] = down;
                 list_.up[down] = up;
                 assert(col_size_[list_.col[col]] > 0);

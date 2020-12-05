@@ -474,9 +474,13 @@ struct Tables {
         54, 54, 54, 57, 57, 57, 60, 60, 60,
         54, 54, 54, 57, 57, 57, 60, 60, 60
     };
+
+    Tables() noexcept {
+        //
+    }
 };
 
-const Tables tables;
+static const Tables tables {};
 
 template <size_t TotalSize>
 struct SudokuBoard {
@@ -544,8 +548,10 @@ struct BasicSudoku {
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
             for (size_t col = 0; col < Cols; col++) {
-                if (board[pos] != '.')
+                char val = board[pos++];
+                if ((val != '.') && (val != ' ') && (val != '0') && (val != '-')) {
                     filled++;
+                }
             }
         }
 
@@ -597,8 +603,10 @@ struct BasicSudoku {
         for (size_t row = 0; row < board.size(); row++) {
             const std::vector<char> & line = board[row];
             for (size_t col = 0; col < line.size(); col++) {
-                if (line[col] != '.')
+                char val = line[col];
+                if ((val != '.') && (val != ' ') && (val != '0') && (val != '-')) {
                     filled++;
+                }
             }
         }
 

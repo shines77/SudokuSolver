@@ -104,34 +104,26 @@ size_t read_sudoku_board(char board[Sudoku::BoardSize], char line[256])
     if ((*pline == '#') || ((*pline == '/') && (pline[1] = '/'))) {
         return 0;
     }
-    size_t grid_nums = 0;
-    for (size_t row = 0; row < Sudoku::Rows; row++) {
-        size_t row_base = row * 9;
-        size_t col_valid = 0;
-        for (size_t col = 0; col < Sudoku::Cols; col++) {
-            char val = *pline;
-            if (val >= '0' && val <= '9') {
-                if (val != '0')
-                    board[row_base + col_valid] = val;
-                else
-                    board[row_base + col_valid] = '.';
-                col_valid++;
-                assert(col <= Sudoku::Cols);
-            }
-            else if (val == '.') {
-                board[row_base + col_valid] = '.';
-                col_valid++;
-                assert(col <= Sudoku::Cols);
-            }
-            else if (val == '\0') {
-                break;
-            }
-            pline++;  
+
+    size_t pos = 0;
+    char val;
+    while ((val = *pline++) != '\0') {
+        if (val >= '0' && val <= '9') {
+            if (val != '0')
+                board[pos] = val;
+            else
+                board[pos] = '.';
+            pos++;
+            assert(pos <= Sudoku::BoardSize);
         }
-        assert(col_valid == Sudoku::Cols || col_valid == 0);
-        grid_nums += col_valid;
+        else if ((val == '.') || (val == ' ') || (val == '-')) {
+            board[pos] = '.';
+            pos++;
+            assert(pos <= Sudoku::BoardSize);
+        }
     }
-    return grid_nums;
+    assert(pos <= Sudoku::BoardSize);
+    return pos;
 }
 
 size_t read_sudoku_board(std::vector<std::vector<char>> & board, char line[256])
@@ -176,7 +168,7 @@ size_t read_sudoku_board(std::vector<std::vector<char>> & board, char line[256])
     return grid_nums;
 }
 
-void test_one_case(size_t index)
+void run_a_testcase(size_t index)
 {
     double elapsed_time = 0.0;
     if (kEnableV1Solution)
@@ -235,7 +227,7 @@ void test_one_case(size_t index)
 }
 
 template <typename SudokuSolver>
-void test_sudoku_files(const char * filename, const char * name)
+void run_sudoku_test(const char * filename, const char * name)
 {
     typedef typename SudokuSolver::algorithm algorithm;
 
@@ -254,14 +246,14 @@ void test_sudoku_files(const char * filename, const char * name)
         ifs.open(filename, std::ios::in);
         if (ifs.good()) {
             while (!ifs.eof()) {
-                char line[128];
+                char line[256];
                 std::memset(line, 0, 16);
                 ifs.getline(line, sizeof(line) - 1);
 
                 char board[Sudoku::BoardSize];
-                size_t grid_nums = read_sudoku_board(board, line);
+                size_t num_grids = read_sudoku_board(board, line);
                 // Sudoku::BoardSize = 81
-                if (grid_nums >= Sudoku::BoardSize) {
+                if (num_grids >= Sudoku::BoardSize) {
                     SudokuSolver solver;
                     double elapsed_time;
                     bool success = solver.solve(board, elapsed_time, false);
@@ -278,7 +270,6 @@ void test_sudoku_files(const char * filename, const char * name)
 #endif
                     }
                 }
-                else break;
             }
             ifs.close();
         }
@@ -326,14 +317,14 @@ int main(int argc, char * argv[])
     if (1)
     {
         if (filename == nullptr) {
-            test_one_case(TEST_CASE_INDEX);
+            run_a_testcase(TEST_CASE_INDEX);
         }
     }
 
     if (1)
     {
         if (filename != nullptr) {
-            test_sudoku_files<v1::Solver>(filename, "v1");
+            run_sudoku_test<v1::Solver>(filename, "v1");
         }
     }
 
