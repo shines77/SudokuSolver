@@ -201,6 +201,8 @@ public:
 private:
     int get_min_column(int & out_min_col) const {
         int first = list_.next[0];
+        if (first == 0)
+            return -1;
         int min_col = col_size_[first];
         assert(min_col >= 0);
         if (min_col <= 1) {

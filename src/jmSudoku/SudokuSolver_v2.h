@@ -326,6 +326,8 @@ public:
 private:
     int get_min_column(int & out_min_col) const {
         int first = list_.next[0];
+        if (first == 0)
+            return -1;
         int min_col = col_size_[first];
         assert(min_col >= 0);
         if (min_col <= 1) {
@@ -356,14 +358,20 @@ private:
 
     int get_min_column_more_than_2(int & out_min_col) const {
         int first = list_.next[0];
+        if (first == 0)
+            return -1;
         int min_col = col_size_[first];
-        int min_col_index = first;
         assert(min_col >= 0);
+        if (min_col <= 3) {
+            out_min_col = min_col;
+            return first;
+        }
+        int min_col_index = first;
         for (int i = list_.next[first]; i != 0; i = list_.next[i]) {
             int col_size = col_size_[i];
             if (col_size < min_col) {
                 assert(col_size > 2);
-                if (col_size == 3) {
+                if (col_size <= 3) {
                     out_min_col = col_size;
                     return i;
                 }
