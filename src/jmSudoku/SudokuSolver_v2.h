@@ -178,26 +178,12 @@ public:
 
     int get_min_column(int & min_col_size) const {
         for (size_t i = 0; i < MaxColumn; i++) {
-#if 1
             for (short col = this->list_[i].next; col != (short)i; col = this->list_[col].next) {
                 if (this->list_[col].enabled == 1) {
                     min_col_size = (int)i;
                     return (col - MaxColumn);
                 }
             }
-#else
-            short col = this->list_[i].next;
-            do {
-                if (col != (short)i) {
-                    if (this->list_[col].enabled == 1) {
-                        min_col_size = (int)i;
-                        return (col - MaxColumn);
-                    }
-                }
-                else break;
-                col = this->list_[col].next;
-            } while (1);
-#endif
         }
         return -1;
     }
@@ -205,8 +191,7 @@ public:
     void push_front(short col_size, short col_index) {
         assert(col_size < MaxColumn);
         short col = (short)MaxColumn + col_index;
-        if (this->list_[col_size].next != col_size &&
-            this->list_[col_size].prev != col_size) {
+        if (this->list_[col_size].next != col_size) {
             short next = this->list_[col_size].next;
             this->list_[next].prev = col;
             this->list_[col_size].next = col;
@@ -228,8 +213,7 @@ public:
     void push_back(short col_size, short col_index) {
         assert(col_size < MaxColumn);
         short col = (short)MaxColumn + col_index;
-        if (this->list_[col_size].next != col_size &&
-            this->list_[col_size].prev != col_size) {
+        if (this->list_[col_size].next != col_size) {
             short prev = this->list_[col_size].prev;
             this->list_[prev].next = col;
             this->list_[col_size].prev = col;
@@ -662,11 +646,9 @@ public:
         }
         
         int min_col;
-        //int index = get_min_column(min_col);
         int index = mincol_list_.get_min_column(min_col);
         if (index == -1) {
             index = get_min_column_more_than_2(min_col);
-            //index = get_min_column(min_col);
         }
         if (index > 0) {
             if (min_col == 1)
