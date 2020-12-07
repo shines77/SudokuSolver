@@ -1,6 +1,6 @@
 
-#ifndef JM_SUDOKU_SOLVER_V1_H
-#define JM_SUDOKU_SOLVER_V1_H
+#ifndef JM_SUDOKU_SOLVER_V2_H
+#define JM_SUDOKU_SOLVER_V2_H
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1020)
 #pragma once
@@ -29,12 +29,12 @@
 
 ************************************************/
 
-#define V1_SEARCH_MODE      SEARCH_MODE_ONE_ANSWER
+#define V2_SEARCH_MODE      SEARCH_MODE_ONE_ANSWER
 
 namespace jmSudoku {
-namespace v1 {
+namespace v2 {
 
-static const size_t kSearchMode = V1_SEARCH_MODE;
+static const size_t kSearchMode = V2_SEARCH_MODE;
 
 template <size_t Capacity>
 struct FixedDlxNodeList {
@@ -126,6 +126,145 @@ private:
     }
 };
 
+template <size_t MaxColumn, size_t Capacity>
+class mincol_list {
+public:
+    static const size_t kCapacity = MaxColumn + Capacity;
+
+    struct node {
+        short prev;
+        short next;
+        short enabled;
+        short reserve;
+    };
+
+private:
+    node list_[kCapacity];
+
+    void init() {
+        for (size_t i = 0; i < MaxColumn; i++) {
+            this->list_[i].prev = (short)i;
+            this->list_[i].next = (short)i;
+            this->list_[i].enabled = 0;
+            this->list_[i].reserve = 0;
+        }
+    }
+
+public:
+    mincol_list() {
+        this->init();
+    }
+    ~mincol_list() {}
+
+    short begin(size_t col_size) const {
+        assert(col_size < MaxColumn);
+        return this->list_[col_size].next;
+    }
+
+    bool is_enabled(short col_index) const {
+        short col = (short)MaxColumn + col_index;
+        return (this->list_[col].enabled != 0);
+    }
+
+    void enable(short col_index) {
+        short col = (short)MaxColumn + col_index;
+        this->list_[col].enabled = 1;
+    }
+
+    void disable(short col_index) {
+        short col = (short)MaxColumn + col_index;
+        this->list_[col].enabled = 0;
+    }
+
+    int get_min_column(int & min_col_size) const {
+        for (size_t i = 0; i < MaxColumn; i++) {
+#if 1
+            for (short col = this->list_[i].next; col != (short)i; col = this->list_[col].next) {
+                if (this->list_[col].enabled == 1) {
+                    min_col_size = (int)i;
+                    return (col - MaxColumn);
+                }
+            }
+#else
+            short col = this->list_[i].next;
+            do {
+                if (col != (short)i) {
+                    if (this->list_[col].enabled == 1) {
+                        min_col_size = (int)i;
+                        return (col - MaxColumn);
+                    }
+                }
+                else break;
+                col = this->list_[col].next;
+            } while (1);
+#endif
+        }
+        return -1;
+    }
+
+    void push_front(short col_size, short col_index) {
+        assert(col_size < MaxColumn);
+        short col = (short)MaxColumn + col_index;
+        if (this->list_[col_size].next != col_size &&
+            this->list_[col_size].prev != col_size) {
+            short next = this->list_[col_size].next;
+            this->list_[next].prev = col;
+            this->list_[col_size].next = col;
+
+            this->list_[col].prev = col_size;
+            this->list_[col].next = next;
+            this->list_[col].enabled = 1;
+        }
+        else {
+            this->list_[col_size].next = col;
+            this->list_[col_size].prev = col;
+            
+            this->list_[col].prev = col_size;
+            this->list_[col].next = col_size;
+            this->list_[col].enabled = 1;
+        }
+    }
+
+    void push_back(short col_size, short col_index) {
+        assert(col_size < MaxColumn);
+        short col = (short)MaxColumn + col_index;
+        if (this->list_[col_size].next != col_size &&
+            this->list_[col_size].prev != col_size) {
+            short prev = this->list_[col_size].prev;
+            this->list_[prev].next = col;
+            this->list_[col_size].prev = col;
+
+            this->list_[col].prev = prev;
+            this->list_[col].next = col_size;
+            this->list_[col].enabled = 1;
+        }
+        else {
+            this->list_[col_size].next = col;
+            this->list_[col_size].prev = col;
+            
+            this->list_[col].prev = col_size;
+            this->list_[col].next = col_size;
+            this->list_[col].enabled = 1;
+        }
+    }
+
+    void remove(short col_index) {
+        short col = (short)MaxColumn + col_index;
+        short prev = this->list_[col].prev;
+        short next = this->list_[col].next;
+        this->list_[prev].next = next;
+        this->list_[next].prev = prev;
+    }
+
+    void restore(short col_index) {
+        short col = (short)MaxColumn + col_index;
+        short prev = this->list_[col].prev;
+        short next = this->list_[col].next;
+        this->list_[next].prev = col;
+        this->list_[prev].next = col;
+    }
+};
+
 class DancingLinks {
 public:
     static const size_t Rows = Sudoku::Rows;
@@ -154,6 +293,8 @@ private:
     SmallBitMatrix2<9, 9>  bit_palaces;     // [palace][num]
 
     short               col_size_[Sudoku::TotalConditions + 1];
+
+    mincol_list<3, Sudoku::TotalConditions + 1>    mincol_list_;
 
     std::vector<int>    answer_;
     int                 last_idx_;
@@ -229,6 +370,37 @@ private:
         return min_col_index;
     }
 
+    int get_min_column_more_than_2(int & out_min_col) const {
+        int first = list_.next[0];
+        int min_col = col_size_[first];
+        int min_col_index = first;
+        assert(min_col >= 0);
+        for (int i = list_.next[first]; i != 0; i = list_.next[i]) {
+            int col_size = col_size_[i];
+            if (col_size < min_col) {
+                assert(col_size > 2);
+                if (col_size == 3) {
+                    out_min_col = col_size;
+                    return i;
+                }
+                min_col = col_size;
+                min_col_index = i;
+            }
+        }
+        out_min_col = min_col;
+        return min_col_index;
+    }
+
+    void traversal_columns_size() {
+        for (short col = list_.prev[0]; col != 0; col = list_.prev[col]) {
+            short col_size = col_size_[col];
+            assert(col_size >= 0);
+            if (col_size <= 2) {
+                mincol_list_.push_front(col_size, col);
+            }
+        }
+    }
+
     std::bitset<9> getUsable(size_t row, size_t col) {
         size_t palace = row / 3 * 3 + col / 3;
         // size_t palace = tables.roundTo3[row] + tables.div3[col];
@@ -301,7 +473,7 @@ public:
 
         this->answer_.clear();
         this->answer_.reserve(81);
-#if (V1_SEARCH_MODE >= SEARCH_MODE_ONE_ANSWER)
+#if (V2_SEARCH_MODE >= SEARCH_MODE_ONE_ANSWER)
         this->answers_.clear();
 #endif
         init_counter = 0;
@@ -422,6 +594,8 @@ public:
         list_.next[prev] = next;
         list_.prev[next] = prev;
 
+        mincol_list_.disable(index);
+
         for (int row = list_.down[index]; row != index; row = list_.down[row]) {
             for (int col = list_.next[row]; col != row; col = list_.next[col]) {
                 int up = list_.up[col];
@@ -430,6 +604,15 @@ public:
                 list_.up[down] = up;
                 assert(col_size_[list_.col[col]] > 0);
                 col_size_[list_.col[col]]--;
+                int col_size = col_size_[list_.col[col]];
+                if (col_size <= 2) {
+                    // if (col_size == 2), only insert
+                    short col_index = list_.col[col];
+                    if (col_size < 2) {
+                        mincol_list_.remove(col_index);
+                    }
+                    mincol_list_.push_front(col_size, col_index);
+                }
             }
         }
     }
@@ -444,8 +627,19 @@ public:
                 list_.up[down] = col;
                 list_.down[up] = col;
                 col_size_[list_.col[col]]++;
+                int col_size = col_size_[list_.col[col]];
+                if (col_size <= 3) {
+                    // if (col_size == 3), only remove
+                    short col_index = list_.col[col];
+                    mincol_list_.remove(col_index);
+                    if (col_size < 3) {
+                        mincol_list_.push_front(col_size, col_index);
+                    }
+                }
             }
         }
+
+        mincol_list_.enable(index);
 
         int next = list_.next[index];
         int prev = list_.prev[index];
@@ -468,7 +662,12 @@ public:
         }
         
         int min_col;
-        int index = get_min_column(min_col);
+        //int index = get_min_column(min_col);
+        int index = mincol_list_.get_min_column(min_col);
+        if (index == -1) {
+            index = get_min_column_more_than_2(min_col);
+            //index = get_min_column(min_col);
+        }
         if (index > 0) {
             if (min_col == 1)
                 num_no_guess++;
@@ -529,6 +728,7 @@ RETRY_UNIQUE_CANDIDATE:
             }
         }
 #endif
+        traversal_columns_size();
         return this->search();
     }
 
@@ -617,7 +817,7 @@ public:
     }
 };
 
-} // namespace v1
+} // namespace v2
 } // namespace jmSudoku
 
-#endif // JM_SUDOKU_SOLVER_V1_H
+#endif // JM_SUDOKU_SOLVER_V2_H

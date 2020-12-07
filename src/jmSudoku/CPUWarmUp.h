@@ -32,6 +32,7 @@ void warmup(int delayMillsecs)
     double delayTimeLimit = (double)delayMillsecs / 1.0;
     volatile int sum = 0;
 
+    printf("------------------------------------------\n\n");
     printf("CPU warm-up begin ...\n");
     ::fflush(stdout);
     std::chrono::high_resolution_clock::time_point startTime, endTime;
@@ -50,6 +51,7 @@ void warmup(int delayMillsecs)
 
     printf("sum = %d, time: %0.3f ms\n", sum, elapsedTime.count());
     printf("CPU warm-up end   ... \n\n");
+    printf("------------------------------------------\n\n");
     ::fflush(stdout);
 #endif // !_DEBUG
 }

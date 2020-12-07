@@ -21,7 +21,7 @@
 #include "TestCase.h"
 
 #include "SudokuSolver_v1.h"
-//#include "SudokuSolver_v2.h"
+#include "SudokuSolver_v2.h"
 //#include "SudokuSolver_v3.h"
 //#include "SudokuSolver_v4.h"
 
@@ -173,7 +173,7 @@ void run_a_testcase(size_t index)
     double elapsed_time = 0.0;
     if (kEnableV1Solution)
     {
-        printf("--------------------------------\n\n");
+        printf("------------------------------------------\n\n");
         printf("jmSudoku: v1::Solver - Dancing Links\n\n");
 
         char board[Sudoku::BoardSize];
@@ -183,23 +183,23 @@ void run_a_testcase(size_t index)
         bool success = solver.solve(board, elapsed_time);
     }
 
-#if 0
-#ifdef NDEBUG
     if (kEnableV2Solution)
     {
-        printf("--------------------------------\n\n");
+        printf("------------------------------------------\n\n");
         printf("jmSudoku: v2::Solution - dfs\n\n");
 
-        std::vector<std::vector<char>> board;
+        char board[Sudoku::BoardSize];
         read_sudoku_board(board, index);
 
         v2::Solver solver;
         bool success = solver.solve(board, elapsed_time);
     }
 
+#if 0
+#ifdef NDEBUG
     if (kEnableV3Solution)
     {
-        printf("--------------------------------\n\n");
+        printf("------------------------------------------\n\n");
         printf("jmSudoku: v3::Solution - dfs\n\n");
 
         std::vector<std::vector<char>> board;
@@ -211,7 +211,7 @@ void run_a_testcase(size_t index)
 
     if (kEnableV4Solution)
     {
-        printf("--------------------------------\n\n");
+        printf("------------------------------------------\n\n");
         printf("jmSudoku: v4::Solution - dfs\n\n");
 
         std::vector<std::vector<char>> board;
@@ -223,7 +223,7 @@ void run_a_testcase(size_t index)
 #endif
 #endif
 
-    printf("--------------------------------\n\n");
+    printf("------------------------------------------\n\n");
 }
 
 template <typename SudokuSolver>
@@ -231,12 +231,12 @@ void run_sudoku_test(const char * filename, const char * name)
 {
     typedef typename SudokuSolver::algorithm algorithm;
 
-    printf("--------------------------------\n\n");
+    printf("------------------------------------------\n\n");
     printf("jmSudoku: %s::Solver\n\n", name);
 
-    size_t num_guesses = 0;
-    size_t num_no_guess = 0;
-    size_t num_impossibles = 0;
+    size_t total_guesses = 0;
+    size_t total_no_guess = 0;
+    size_t total_impossibles = 0;
 
     size_t puzzleCount = 0;
     double total_time = 0.0;
@@ -259,9 +259,9 @@ void run_sudoku_test(const char * filename, const char * name)
                     bool success = solver.solve(board, elapsed_time, false);
                     total_time += elapsed_time;
                     if (success) {
-                        num_guesses += algorithm::num_guesses;
-                        num_no_guess += algorithm::num_no_guess;
-                        num_impossibles += algorithm::num_impossibles;
+                        total_guesses += algorithm::num_guesses;
+                        total_no_guess += algorithm::num_no_guess;
+                        total_impossibles += algorithm::num_impossibles;
 
                         puzzleCount++;
 #ifndef NDEBUG
@@ -278,26 +278,28 @@ void run_sudoku_test(const char * filename, const char * name)
         std::cout << "Exception info: " << ex.what() << std::endl << std::endl;
     }
 
-    size_t recur_counter = num_guesses + num_no_guess + num_impossibles;
-    double no_guess_percent = calc_percent(num_no_guess, recur_counter);
-    double impossibles_percent = calc_percent(num_impossibles, recur_counter);
-    double guesses_percent = calc_percent(num_guesses, recur_counter);
+    size_t recur_counter = total_guesses + total_no_guess + total_impossibles;
+    double no_guess_percent = calc_percent(total_no_guess, recur_counter);
+    double impossibles_percent = calc_percent(total_impossibles, recur_counter);
+    double guesses_percent = calc_percent(total_guesses, recur_counter);
 
     printf("Total puzzle count = %u\n\n", (uint32_t)puzzleCount);
     printf("Total elapsed time: %0.3f ms\n\n", total_time);
     printf("recur_counter: %" PRIuPTR "\n\n"
-           "num_guesses: %" PRIuPTR ", num_impossibles: %" PRIuPTR ", no_guess: %" PRIuPTR "\n"
+           "num_guesses: %" PRIuPTR ", num_impossibles: %" PRIuPTR ", no_guess: %" PRIuPTR "\n\n"
            "guess %% = %0.1f %%, impossible %% = %0.1f %%, no_guess %% = %0.1f %%\n\n",
            recur_counter,
-           num_guesses, num_impossibles, num_no_guess,
+           total_guesses, total_impossibles, total_no_guess,
            guesses_percent, impossibles_percent, no_guess_percent);
 
     if (puzzleCount != 0) {
         printf("%0.1f usec/puzzle, %0.2f guesses/puzzle, %0.1f puzzles/sec\n\n",
                total_time * 1000.0 / puzzleCount,
-               (double)num_guesses / puzzleCount,
+               (double)total_guesses / puzzleCount,
                puzzleCount / (total_time / 1000.0));
     }
+
+    printf("------------------------------------------\n\n");
 }
 
 int main(int argc, char * argv[])
@@ -325,6 +327,7 @@ int main(int argc, char * argv[])
     {
         if (filename != nullptr) {
             run_sudoku_test<v1::Solver>(filename, "v1");
+            run_sudoku_test<v2::Solver>(filename, "v2");
         }
     }
 
