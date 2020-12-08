@@ -231,12 +231,13 @@ void run_sudoku_test(const char * filename, const char * name)
 {
     typedef typename SudokuSolver::algorithm algorithm;
 
-    printf("------------------------------------------\n\n");
+    //printf("------------------------------------------\n\n");
     printf("jmSudoku: %s::Solver\n\n", name);
 
     size_t total_guesses = 0;
+    size_t total_unique_candidate = 0;
+    size_t total_early_return = 0;
     size_t total_no_guess = 0;
-    size_t total_impossibles = 0;
 
     size_t puzzleCount = 0;
     double total_time = 0.0;
@@ -260,8 +261,12 @@ void run_sudoku_test(const char * filename, const char * name)
                     total_time += elapsed_time;
                     if (success) {
                         total_guesses += algorithm::num_guesses;
-                        total_no_guess += algorithm::num_no_guess;
-                        total_impossibles += algorithm::num_impossibles;
+                        total_unique_candidate += algorithm::num_unique_candidate;
+                        total_early_return += algorithm::num_early_return;
+
+                        if (algorithm::num_guesses == 0) {
+                            total_no_guess++;
+                        }
 
                         puzzleCount++;
 #ifndef NDEBUG
@@ -278,19 +283,20 @@ void run_sudoku_test(const char * filename, const char * name)
         std::cout << "Exception info: " << ex.what() << std::endl << std::endl;
     }
 
-    size_t recur_counter = total_guesses + total_no_guess + total_impossibles;
-    double no_guess_percent = calc_percent(total_no_guess, recur_counter);
-    double impossibles_percent = calc_percent(total_impossibles, recur_counter);
+    size_t recur_counter = total_guesses + total_unique_candidate + total_early_return;
+    double unique_candidate_percent = calc_percent(total_unique_candidate, recur_counter);
+    double early_return_percent = calc_percent(total_early_return, recur_counter);
     double guesses_percent = calc_percent(total_guesses, recur_counter);
+    double no_guess_percent = calc_percent(total_no_guess, puzzleCount);
 
     printf("Total puzzle count = %u\n\n", (uint32_t)puzzleCount);
     printf("Total elapsed time: %0.3f ms\n\n", total_time);
     printf("recur_counter: %" PRIuPTR "\n\n"
-           "num_guesses: %" PRIuPTR ", num_impossibles: %" PRIuPTR ", no_guess: %" PRIuPTR "\n\n"
-           "guess %% = %0.1f %%, impossible %% = %0.1f %%, no_guess %% = %0.1f %%\n\n",
+           "num_no_guess: %" PRIuPTR ", num_guesses: %" PRIuPTR ", num_early_return: %" PRIuPTR ", unique_candidate: %" PRIuPTR "\n\n"
+           "no_guess %% = %0.1f %%, guess %% = %0.1f %%, early_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
            recur_counter,
-           total_guesses, total_impossibles, total_no_guess,
-           guesses_percent, impossibles_percent, no_guess_percent);
+           total_no_guess, total_guesses, total_early_return, total_unique_candidate,
+           no_guess_percent, guesses_percent, early_return_percent, unique_candidate_percent);
 
     if (puzzleCount != 0) {
         printf("%0.1f usec/puzzle, %0.2f guesses/puzzle, %0.1f puzzles/sec\n\n",

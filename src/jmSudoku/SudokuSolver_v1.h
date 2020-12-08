@@ -138,8 +138,8 @@ public:
 
     static size_t init_counter;
     static size_t num_guesses;
-    static size_t num_no_guess;
-    static size_t num_impossibles;
+    static size_t num_unique_candidate;
+    static size_t num_early_return;
 
 private:    
 #if 0
@@ -179,23 +179,23 @@ public:
 
     static size_t get_init_counter() { return DancingLinks::init_counter; }
     static size_t get_num_guesses() { return DancingLinks::num_guesses; }
-    static size_t get_num_no_guess() { return DancingLinks::num_no_guess; }
-    static size_t get_num_impossibles() { return DancingLinks::num_impossibles; }
+    static size_t get_num_unique_candidate() { return DancingLinks::num_unique_candidate; }
+    static size_t get_num_early_return() { return DancingLinks::num_early_return; }
 
     static size_t get_search_counter() {
-        return (DancingLinks::num_guesses + DancingLinks::num_no_guess + DancingLinks::num_impossibles);
+        return (DancingLinks::num_guesses + DancingLinks::num_unique_candidate + DancingLinks::num_early_return);
     }
 
     static double get_guess_percent() {
         return calc_percent(DancingLinks::num_guesses, DancingLinks::get_search_counter());
     }
 
-    static double get_impossible_percent() {
-        return calc_percent(DancingLinks::num_impossibles, DancingLinks::get_search_counter());
+    static double get_early_return_percent() {
+        return calc_percent(DancingLinks::num_early_return, DancingLinks::get_search_counter());
     }
 
-    static double get_no_guess_percent() {
-        return calc_percent(DancingLinks::num_no_guess, DancingLinks::get_search_counter());
+    static double get_unique_candidate_percent() {
+        return calc_percent(DancingLinks::num_unique_candidate, DancingLinks::get_search_counter());
     }
 
 private:
@@ -308,8 +308,8 @@ public:
 #endif
         init_counter = 0;
         num_guesses = 0;
-        num_no_guess = 0;
-        num_impossibles = 0;
+        num_unique_candidate = 0;
+        num_early_return = 0;
     }
 
     void build(char board[Sudoku::BoardSize]) {
@@ -473,7 +473,7 @@ public:
         int index = get_min_column(min_col);
         if (index > 0) {
             if (min_col == 1)
-                num_no_guess++;
+                num_unique_candidate++;
             else
                 num_guesses++;
             this->remove(index);
@@ -501,7 +501,7 @@ public:
             this->restore(index);
         }
         else {
-            num_impossibles++;
+            num_early_return++;
         }
 
         return false;
@@ -564,8 +564,8 @@ RETRY_UNIQUE_CANDIDATE:
 
 size_t DancingLinks::init_counter = 0;
 size_t DancingLinks::num_guesses = 0;
-size_t DancingLinks::num_no_guess = 0;
-size_t DancingLinks::num_impossibles = 0;
+size_t DancingLinks::num_unique_candidate = 0;
+size_t DancingLinks::num_early_return = 0;
 
 class Solver {
 public:
@@ -603,16 +603,16 @@ public:
             else
                 solver_.display_answer(board);
             printf("elapsed time: %0.3f ms, init_counter: %" PRIuPTR ", recur_counter: %" PRIuPTR "\n\n"
-                   "num_guesses: %" PRIuPTR ", num_impossibles: %" PRIuPTR ", no_guess: %" PRIuPTR "\n"
-                   "guess %% = %0.1f %%, impossible %% = %0.1f %%, no_guess %% = %0.1f %%\n\n",
+                   "num_guesses: %" PRIuPTR ", num_early_return: %" PRIuPTR ", unique_candidate: %" PRIuPTR "\n"
+                   "guess %% = %0.1f %%, early_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
                    elapsed_time, DancingLinks::get_init_counter(),
                    DancingLinks::get_search_counter(),
                    DancingLinks::get_num_guesses(),
-                   DancingLinks::get_num_impossibles(),
-                   DancingLinks::get_num_no_guess(),
+                   DancingLinks::get_num_early_return(),
+                   DancingLinks::get_num_unique_candidate(),
                    DancingLinks::get_guess_percent(),
-                   DancingLinks::get_impossible_percent(),
-                   DancingLinks::get_no_guess_percent());
+                   DancingLinks::get_early_return_percent(),
+                   DancingLinks::get_unique_candidate_percent());
         }
 
         return success;
