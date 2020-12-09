@@ -8,7 +8,8 @@
 
 #if defined(_MSC_VER)
 #define __SSE_4_1__
-#define __SSE_4_2__
+#else
+#define __SSE_4_1__
 #endif
 
 #include <stdint.h>
