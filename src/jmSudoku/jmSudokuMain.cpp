@@ -271,7 +271,7 @@ void run_sudoku_test(const char * filename, const char * name)
 
                         puzzleCount++;
 #ifndef NDEBUG
-                        if (puzzleCount > 100)
+                        if (puzzleCount > 100000)
                             break;
 #endif
                     }
@@ -334,8 +334,10 @@ int main(int argc, char * argv[])
     if (1)
     {
         if (filename != nullptr) {
+#ifdef NDEBUG
             run_sudoku_test<v1::Solver>(filename, "v1");
             run_sudoku_test<v2::Solver>(filename, "v2");
+#endif
             run_sudoku_test<v3::Solver>(filename, "v3");
         }
     }

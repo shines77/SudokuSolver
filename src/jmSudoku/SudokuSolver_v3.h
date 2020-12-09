@@ -7,9 +7,33 @@
 #endif
 
 #if defined(_MSC_VER)
+#define __MMX__
+#define __SSE__
+#define __SSE2__
+#define __SSE3__
+#define __SSSE3__
+#define __SSE4A__
+#define __SSE4a__
 #define __SSE_4_1__
+#define __POPCNT__
+#define __LZCNT__
+#define __AVX__
+#define __AVX2__
+#define __3dNOW__
 #else
+#define __MMX__
+#define __SSE__
+#define __SSE2__
+#define __SSE3__
+#define __SSSE3__
+#define __SSE4A__
+#define __SSE4a__
 #define __SSE_4_1__
+#define __POPCNT__
+#define __LZCNT__
+#define __AVX__
+#define __AVX2__
+#define __3dNOW__
 #endif
 
 #include <stdint.h>
@@ -90,26 +114,24 @@ public:
     static size_t num_early_return;
 
 private:
+#pragma pack(push, 1)
     struct col_info_t {
         uint8_t size;
         uint8_t enable;
     };
-#if 0
-    DlxNodeList         list_;
-#else
-    FixedDlxNodeList<Sudoku::TotalSize * 4 + 1>
-                        list_;
-#endif
+#pragma pack(pop)
+
+    FixedDlxNodeList<Sudoku::TotalSize * 4 + 1> list_;
 
     SmallBitMatrix2<9, 9>  bit_rows;        // [row][num]
     SmallBitMatrix2<9, 9>  bit_cols;        // [col][num]
     SmallBitMatrix2<9, 9>  bit_palaces;     // [palace][num]
 
 #if defined(__SSE_4_1__)
-    alignas(64) col_info_t col_info_[Sudoku::TotalConditions + 1];
+    alignas(16) col_info_t col_info_[Sudoku::TotalConditions + 1];
 #else
-    alignas(32) uint8_t col_size_[Sudoku::TotalConditions + 1];
-    alignas(32) uint8_t col_enable_[Sudoku::TotalConditions + 1];
+    alignas(16) uint8_t col_size_[Sudoku::TotalConditions + 1];
+    alignas(16) uint8_t col_enable_[Sudoku::TotalConditions + 1];
 #endif
     int                 max_col_;
     int                 last_idx_;
@@ -174,7 +196,8 @@ private:
                 assert(col_size >= 0);
                 if (col_size <= 1) {
                     if (col_size == 0) {
-                        return 0;
+                        out_min_col = 0;
+                        return i;
                     }
                     else {
                         out_min_col = 1;
@@ -190,7 +213,7 @@ private:
     }
 
     int get_min_column_simd(int & out_min_col) {
-        int min_col = 256;
+        int min_col = 254;
         int min_col_index = 0;
         int index_base = 0;
 
@@ -202,22 +225,22 @@ private:
             __m128i xmm2 = _mm_load_si128((const __m128i *)(pinfo + 32));
             __m128i xmm3 = _mm_load_si128((const __m128i *)(pinfo + 48));
 
-            __m128i xmm4 = _mm_minpos_epu16(xmm0);
-            __m128i xmm5 = _mm_minpos_epu16(xmm1);
-            __m128i xmm6 = _mm_minpos_epu16(xmm2);
-            __m128i xmm7 = _mm_minpos_epu16(xmm3);
+            __m128i xmm4 = _mm_minpos_epu16(xmm0);      // SSE 4.1
+            __m128i xmm5 = _mm_minpos_epu16(xmm1);      // SSE 4.1
+            __m128i xmm6 = _mm_minpos_epu16(xmm2);      // SSE 4.1
+            __m128i xmm7 = _mm_minpos_epu16(xmm3);      // SSE 4.1
 
             __m128i xmm5_ = _mm_slli_epi64(xmm5, 32);
             __m128i xmm7_ = _mm_slli_epi64(xmm7, 32);
-            __m128i xmm4_5  = _mm_blend_epi16(xmm4, xmm5_, 0b00001100);
-            __m128i xmm6_7  = _mm_blend_epi16(xmm6, xmm7_, 0b00001100);
+            __m128i xmm4_5  = _mm_blend_epi16(xmm4, xmm5_, 0b00001100); // SSE 4.1
+            __m128i xmm6_7  = _mm_blend_epi16(xmm6, xmm7_, 0b00001100); // SSE 4.1
             __m128i xmm6_7_ = _mm_slli_si128(xmm6_7, 8);
             __m128i comb_0  = _mm_or_si128(xmm4_5, xmm6_7_);
             __m128i __col_index = comb_0;
 
             __m128i kColSizeMask = _mm_set1_epi32((int)0xFFFF0000L);
             __m128i __col_size = _mm_or_si128(comb_0, kColSizeMask);
-            __m128i __min_col_size = _mm_minpos_epu16(__col_size);
+            __m128i __min_col_size = _mm_minpos_epu16(__col_size);      // SSE 4.1
 
             uint32_t min_col_size32 = (uint32_t)_mm_cvtsi128_si32(__min_col_size);
             int min_col_size = (int)(min_col_size32 & 0x0000FFFFULL);
@@ -236,7 +259,8 @@ private:
                 min_col_index = index_base + min_block_index16 * 8 + min_col_offset;
 
                 if (min_col == 0) {
-                    return 0;
+                    out_min_col = 0;
+                    return min_col_index;
                 }
 #if 0
                 else if (min_col == 1) {
@@ -253,16 +277,16 @@ private:
             __m128i xmm0 = _mm_load_si128((const __m128i *)(pinfo + 0));
             __m128i xmm1 = _mm_load_si128((const __m128i *)(pinfo + 16));
 
-            __m128i xmm2 = _mm_minpos_epu16(xmm0);
-            __m128i xmm3 = _mm_minpos_epu16(xmm1);
+            __m128i xmm2 = _mm_minpos_epu16(xmm0);      // SSE 4.1
+            __m128i xmm3 = _mm_minpos_epu16(xmm1);      // SSE 4.1
 
             __m128i xmm3_ = _mm_slli_epi64(xmm3, 32);
-            __m128i comb_0 = _mm_blend_epi16(xmm2, xmm3_, 0b00001100);
+            __m128i comb_0 = _mm_blend_epi16(xmm2, xmm3_, 0b00001100);  // SSE 4.1
             __m128i __col_index = comb_0;
 
             __m128i kColSizeMask = _mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFF0000L, 0xFFFF0000L);
             __m128i __col_size = _mm_or_si128(comb_0, kColSizeMask);
-            __m128i __min_col_size = _mm_minpos_epu16(__col_size);
+            __m128i __min_col_size = _mm_minpos_epu16(__col_size);      // SSE 4.1
 
             uint32_t min_col_size32 = (uint32_t)_mm_cvtsi128_si32(__min_col_size);
             int min_col_size = (int)(min_col_size32 & 0x0000FFFFULL);
@@ -281,7 +305,8 @@ private:
                 min_col_index = index_base + min_block_index16 * 8 + min_col_offset;
 
                 if (min_col == 0) {
-                    return 0;
+                    out_min_col = 0;
+                    return min_col_index;
                 }
 #if 0
                 else if (min_col == 1) {
@@ -296,7 +321,7 @@ private:
 
         if ((pinfo_end - pinfo) >= 16) {
             __m128i xmm0 = _mm_load_si128((const __m128i *)(pinfo + 0));
-            __m128i __min_col_size = _mm_minpos_epu16(xmm0);
+            __m128i __min_col_size = _mm_minpos_epu16(xmm0);    // SSE 4.1
 
             uint32_t min_col_size32 = (uint32_t)_mm_cvtsi128_si32(__min_col_size);
             int min_col_size = (int)(min_col_size32 & 0x0000FFFFULL);
@@ -307,7 +332,8 @@ private:
                 min_col_index = index_base + min_col_offset;
 
                 if (min_col == 0) {
-                    return 0;
+                    out_min_col = 0;
+                    return min_col_index;
                 }
 #if 0
                 else if (min_col == 1) {
@@ -327,7 +353,8 @@ private:
                 int col_size = pcol_info->size;
                 if (col_size < min_col) {
                     if (col_size == 0) {
-                        return 0;
+                        out_min_col = 0;
+                        return index_base;
                     }
                     min_col = col_size;
                     min_col_index = index_base;
@@ -398,6 +425,25 @@ private:
         this->bit_palaces[palace].set(num);
     }
 
+    bool check_col_list_enable() {
+        uint8_t enable[Sudoku::TotalConditions + 1];
+        std::memset((void *)&enable[0], 0xFF, sizeof(enable));
+        for (int i = list_.next[0]; i != 0; i = list_.next[i]) {
+            enable[i] = 0;
+        }
+        enable[0] = 0xFF;
+
+        bool is_correctly = true;
+        for (int i = 0; i < this->max_col_; i++) {
+            if (col_info_[i].enable != enable[i]) {
+                is_correctly = false;
+                assert(false);
+            }
+        }
+
+        return is_correctly;
+    }
+
 public:
     int filter_unused_cols(char board[Sudoku::BoardSize]) {
         std::memset(&this->col_index_[0], 0, sizeof(this->col_index_));
@@ -454,7 +500,7 @@ public:
         }
 #endif
         col_info_[0].size = 255;
-        //col_info_[0].enable = 0;
+        //col_info_[0].enable = 0xFF;
 #else // !__SSE_4_1__
 #if 1
         std::memset((void *)&col_size_[0], 0, (cols + 1) * sizeof(uint8_t));
@@ -633,7 +679,7 @@ public:
                 uint16_t col_index = list_.col[col];
                 assert(this->get_col_size(col_index) > 0);
                 this->dec_col_size(col_index);
-                this->set_col_enable(col_index);
+                //this->set_col_enable(col_index);
             }
         }
     }
@@ -656,7 +702,7 @@ public:
 
                 uint16_t col_index = list_.col[col];
                 this->inc_col_size(col_index);
-                this->set_col_enable(col_index);
+                //this->set_col_enable(col_index);
             }
         }
     }
@@ -674,14 +720,15 @@ public:
                 return true;
             }
         }
-        
+      
         int min_col;
         int index;
         if (empties > 8)
             index = get_min_column_simd(min_col);
         else
             index = get_min_column(min_col);
-        if (index > 0) {
+        assert(index > 0);
+        if (min_col != 0) {
             if (min_col == 1)
                 num_unique_candidate++;
             else
