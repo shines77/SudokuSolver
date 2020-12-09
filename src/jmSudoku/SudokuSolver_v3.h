@@ -14,26 +14,30 @@
 #define __SSSE3__
 #define __SSE4A__
 #define __SSE4a__
-#define __SSE_4_1__
+//#define __SSE4_1__
+//#define __SSE4_2__
 #define __POPCNT__
 #define __LZCNT__
 #define __AVX__
 #define __AVX2__
 #define __3dNOW__
 #else
-#define __MMX__
-#define __SSE__
-#define __SSE2__
-#define __SSE3__
-#define __SSSE3__
-#define __SSE4A__
-#define __SSE4a__
-#define __SSE_4_1__
-#define __POPCNT__
-#define __LZCNT__
-#define __AVX__
-#define __AVX2__
-#define __3dNOW__
+//#define __MMX__
+//#define __SSE__
+//#define __SSE2__
+//#define __SSE3__
+//#define __SSSE3__
+//#define __SSE4A__
+//#define __SSE4a__
+//#define __SSE4_1__
+//#define __SSE4_2__
+//#define __POPCNT__
+//#define __LZCNT__
+//#define __AVX__
+//#define __AVX2__
+//#define __3dNOW__
+#undef __SSE4_1__
+#undef __SSE4_2__
 #endif
 
 #include <stdint.h>
@@ -58,6 +62,9 @@
 
 #include "Sudoku.h"
 #include "StopWatch.h"
+#include "BitScan.h"
+
+using namespace jstd;
 
 /************************************************
 
@@ -127,7 +134,7 @@ private:
     SmallBitMatrix2<9, 9>  bit_cols;        // [col][num]
     SmallBitMatrix2<9, 9>  bit_palaces;     // [palace][num]
 
-#if defined(__SSE_4_1__)
+#if defined(__SSE4_1__)
     alignas(16) col_info_t col_info_[Sudoku::TotalConditions + 1];
 #else
     alignas(16) uint8_t col_size_[Sudoku::TotalConditions + 1];
@@ -179,7 +186,53 @@ public:
     }
 
 private:
-#if defined(__SSE_4_1__)
+#if defined(__SSE4_1__)
+
+    inline void set_col_enable(int index) {
+        this->col_info_[index].enable = 0x00;
+    }
+
+    inline void set_col_disable(int index) {
+        this->col_info_[index].enable = 0xFF;
+    }
+
+    inline uint8_t get_col_size(int index) {
+        return this->col_info_[index].size;
+    }
+
+    inline void inc_col_size(int index) {
+        this->col_info_[index].size++;
+    }
+
+    inline void dec_col_size(int index) {
+        this->col_info_[index].size--;
+    }
+
+#else // !__SSE4_1__
+
+    inline void set_col_enable(int index) {
+        this->col_enable_[index] = 0x00;
+    }
+
+    inline void set_col_disable(int index) {
+        this->col_enable_[index] = 0xF0;
+    }
+
+    inline uint8_t get_col_size(int index) {
+        return this->col_size_[index];
+    }
+
+    inline void inc_col_size(int index) {
+        this->col_size_[index]++;
+    }
+
+    inline void dec_col_size(int index) {
+        this->col_size_[index]--;
+    }
+
+#endif // __SSE4_1__
+
+#if defined(__SSE4_1__)
     int get_min_column(int & out_min_col) const {
         int first = list_.next[0];
         assert(first != 0);
@@ -368,7 +421,7 @@ private:
         return min_col_index;
     }
 
-#else // !__SSE_4_1__
+#elif defined(__SSE2__)
 
     int get_min_column(int & out_min_col) const {
         int first = list_.next[0];
@@ -385,13 +438,8 @@ private:
             if (col_size < min_col) {
                 assert(col_size >= 0);
                 if (col_size <= 1) {
-                    if (col_size == 0) {
-                        return 0;
-                    }
-                    else {
-                        out_min_col = 1;
-                        return i;
-                    }
+                    out_min_col = col_size;
+                    return i;
                 }
                 min_col = col_size;
                 min_col_index = i;
@@ -401,11 +449,323 @@ private:
         return min_col_index;
     }
 
+    //
+    // Horizontal minimum and maximum using SSE
+    // See: https://stackoverflow.com/questions/22256525/horizontal-minimum-and-maximum-using-sse
+    //
     int get_min_column_simd(int & out_min_col) {
-        return get_min_column(out_min_col);
+        int min_col = 254;
+        int min_col_index = 0;
+        int index_base = 0;
+
+        const char * psize     = (const char *)&col_size_[0];
+        const char * penable   = (const char *)&col_enable_[0];
+        const char * psize_end = (const char *)&col_size_[this->max_col_];
+        while ((psize_end - psize) >= 64) {
+            __m128i xmm0 = _mm_load_si128((const __m128i *)(psize + 0));
+            __m128i xmm1 = _mm_load_si128((const __m128i *)(psize + 16));
+
+            __m128i xmm2 = _mm_load_si128((const __m128i *)(penable + 0));
+            __m128i xmm3 = _mm_load_si128((const __m128i *)(penable + 16));
+
+            xmm0 = _mm_or_si128(xmm0, xmm2);
+            xmm1 = _mm_or_si128(xmm1, xmm3);
+
+            xmm0 = _mm_min_epu8(xmm0, _mm_shuffle_epi32(xmm0, _MM_SHUFFLE(3, 2, 3, 2)));
+            xmm1 = _mm_min_epu8(xmm1, _mm_shuffle_epi32(xmm1, _MM_SHUFFLE(3, 2, 3, 2)));
+
+            xmm0 = _mm_min_epu8(xmm0, _mm_shuffle_epi32(xmm0, _MM_SHUFFLE(1, 1, 1, 1)));
+            xmm1 = _mm_min_epu8(xmm1, _mm_shuffle_epi32(xmm1, _MM_SHUFFLE(1, 1, 1, 1)));
+
+            xmm0 = _mm_min_epu8(xmm0, _mm_shufflelo_epi16(xmm0, _MM_SHUFFLE(1, 1, 1, 1)));
+            xmm1 = _mm_min_epu8(xmm1, _mm_shufflelo_epi16(xmm1, _MM_SHUFFLE(1, 1, 1, 1)));
+
+            xmm0 = _mm_min_epu8(xmm0, _mm_srli_epi16(xmm0, 8));
+            xmm1 = _mm_min_epu8(xmm1, _mm_srli_epi16(xmm1, 8));
+
+            xmm0 = _mm_min_epu8(xmm0, xmm1);
+
+            __m128i xmm4 = _mm_load_si128((const __m128i *)(psize + 32));
+            __m128i xmm5 = _mm_load_si128((const __m128i *)(psize + 48));
+
+            __m128i xmm6 = _mm_load_si128((const __m128i *)(penable + 32));
+            __m128i xmm7 = _mm_load_si128((const __m128i *)(penable + 48));
+
+            xmm4 = _mm_or_si128(xmm4, xmm6);
+            xmm5 = _mm_or_si128(xmm5, xmm7);
+
+            xmm4 = _mm_min_epu8(xmm4, _mm_shuffle_epi32(xmm4, _MM_SHUFFLE(3, 2, 3, 2)));
+            xmm5 = _mm_min_epu8(xmm5, _mm_shuffle_epi32(xmm5, _MM_SHUFFLE(3, 2, 3, 2)));
+
+            xmm4 = _mm_min_epu8(xmm4, _mm_shuffle_epi32(xmm4, _MM_SHUFFLE(1, 1, 1, 1)));
+            xmm5 = _mm_min_epu8(xmm5, _mm_shuffle_epi32(xmm5, _MM_SHUFFLE(1, 1, 1, 1)));
+
+            xmm4 = _mm_min_epu8(xmm4, _mm_shufflelo_epi16(xmm4, _MM_SHUFFLE(1, 1, 1, 1)));
+            xmm5 = _mm_min_epu8(xmm5, _mm_shufflelo_epi16(xmm5, _MM_SHUFFLE(1, 1, 1, 1)));
+
+            xmm4 = _mm_min_epu8(xmm4, _mm_srli_epi16(xmm4, 8));
+            xmm5 = _mm_min_epu8(xmm5, _mm_srli_epi16(xmm5, 8));
+
+            xmm4 = _mm_min_epu8(xmm4, xmm5);
+
+            // The minimum column size of per 64 numbers
+            __m128i min_size_64 = _mm_min_epu8(xmm0, xmm4);
+
+            int min_col_size = _mm_cvtsi128_si32(min_size_64) & 0x000000FFL;
+            if (min_col_size < min_col) {
+                min_col = min_col_size;
+
+                __m128i xmm0 = _mm_load_si128((const __m128i *)(psize + 0));
+                __m128i xmm2 = _mm_load_si128((const __m128i *)(penable + 0));
+
+                __m128i min_cmp = _mm_set1_epi8((char)min_col_size);
+
+                xmm0 = _mm_or_si128(xmm0, xmm2);
+                xmm0 = _mm_cmpeq_epi8(xmm0, min_cmp);
+
+                int equal_mask = _mm_movemask_epi8(xmm0);
+                if (equal_mask == 0) {
+                    __m128i xmm1 = _mm_load_si128((const __m128i *)(psize + 16));
+                    __m128i xmm3 = _mm_load_si128((const __m128i *)(penable + 16));
+                
+                    xmm1 = _mm_or_si128(xmm1, xmm3);  
+                    xmm1 = _mm_cmpeq_epi8(xmm1, min_cmp);
+
+                    equal_mask = _mm_movemask_epi8(xmm1);
+                    if (equal_mask == 0) {
+                        __m128i xmm4 = _mm_load_si128((const __m128i *)(psize + 32));
+                        __m128i xmm6 = _mm_load_si128((const __m128i *)(penable + 32));
+                
+                        xmm4 = _mm_or_si128(xmm4, xmm6);  
+                        xmm4 = _mm_cmpeq_epi8(xmm4, min_cmp);
+
+                        equal_mask = _mm_movemask_epi8(xmm4);
+                        if (equal_mask == 0) {
+                            __m128i xmm5 = _mm_load_si128((const __m128i *)(psize + 48));
+                            __m128i xmm7 = _mm_load_si128((const __m128i *)(penable + 48));
+                
+                            xmm5 = _mm_or_si128(xmm5, xmm7);  
+                            xmm5 = _mm_cmpeq_epi8(xmm5, min_cmp);
+
+                            equal_mask = _mm_movemask_epi8(xmm5);
+                            if (equal_mask == 0) {
+                                assert(false);
+                            }
+                            else {
+                                int min_col_offset = BitScan::bsf(equal_mask);
+                                min_col_index = index_base + 3 * 16 + min_col_offset;
+                            }
+                        }
+                        else {
+                            int min_col_offset = BitScan::bsf(equal_mask);
+                            min_col_index = index_base + 2 * 16 + min_col_offset;
+                        }
+                    }
+                    else {
+                        int min_col_offset = BitScan::bsf(equal_mask);
+                        min_col_index = index_base + 1 * 16 + min_col_offset;
+                    }
+                }
+                else {
+                    int min_col_offset = BitScan::bsf(equal_mask);
+                    min_col_index = index_base + 0 * 16 + min_col_offset;
+                }
+
+                if (min_col == 0) {
+                    out_min_col = 0;
+                    return min_col_index;
+                }
+#if 0
+                else if (min_col == 1) {
+                    out_min_col = 1;
+                    return min_col_index;
+                }
+#endif
+            }
+
+            index_base += 64;
+            penable += 64;
+            psize += 64;
+        }
+
+        if ((psize_end - psize) >= 32) {
+            __m128i xmm0 = _mm_load_si128((const __m128i *)(psize + 0));
+            __m128i xmm1 = _mm_load_si128((const __m128i *)(psize + 16));
+
+            __m128i xmm2 = _mm_load_si128((const __m128i *)(penable + 0));
+            __m128i xmm3 = _mm_load_si128((const __m128i *)(penable + 16));
+
+            xmm0 = _mm_or_si128(xmm0, xmm2);
+            xmm1 = _mm_or_si128(xmm1, xmm3);
+
+            xmm0 = _mm_min_epu8(xmm0, _mm_shuffle_epi32(xmm0, _MM_SHUFFLE(3, 2, 3, 2)));
+            xmm1 = _mm_min_epu8(xmm1, _mm_shuffle_epi32(xmm1, _MM_SHUFFLE(3, 2, 3, 2)));
+
+            xmm0 = _mm_min_epu8(xmm0, _mm_shuffle_epi32(xmm0, _MM_SHUFFLE(1, 1, 1, 1)));
+            xmm1 = _mm_min_epu8(xmm1, _mm_shuffle_epi32(xmm1, _MM_SHUFFLE(1, 1, 1, 1)));
+
+            xmm0 = _mm_min_epu8(xmm0, _mm_shufflelo_epi16(xmm0, _MM_SHUFFLE(1, 1, 1, 1)));
+            xmm1 = _mm_min_epu8(xmm1, _mm_shufflelo_epi16(xmm1, _MM_SHUFFLE(1, 1, 1, 1)));
+
+            xmm0 = _mm_min_epu8(xmm0, _mm_srli_epi16(xmm0, 8));
+            xmm1 = _mm_min_epu8(xmm1, _mm_srli_epi16(xmm1, 8));
+
+            // The minimum column size of per 32 numbers
+            __m128i min_size_32 = _mm_min_epu8(xmm0, xmm1);
+
+            int min_col_size = _mm_cvtsi128_si32(min_size_32) & 0x000000FFL;
+            if (min_col_size < min_col) {
+                min_col = min_col_size;
+
+                __m128i xmm0 = _mm_load_si128((const __m128i *)(psize + 0));
+                __m128i xmm2 = _mm_load_si128((const __m128i *)(penable + 0));
+
+                __m128i min_cmp = _mm_set1_epi8((char)min_col_size);
+
+                xmm0 = _mm_or_si128(xmm0, xmm2);
+                xmm0 = _mm_cmpeq_epi8(xmm0, min_cmp);
+
+                int equal_mask = _mm_movemask_epi8(xmm0);
+                if (equal_mask == 0) {
+                    __m128i xmm1 = _mm_load_si128((const __m128i *)(psize + 16));
+                    __m128i xmm3 = _mm_load_si128((const __m128i *)(penable + 16));
+                
+                    xmm1 = _mm_or_si128(xmm1, xmm3);  
+                    xmm1 = _mm_cmpeq_epi8(xmm1, min_cmp);
+
+                    equal_mask = _mm_movemask_epi8(xmm1);
+                    if (equal_mask == 0) {
+                        assert(false);
+                    }
+                    else {
+                        int min_col_offset = BitScan::bsf(equal_mask);
+                        min_col_index = index_base + 1 * 16 + min_col_offset;
+                    }
+                }
+                else {
+                    int min_col_offset = BitScan::bsf(equal_mask);
+                    min_col_index = index_base + 0 * 16 + min_col_offset;
+                }
+
+                if (min_col == 0) {
+                    out_min_col = 0;
+                    return min_col_index;
+                }
+#if 0
+                else if (min_col == 1) {
+                    out_min_col = 1;
+                    return min_col_index;
+                }
+#endif
+            }
+
+            index_base += 32;
+            penable += 32;
+            psize += 32;
+        }
+
+        if ((psize_end - psize) >= 16) {
+            __m128i xmm0 = _mm_load_si128((const __m128i *)(psize + 0));
+            __m128i xmm2 = _mm_load_si128((const __m128i *)(penable + 0));
+
+            xmm0 = _mm_or_si128(xmm0, xmm2);
+            xmm0 = _mm_min_epu8(xmm0, _mm_shuffle_epi32(xmm0, _MM_SHUFFLE(3, 2, 3, 2)));
+            xmm0 = _mm_min_epu8(xmm0, _mm_shuffle_epi32(xmm0, _MM_SHUFFLE(1, 1, 1, 1)));
+            xmm0 = _mm_min_epu8(xmm0, _mm_shufflelo_epi16(xmm0, _MM_SHUFFLE(1, 1, 1, 1)));
+
+            // The minimum column size of per 16 numbers
+            __m128i min_size_16 = _mm_min_epu8(xmm0, _mm_srli_epi16(xmm0, 8));
+
+            int min_col_size = _mm_cvtsi128_si32(min_size_16) & 0x000000FFL;
+            if (min_col_size < min_col) {
+                min_col = min_col_size;
+
+                __m128i xmm0 = _mm_load_si128((const __m128i *)(psize + 0));
+                __m128i xmm2 = _mm_load_si128((const __m128i *)(penable + 0));
+
+                __m128i min_cmp = _mm_set1_epi8((char)min_col_size);
+
+                xmm0 = _mm_or_si128(xmm0, xmm2);
+                xmm0 = _mm_cmpeq_epi8(xmm0, min_cmp);
+
+                int equal_mask = _mm_movemask_epi8(xmm0);
+                if (equal_mask == 0) {
+                    assert(false);
+                }
+                else {
+                    int min_col_offset = BitScan::bsf(equal_mask);
+                    min_col_index = index_base + min_col_offset;
+                }
+
+                if (min_col == 0) {
+                    out_min_col = 0;
+                    return min_col_index;
+                }
+#if 0
+                else if (min_col == 1) {
+                    out_min_col = 1;
+                    return min_col_index;
+                }
+#endif
+            }
+
+            index_base += 16;
+            penable += 16;
+            psize += 16;
+        }
+
+        // Last remain items (less than 16 items)
+        while (psize < psize_end) {
+            uint8_t * pcol_enable = (uint8_t *)penable;
+            if (*pcol_enable == 0) {
+                int col_size = *psize;
+                if (col_size < min_col) {
+                    if (col_size == 0) {
+                        out_min_col = 0;
+                        return index_base;
+                    }
+                    min_col = col_size;
+                    min_col_index = index_base;
+                }
+            }
+            index_base++;
+            penable++;
+            psize++;
+        }
+
+        out_min_col = min_col;
+        return min_col_index;
     }
 
-#endif // __SSE_4_1__
+#else
+
+    int get_min_column(int & out_min_col) const {
+        int first = list_.next[0];
+        assert(first != 0);
+        int min_col = col_size_[first];
+        assert(min_col >= 0);
+        if (min_col <= 1) {
+            out_min_col = min_col;
+            return first;
+        }
+        int min_col_index = first;
+        for (int i = list_.next[first]; i != 0; i = list_.next[i]) {
+            int col_size = col_size_[i];
+            if (col_size < min_col) {
+                assert(col_size >= 0);
+                if (col_size <= 1) {
+                    out_min_col = col_size;
+                    return i;
+                }
+                min_col = col_size;
+                min_col_index = i;
+            }
+        }
+        out_min_col = min_col;
+        return min_col_index;
+    }
+
+#endif // __SSE4_1__
 
     std::bitset<9> getUsable(size_t row, size_t col) {
         size_t palace = row / 3 * 3 + col / 3;
@@ -426,6 +786,7 @@ private:
     }
 
     bool check_col_list_enable() {
+#if defined(__SSE4_1__)
         uint8_t enable[Sudoku::TotalConditions + 1];
         std::memset((void *)&enable[0], 0xFF, sizeof(enable));
         for (int i = list_.next[0]; i != 0; i = list_.next[i]) {
@@ -442,6 +803,9 @@ private:
         }
 
         return is_correctly;
+#else
+        return true;
+#endif
     }
 
 public:
@@ -490,7 +854,7 @@ public:
         this->max_col_ = cols + 1;
         this->last_idx_ = cols + 1;
 
-#if defined(__SSE_4_1__)
+#if defined(__SSE4_1__)
 #if 1
         std::memset((void *)&col_info_[0], 0, (cols + 1) * sizeof(col_info_t));
 #else
@@ -501,19 +865,19 @@ public:
 #endif
         col_info_[0].size = 255;
         //col_info_[0].enable = 0xFF;
-#else // !__SSE_4_1__
+#else // !__SSE4_1__
 #if 1
         std::memset((void *)&col_size_[0], 0, (cols + 1) * sizeof(uint8_t));
-        std::memset((void *)&col_enable_[0], 0x0F, (cols + 1) * sizeof(uint8_t));
+        std::memset((void *)&col_enable_[0], 0x00, (cols + 1) * sizeof(uint8_t));
 #else
         for (int i = 0; i <= cols; i++) {
             col_size_[i] = 0;
-            col_enable_[i] = 0x0F;
+            col_enable_[i] = 0x00;
         }
 #endif
         col_size_[0] = 255;
-        col_enable_[0] = 0xFF;
-#endif // __SSE_4_1__
+        col_enable_[0] = 0xF0;
+#endif // __SSE4_1__
 
         this->bit_rows.reset();
         this->bit_cols.reset();
@@ -614,52 +978,6 @@ public:
         this->inc_col_size(col);
     }
 
-#if defined(__SSE_4_1__)
-
-    inline void set_col_enable(int index) {
-        this->col_info_[index].enable = 0x00;
-    }
-
-    inline void set_col_disable(int index) {
-        this->col_info_[index].enable = 0xFF;
-    }
-
-    inline uint8_t get_col_size(int index) {
-        return this->col_info_[index].size;
-    }
-
-    inline void inc_col_size(int index) {
-        this->col_info_[index].size++;
-    }
-
-    inline void dec_col_size(int index) {
-        this->col_info_[index].size--;
-    }
-
-#else // !__SSE_4_1__
-
-    inline void set_col_enable(int index) {
-        this->col_enable_[index] = 0x0F;
-    }
-
-    inline void set_col_disable(int index) {
-        this->col_enable_[index] = 0xFF;
-    }
-
-    inline uint8_t get_col_size(int index) {
-        return this->col_size_[index];
-    }
-
-    inline void inc_col_size(int index) {
-        this->col_size_[index]++;
-    }
-
-    inline void dec_col_size(int index) {
-        this->col_size_[index]--;
-    }
-
-#endif // __SSE_4_1__
-
     void remove(int index) {
         assert(index > 0);
         int prev = list_.prev[index];
@@ -723,10 +1041,14 @@ public:
       
         int min_col;
         int index;
+#if defined(__SSE2__) || defined(__SSE4_1__)
         if (empties > 8)
             index = get_min_column_simd(min_col);
         else
             index = get_min_column(min_col);
+#else
+        index = get_min_column(min_col);
+#endif
         assert(index > 0);
         if (min_col != 0) {
             if (min_col == 1)
@@ -765,29 +1087,6 @@ public:
     }
 
     bool solve() {
-#if 0
-RETRY_UNIQUE_CANDIDATE:
-        for (int index = list_.next[0]; index != 0; index = list_.next[index]) {
-            size_t col_size = col_size_[index];
-            if (col_size == 1) {
-                assert(index > 0);
-
-                this->remove(index);
-                for (int row = list_.down[index]; row != index; row = list_.down[row]) {
-                    this->answer_.push_back(list_.row[row]);
-                    for (int col = list_.next[row]; col != row; col = list_.next[col]) {
-                        this->remove(list_.col[col]);
-                    }
-                }
-
-                init_counter++;
-                goto RETRY_UNIQUE_CANDIDATE;
-            }
-            else if (col_size == 0) {
-                return false;
-            }
-        }
-#endif
         return this->search(this->empties_);
     }
 

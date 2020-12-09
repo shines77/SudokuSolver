@@ -31,6 +31,9 @@
     <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v3.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\jmSudoku\BitScan.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\jmSudoku\jmSudokuMain.cpp">

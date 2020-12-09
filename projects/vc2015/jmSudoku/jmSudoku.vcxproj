@@ -154,6 +154,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\src\jmSudoku\BitScan.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\CPUWarmUp.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\StopWatch.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\Sudoku.h" />
