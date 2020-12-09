@@ -290,14 +290,15 @@ void run_sudoku_test(const char * filename, const char * name)
     double guesses_percent = calc_percent(total_guesses, recur_counter);
     double no_guess_percent = calc_percent(total_no_guess, puzzleCount);
 
-    printf("Total puzzle count = %u\n\n", (uint32_t)puzzleCount);
+    printf("Total puzzle count = %u, total_no_guess: %" PRIuPTR ", no_guess %% = %0.1f %%\n\n",
+           (uint32_t)puzzleCount, total_no_guess, no_guess_percent);
     printf("Total elapsed time: %0.3f ms\n\n", total_time);
     printf("recur_counter: %" PRIuPTR "\n\n"
-           "num_no_guess: %" PRIuPTR ", num_guesses: %" PRIuPTR ", num_early_return: %" PRIuPTR ", unique_candidate: %" PRIuPTR "\n\n"
-           "no_guess %% = %0.1f %%, guess %% = %0.1f %%, early_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
+           "total_guesses: %" PRIuPTR ", total_early_return: %" PRIuPTR ", total_unique_candidate: %" PRIuPTR "\n\n"
+           "guess %% = %0.1f %%, early_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
            recur_counter,
-           total_no_guess, total_guesses, total_early_return, total_unique_candidate,
-           no_guess_percent, guesses_percent, early_return_percent, unique_candidate_percent);
+           total_guesses, total_early_return, total_unique_candidate,
+           guesses_percent, early_return_percent, unique_candidate_percent);
 
     if (puzzleCount != 0) {
         printf("%0.1f usec/puzzle, %0.2f guesses/puzzle, %0.1f puzzles/sec\n\n",
