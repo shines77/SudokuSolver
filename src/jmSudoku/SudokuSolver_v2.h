@@ -182,16 +182,20 @@ public:
                 return 0;
             }
         }
-        for (short col = this->list_[1].next; col != (short)1; col = this->list_[col].next) {
-            if (this->list_[col].enabled == 1) {
-                min_col_size = (int)1;
-                return (col - MaxColumn);
+        if (MaxColumn >= 2) {
+            for (short col = this->list_[1].next; col != (short)1; col = this->list_[col].next) {
+                if (this->list_[col].enabled == 1) {
+                    min_col_size = (int)1;
+                    return (col - MaxColumn);
+                }
             }
         }
-        for (short col = this->list_[2].next; col != (short)2; col = this->list_[col].next) {
-            if (this->list_[col].enabled == 1) {
-                min_col_size = (int)2;
-                return (col - MaxColumn);
+        if (MaxColumn >= 3) {
+            for (short col = this->list_[2].next; col != (short)2; col = this->list_[col].next) {
+                if (this->list_[col].enabled == 1) {
+                    min_col_size = (int)2;
+                    return (col - MaxColumn);
+                }
             }
         }
         return -1;
@@ -200,6 +204,7 @@ public:
     void push_front(short col_size, short col_index) {
         assert(col_size < MaxColumn);
         short col = (short)MaxColumn + col_index;
+        this->list_[col].enabled = 1;
         if (this->list_[col_size].next != col_size) {
             short next = this->list_[col_size].next;
             this->list_[next].prev = col;
@@ -207,7 +212,6 @@ public:
 
             this->list_[col].prev = col_size;
             this->list_[col].next = next;
-            this->list_[col].enabled = 1;
         }
         else {
             this->list_[col_size].next = col;
@@ -215,13 +219,13 @@ public:
             
             this->list_[col].prev = col_size;
             this->list_[col].next = col_size;
-            this->list_[col].enabled = 1;
         }
     }
 
     void push_back(short col_size, short col_index) {
         assert(col_size < MaxColumn);
         short col = (short)MaxColumn + col_index;
+        this->list_[col].enabled = 1;
         if (this->list_[col_size].next != col_size) {
             short prev = this->list_[col_size].prev;
             this->list_[prev].next = col;
@@ -229,7 +233,6 @@ public:
 
             this->list_[col].prev = prev;
             this->list_[col].next = col_size;
-            this->list_[col].enabled = 1;
         }
         else {
             this->list_[col_size].next = col;
@@ -237,7 +240,6 @@ public:
             
             this->list_[col].prev = col_size;
             this->list_[col].next = col_size;
-            this->list_[col].enabled = 1;
         }
     }
 
@@ -273,6 +275,8 @@ public:
     static size_t num_unique_candidate;
     static size_t num_early_return;
 
+    static const int kMaxMinColumn = 2;
+
 private:    
 #if 0
     DlxNodeList         list_;
@@ -287,7 +291,7 @@ private:
 
     short               col_size_[Sudoku::TotalConditions + 1];
 
-    mincol_list<3, Sudoku::TotalConditions + 1>    mincol_list_;
+    mincol_list<size_t(kMaxMinColumn), Sudoku::TotalConditions + 1>    mincol_list_;
 
     std::vector<int>    answer_;
     int                 last_idx_;
@@ -364,12 +368,13 @@ private:
         return min_col_index;
     }
 
-    int get_min_column_more_than_2(int & out_min_col) const {
+    template <int LeastColSize>
+    int get_min_column_more_than_N(int & out_min_col) const {
         int first = list_.next[0];
         assert(first != 0);
         int min_col = col_size_[first];
         assert(min_col >= 0);
-        if (min_col <= 3) {
+        if (min_col <= LeastColSize) {
             out_min_col = min_col;
             return first;
         }
@@ -377,8 +382,8 @@ private:
         for (int i = list_.next[first]; i != 0; i = list_.next[i]) {
             int col_size = col_size_[i];
             if (col_size < min_col) {
-                assert(col_size > 2);
-                if (col_size <= 3) {
+                assert(col_size > (kMaxMinColumn - 1));
+                if (col_size <= LeastColSize) {
                     out_min_col = col_size;
                     return i;
                 }
@@ -394,7 +399,7 @@ private:
         for (short col = list_.prev[0]; col != 0; col = list_.prev[col]) {
             short col_size = col_size_[col];
             assert(col_size >= 0);
-            if (col_size <= 2) {
+            if (col_size <= (short)(kMaxMinColumn - 1)) {
                 mincol_list_.push_front(col_size, col);
             }
         }
@@ -604,10 +609,10 @@ public:
                 assert(col_size_[list_.col[col]] > 0);
                 col_size_[list_.col[col]]--;
                 int col_size = col_size_[list_.col[col]];
-                if (col_size <= 2) {
+                if (col_size <= (kMaxMinColumn - 1)) {
                     // if (col_size == 2), only insert
                     short col_index = list_.col[col];
-                    if (col_size < 2) {
+                    if (col_size < (kMaxMinColumn - 1)) {
                         mincol_list_.remove(col_index);
                     }
                     mincol_list_.push_front(col_size, col_index);
@@ -627,11 +632,11 @@ public:
                 list_.down[up] = col;
                 col_size_[list_.col[col]]++;
                 int col_size = col_size_[list_.col[col]];
-                if (col_size <= 3) {
+                if (col_size <= kMaxMinColumn) {
                     // if (col_size == 3), only remove
                     short col_index = list_.col[col];
                     mincol_list_.remove(col_index);
-                    if (col_size < 3) {
+                    if (col_size < kMaxMinColumn) {
                         mincol_list_.push_front(col_size, col_index);
                     }
                 }
@@ -663,7 +668,7 @@ public:
         int min_col;
         int index = mincol_list_.get_min_column(min_col);
         if (index == -1) {
-            index = get_min_column_more_than_2(min_col);
+            index = get_min_column_more_than_N<kMaxMinColumn>(min_col);
         }
         if (index > 0) {
             if (min_col == 1)
