@@ -14,8 +14,8 @@
 #define __SSSE3__
 #define __SSE4A__
 #define __SSE4a__
-//#define __SSE4_1__
-//#define __SSE4_2__
+#define __SSE4_1__
+#define __SSE4_2__
 #define __POPCNT__
 #define __LZCNT__
 #define __AVX__
@@ -36,8 +36,8 @@
 //#define __AVX__
 //#define __AVX2__
 //#define __3dNOW__
-#undef __SSE4_1__
-#undef __SSE4_2__
+//#undef __SSE4_1__
+//#undef __SSE4_2__
 #endif
 
 #include <stdint.h>
