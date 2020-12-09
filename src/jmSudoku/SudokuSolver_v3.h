@@ -7,8 +7,8 @@
 #endif
 
 #if defined(_MSC_VER)
-#define __SSE_4_1__     1
-#define __SSE_4_2__     1
+#define __SSE_4_1__
+#define __SSE_4_2__
 #endif
 
 #include <stdint.h>
@@ -23,9 +23,13 @@
 #include <vector>
 #include <bitset>
 
+#if defined(_MSC_VER)
 #include <emmintrin.h>      // For SSE 2
 #include <tmmintrin.h>      // For SSE 3
 #include <smmintrin.h>      // For SSE 4.1
+#else
+#include <x86intrin.h>      // For SSE 4.1
+#endif // _MSC_VER
 
 #include "Sudoku.h"
 #include "StopWatch.h"
@@ -370,7 +374,7 @@ private:
     }
 
     int get_min_column_simd(int & out_min_col) {
-        return 0;
+        return get_min_column(out_min_col);
     }
 
 #endif // __SSE_4_1__
