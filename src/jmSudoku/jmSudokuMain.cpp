@@ -22,7 +22,7 @@
 
 #include "SudokuSolver_v1.h"
 #include "SudokuSolver_v2.h"
-//#include "SudokuSolver_v3.h"
+#include "SudokuSolver_v3.h"
 //#include "SudokuSolver_v4.h"
 
 #include "CPUWarmUp.h"
@@ -195,19 +195,20 @@ void run_a_testcase(size_t index)
         bool success = solver.solve(board, elapsed_time);
     }
 
-#if 0
-#ifdef NDEBUG
     if (kEnableV3Solution)
     {
         printf("------------------------------------------\n\n");
         printf("jmSudoku: v3::Solution - dfs\n\n");
 
-        std::vector<std::vector<char>> board;
+        char board[Sudoku::BoardSize];
         read_sudoku_board(board, index);
 
         v3::Solver solver;
         bool success = solver.solve(board, elapsed_time);
     }
+
+#if 0
+#ifdef NDEBUG
 
     if (kEnableV4Solution)
     {
@@ -334,6 +335,7 @@ int main(int argc, char * argv[])
         if (filename != nullptr) {
             run_sudoku_test<v1::Solver>(filename, "v1");
             run_sudoku_test<v2::Solver>(filename, "v2");
+            run_sudoku_test<v3::Solver>(filename, "v3");
         }
     }
 
