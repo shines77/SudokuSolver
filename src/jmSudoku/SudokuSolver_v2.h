@@ -166,17 +166,17 @@ public:
         return (this->list_[col].enabled != 0);
     }
 
-    void enable(short col_index) {
+    inline void enable(short col_index) {
         short col = (short)MaxColumn + col_index;
         this->list_[col].enabled = 1;
     }
 
-    void disable(short col_index) {
+    inline void disable(short col_index) {
         short col = (short)MaxColumn + col_index;
         this->list_[col].enabled = 0;
     }
 
-    int get_min_column(int & min_col_size) const {
+    inline int get_min_column(int & min_col_size) const {
         for (short col = this->list_[0].next; col != (short)0; col = this->list_[col].next) {
             if (this->list_[col].enabled == 1) {
                 return 0;
@@ -201,7 +201,7 @@ public:
         return -1;
     }
 
-    void push_front(short col_size, short col_index) {
+    inline void push_front(short col_size, short col_index) {
         assert(col_size < MaxColumn);
         short col = (short)MaxColumn + col_index;
         this->list_[col].enabled = 1;
@@ -222,7 +222,7 @@ public:
         }
     }
 
-    void push_back(short col_size, short col_index) {
+    inline void push_back(short col_size, short col_index) {
         assert(col_size < MaxColumn);
         short col = (short)MaxColumn + col_index;
         this->list_[col].enabled = 1;
@@ -243,20 +243,22 @@ public:
         }
     }
 
-    void remove(short col_index) {
+    inline void remove(short col_index) {
         short col = (short)MaxColumn + col_index;
         short prev = this->list_[col].prev;
         short next = this->list_[col].next;
         this->list_[prev].next = next;
         this->list_[next].prev = prev;
+        this->list_[col].enabled = 0;
     }
 
-    void restore(short col_index) {
+    inline void restore(short col_index) {
         short col = (short)MaxColumn + col_index;
         short prev = this->list_[col].prev;
         short next = this->list_[col].next;
         this->list_[next].prev = col;
         this->list_[prev].next = col;
+        this->list_[col].enabled = 1;
     }
 };
 
@@ -597,6 +599,12 @@ public:
 
     void restore(int index) {
         assert(index > 0);
+        int next = list_.next[index];
+        int prev = list_.prev[index];
+        list_.prev[next] = index;
+        list_.next[prev] = index;
+
+        mincol_list_.enable(index);
 
         for (int row = list_.up[index]; row != index; row = list_.up[row]) {
             for (int col = list_.prev[row]; col != row; col = list_.prev[col]) {
@@ -616,13 +624,6 @@ public:
                 }
             }
         }
-
-        mincol_list_.enable(index);
-
-        int next = list_.next[index];
-        int prev = list_.prev[index];
-        list_.prev[next] = index;
-        list_.next[prev] = index;
     }
 
     bool search() {
