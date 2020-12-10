@@ -1,6 +1,6 @@
 
-#ifndef JM_SUDOKU_SOLVER_V2A_H
-#define JM_SUDOKU_SOLVER_V2A_H
+#ifndef JM_SUDOKU_SOLVER_DLX_V1_H
+#define JM_SUDOKU_SOLVER_DLX_V1_H
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1020)
 #pragma once
@@ -29,12 +29,13 @@
 
 ************************************************/
 
-#define V2A_SEARCH_MODE     SEARCH_MODE_ONE_ANSWER
+#define DLX_V1_SEARCH_MODE      SEARCH_MODE_ONE_ANSWER
 
 namespace jmSudoku {
-namespace v2a {
+namespace dlx {
+namespace v1 {
 
-static const size_t kSearchMode = V2A_SEARCH_MODE;
+static const size_t kSearchMode = DLX_V1_SEARCH_MODE;
 
 template <size_t Capacity>
 struct FixedDlxNodeList {
@@ -126,138 +127,6 @@ private:
     }
 };
 
-template <size_t MaxColumn, size_t Capacity>
-class mincol_list {
-public:
-    static const size_t kCapacity = MaxColumn + Capacity;
-
-    struct node {
-        short prev;
-        short next;
-        short enabled;
-        short reserve;
-    };
-
-private:
-    node list_[kCapacity];
-
-    void init() {
-        for (size_t i = 0; i < MaxColumn; i++) {
-            this->list_[i].prev = (short)i;
-            this->list_[i].next = (short)i;
-            this->list_[i].enabled = 0;
-            this->list_[i].reserve = 0;
-        }
-    }
-
-public:
-    mincol_list() {
-        this->init();
-    }
-    ~mincol_list() {}
-
-    short begin(size_t col_size) const {
-        assert(col_size < MaxColumn);
-        return this->list_[col_size].next;
-    }
-
-    bool is_enabled(short col_index) const {
-        short col = (short)MaxColumn + col_index;
-        return (this->list_[col].enabled != 0);
-    }
-
-    void enable(short col_index) {
-        short col = (short)MaxColumn + col_index;
-        this->list_[col].enabled = 1;
-    }
-
-    void disable(short col_index) {
-        short col = (short)MaxColumn + col_index;
-        this->list_[col].enabled = 0;
-    }
-
-    int get_min_column(int & min_col_size) const {
-        for (short col = this->list_[0].next; col != (short)0; col = this->list_[col].next) {
-            if (this->list_[col].enabled == 1) {
-                return 0;
-            }
-        }
-        for (short col = this->list_[1].next; col != (short)1; col = this->list_[col].next) {
-            if (this->list_[col].enabled == 1) {
-                min_col_size = (int)1;
-                return (col - MaxColumn);
-            }
-        }
-        for (short col = this->list_[2].next; col != (short)2; col = this->list_[col].next) {
-            if (this->list_[col].enabled == 1) {
-                min_col_size = (int)2;
-                return (col - MaxColumn);
-            }
-        }
-        return -1;
-    }
-
-    void push_front(short col_size, short col_index) {
-        assert(col_size < MaxColumn);
-        short col = (short)MaxColumn + col_index;
-        if (this->list_[col_size].next != col_size) {
-            short next = this->list_[col_size].next;
-            this->list_[next].prev = col;
-            this->list_[col_size].next = col;
-
-            this->list_[col].prev = col_size;
-            this->list_[col].next = next;
-            this->list_[col].enabled = 1;
-        }
-        else {
-            this->list_[col_size].next = col;
-            this->list_[col_size].prev = col;
-            
-            this->list_[col].prev = col_size;
-            this->list_[col].next = col_size;
-            this->list_[col].enabled = 1;
-        }
-    }
-
-    void push_back(short col_size, short col_index) {
-        assert(col_size < MaxColumn);
-        short col = (short)MaxColumn + col_index;
-        if (this->list_[col_size].next != col_size) {
-            short prev = this->list_[col_size].prev;
-            this->list_[prev].next = col;
-            this->list_[col_size].prev = col;
-
-            this->list_[col].prev = prev;
-            this->list_[col].next = col_size;
-            this->list_[col].enabled = 1;
-        }
-        else {
-            this->list_[col_size].next = col;
-            this->list_[col_size].prev = col;
-            
-            this->list_[col].prev = col_size;
-            this->list_[col].next = col_size;
-            this->list_[col].enabled = 1;
-        }
-    }
-
-    void remove(short col_index) {
-        short col = (short)MaxColumn + col_index;
-        short prev = this->list_[col].prev;
-        short next = this->list_[col].next;
-        this->list_[prev].next = next;
-        this->list_[next].prev = prev;
-    }
-
-    void restore(short col_index) {
-        short col = (short)MaxColumn + col_index;
-        short prev = this->list_[col].prev;
-        short next = this->list_[col].next;
-        this->list_[next].prev = col;
-        this->list_[prev].next = col;
-    }
-};
-
 class DancingLinks {
 public:
     static const size_t Rows = Sudoku::Rows;
@@ -268,7 +137,6 @@ public:
     static const size_t TotalSize = Sudoku::TotalSize;
     static const size_t TotalSize2 = Sudoku::TotalSize2;
 
-    static size_t init_counter;
     static size_t num_guesses;
     static size_t num_unique_candidate;
     static size_t num_early_return;
@@ -286,8 +154,6 @@ private:
     SmallBitMatrix2<9, 9>  bit_palaces;     // [palace][num]
 
     short               col_size_[Sudoku::TotalConditions + 1];
-
-    mincol_list<3, Sudoku::TotalConditions + 1>    mincol_list_;
 
     std::vector<int>    answer_;
     int                 last_idx_;
@@ -311,7 +177,6 @@ public:
 
     int cols() const { return (int)Sudoku::TotalConditions; }
 
-    static size_t get_init_counter() { return DancingLinks::init_counter; }
     static size_t get_num_guesses() { return DancingLinks::num_guesses; }
     static size_t get_num_unique_candidate() { return DancingLinks::num_unique_candidate; }
     static size_t get_num_early_return() { return DancingLinks::num_early_return; }
@@ -335,7 +200,8 @@ public:
 private:
     int get_min_column(int & out_min_col) const {
         int first = list_.next[0];
-        assert(first != 0);
+        if (first == 0)
+            return -1;
         int min_col = col_size_[first];
         assert(min_col >= 0);
         if (min_col <= 1) {
@@ -362,42 +228,6 @@ private:
         }
         out_min_col = min_col;
         return min_col_index;
-    }
-
-    int get_min_column_more_than_2(int & out_min_col) const {
-        int first = list_.next[0];
-        assert(first != 0);
-        int min_col = col_size_[first];
-        assert(min_col >= 0);
-        if (min_col <= 3) {
-            out_min_col = min_col;
-            return first;
-        }
-        int min_col_index = first;
-        for (int i = list_.next[first]; i != 0; i = list_.next[i]) {
-            int col_size = col_size_[i];
-            if (col_size < min_col) {
-                assert(col_size > 2);
-                if (col_size <= 3) {
-                    out_min_col = col_size;
-                    return i;
-                }
-                min_col = col_size;
-                min_col_index = i;
-            }
-        }
-        out_min_col = min_col;
-        return min_col_index;
-    }
-
-    void traversal_columns_size() {
-        for (short col = list_.prev[0]; col != 0; col = list_.prev[col]) {
-            short col_size = col_size_[col];
-            assert(col_size >= 0);
-            if (col_size <= 2) {
-                mincol_list_.push_front(col_size, col);
-            }
-        }
     }
 
     std::bitset<9> getUsable(size_t row, size_t col) {
@@ -472,10 +302,9 @@ public:
 
         this->answer_.clear();
         this->answer_.reserve(81);
-        if (kSearchMode > SEARCH_MODE_ONE_ANSWER) {
-            this->answers_.clear();
-        }
-        init_counter = 0;
+#if (DLX_V1_SEARCH_MODE >= SEARCH_MODE_ONE_ANSWER)
+        this->answers_.clear();
+#endif
         num_guesses = 0;
         num_unique_candidate = 0;
         num_early_return = 0;
@@ -536,29 +365,6 @@ public:
                             last_idx_ = index;
                         }
                     }
-                }
-                else {
-#if 0
-                    size_t number = val - '1';
-                    int head = last_idx_;
-                    int index = last_idx_;
-
-                    this->insert(index + 0, row_idx, (int)(0      + pos              + 1));
-                    this->insert(index + 1, row_idx, (int)(81 * 1 + row * 9 + number + 1));
-                    this->insert(index + 2, row_idx, (int)(81 * 2 + col * 9 + number + 1));
-                    size_t palace_x_9 = tables.palace_x_9[pos];
-                    this->insert(index + 3, row_idx, (int)(81 * 3 + palace_x_9 + number + 1));
-
-                    this->rows_[row_idx] = (unsigned char)row;
-                    this->cols_[row_idx] = (unsigned char)col;
-                    this->numbers_[row_idx] = (unsigned char)number;
-                    index += 4;
-                    row_idx++;
-
-                    list_.next[index - 1] = head;
-                    list_.prev[head] = index - 1;
-                    last_idx_ = index;
-#endif
                 }                
                 pos++;
             }
@@ -593,8 +399,6 @@ public:
         list_.next[prev] = next;
         list_.prev[next] = prev;
 
-        mincol_list_.disable(index);
-
         for (int row = list_.down[index]; row != index; row = list_.down[row]) {
             for (int col = list_.next[row]; col != row; col = list_.next[col]) {
                 int up = list_.up[col];
@@ -603,15 +407,6 @@ public:
                 list_.up[down] = up;
                 assert(col_size_[list_.col[col]] > 0);
                 col_size_[list_.col[col]]--;
-                int col_size = col_size_[list_.col[col]];
-                if (col_size <= 2) {
-                    // if (col_size == 2), only insert
-                    short col_index = list_.col[col];
-                    if (col_size < 2) {
-                        mincol_list_.remove(col_index);
-                    }
-                    mincol_list_.push_front(col_size, col_index);
-                }
             }
         }
     }
@@ -626,19 +421,8 @@ public:
                 list_.up[down] = col;
                 list_.down[up] = col;
                 col_size_[list_.col[col]]++;
-                int col_size = col_size_[list_.col[col]];
-                if (col_size <= 3) {
-                    // if (col_size == 3), only remove
-                    short col_index = list_.col[col];
-                    mincol_list_.remove(col_index);
-                    if (col_size < 3) {
-                        mincol_list_.push_front(col_size, col_index);
-                    }
-                }
             }
         }
-
-        mincol_list_.enable(index);
 
         int next = list_.next[index];
         int prev = list_.prev[index];
@@ -661,10 +445,7 @@ public:
         }
         
         int min_col;
-        int index = mincol_list_.get_min_column(min_col);
-        if (index == -1) {
-            index = get_min_column_more_than_2(min_col);
-        }
+        int index = get_min_column(min_col);
         if (index > 0) {
             if (min_col == 1)
                 num_unique_candidate++;
@@ -702,30 +483,6 @@ public:
     }
 
     bool solve() {
-#if 0
-RETRY_UNIQUE_CANDIDATE:
-        for (int index = list_.next[0]; index != 0; index = list_.next[index]) {
-            size_t col_size = col_size_[index];
-            if (col_size == 1) {
-                assert(index > 0);
-
-                this->remove(index);
-                for (int row = list_.down[index]; row != index; row = list_.down[row]) {
-                    this->answer_.push_back(list_.row[row]);
-                    for (int col = list_.next[row]; col != row; col = list_.next[col]) {
-                        this->remove(list_.col[col]);
-                    }
-                }
-
-                init_counter++;
-                goto RETRY_UNIQUE_CANDIDATE;
-            }
-            else if (col_size == 0) {
-                return false;
-            }
-        }
-#endif
-        traversal_columns_size();
         return this->search();
     }
 
@@ -757,7 +514,6 @@ RETRY_UNIQUE_CANDIDATE:
     }
 };
 
-size_t DancingLinks::init_counter = 0;
 size_t DancingLinks::num_guesses = 0;
 size_t DancingLinks::num_unique_candidate = 0;
 size_t DancingLinks::num_early_return = 0;
@@ -797,11 +553,10 @@ public:
                 solver_.display_answers(board);
             else
                 solver_.display_answer(board);
-            printf("elapsed time: %0.3f ms, init_counter: %" PRIuPTR ", recur_counter: %" PRIuPTR "\n\n"
-                   "num_guesses: %" PRIuPTR ", num_early_return: %" PRIuPTR ", unique_candidate: %" PRIuPTR "\n"
+            printf("elapsed time: %0.3f ms, recur_counter: %" PRIuPTR "\n\n"
+                   "num_guesses: %" PRIuPTR ", num_early_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
                    "guess %% = %0.1f %%, early_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
-                   elapsed_time, DancingLinks::get_init_counter(),
-                   DancingLinks::get_search_counter(),
+                   elapsed_time, DancingLinks::get_search_counter(),
                    DancingLinks::get_num_guesses(),
                    DancingLinks::get_num_early_return(),
                    DancingLinks::get_num_unique_candidate(),
@@ -814,7 +569,8 @@ public:
     }
 };
 
-} // namespace v2a
+} // namespace v1
+} // namespace dlx
 } // namespace jmSudoku
 
-#endif // JM_SUDOKU_SOLVER_V2A_H
+#endif // JM_SUDOKU_SOLVER_DLX_V1_H

@@ -158,10 +158,10 @@
     <ClInclude Include="..\..\..\src\jmSudoku\CPUWarmUp.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\StopWatch.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\Sudoku.h" />
-    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v1.h" />
-    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v2.h" />
-    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v2a.h" />
-    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v3.h" />
+    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_dlx_v1.h" />
+    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_dlx_v2.h" />
+    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_dlx_v2a.h" />
+    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_dlx_v3.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\TestCase.h" />
   </ItemGroup>
   <ItemGroup>

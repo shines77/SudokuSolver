@@ -1,6 +1,6 @@
 
-#ifndef JM_SUDOKU_SOLVER_V3_H
-#define JM_SUDOKU_SOLVER_V3_H
+#ifndef JM_SUDOKU_SOLVER_DLX_V3_H
+#define JM_SUDOKU_SOLVER_DLX_V3_H
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1020)
 #pragma once
@@ -74,12 +74,13 @@ using namespace jstd;
 
 ************************************************/
 
-#define V3_SEARCH_MODE      SEARCH_MODE_ONE_ANSWER
+#define DLX_V3_SEARCH_MODE      SEARCH_MODE_ONE_ANSWER
 
 namespace jmSudoku {
+namespace dlx {
 namespace v3 {
 
-static const size_t kSearchMode = V3_SEARCH_MODE;
+static const size_t kSearchMode = DLX_V3_SEARCH_MODE;
 
 template <size_t Capacity>
 struct FixedDlxNodeList {
@@ -1171,6 +1172,7 @@ public:
 };
 
 } // namespace v3
+} // namespace dlx
 } // namespace jmSudoku
 
-#endif // JM_SUDOKU_SOLVER_V3_H
+#endif // JM_SUDOKU_SOLVER_DLX_V3_H

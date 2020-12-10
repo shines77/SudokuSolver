@@ -16,22 +16,22 @@
     <ClInclude Include="..\..\..\src\jmSudoku\Sudoku.h">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v1.h">
-      <Filter>src</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\src\jmSudoku\TestCase.h">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v2.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v2a.h">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v3.h">
-      <Filter>src</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\src\jmSudoku\BitScan.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_dlx_v1.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_dlx_v2.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_dlx_v2a.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_dlx_v3.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>

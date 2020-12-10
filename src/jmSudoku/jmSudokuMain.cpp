@@ -20,10 +20,9 @@
 #include "Sudoku.h"
 #include "TestCase.h"
 
-#include "SudokuSolver_v1.h"
-#include "SudokuSolver_v2.h"
-#include "SudokuSolver_v3.h"
-//#include "SudokuSolver_v4.h"
+#include "SudokuSolver_dlx_v1.h"
+#include "SudokuSolver_dlx_v2.h"
+#include "SudokuSolver_dlx_v3.h"
 
 #include "CPUWarmUp.h"
 #include "StopWatch.h"
@@ -174,36 +173,36 @@ void run_a_testcase(size_t index)
     if (kEnableV1Solution)
     {
         printf("------------------------------------------\n\n");
-        printf("jmSudoku: v1::Solver - Dancing Links\n\n");
+        printf("jmSudoku: dlx::v1::Solver - Dancing Links\n\n");
 
         char board[Sudoku::BoardSize];
         read_sudoku_board(board, index);
 
-        v1::Solver solver;
+        dlx::v1::Solver solver;
         bool success = solver.solve(board, elapsed_time);
     }
 
     if (kEnableV2Solution)
     {
         printf("------------------------------------------\n\n");
-        printf("jmSudoku: v2::Solution - dfs\n\n");
+        printf("jmSudoku: dlx::v2::Solution - Dancing Links\n\n");
 
         char board[Sudoku::BoardSize];
         read_sudoku_board(board, index);
 
-        v2::Solver solver;
+        dlx::v2::Solver solver;
         bool success = solver.solve(board, elapsed_time);
     }
 
     if (kEnableV3Solution)
     {
         printf("------------------------------------------\n\n");
-        printf("jmSudoku: v3::Solution - dfs\n\n");
+        printf("jmSudoku: dlx::v3::Solution - Dancing Links\n\n");
 
         char board[Sudoku::BoardSize];
         read_sudoku_board(board, index);
 
-        v3::Solver solver;
+        dlx::v3::Solver solver;
         bool success = solver.solve(board, elapsed_time);
     }
 
@@ -335,10 +334,10 @@ int main(int argc, char * argv[])
     {
         if (filename != nullptr) {
 #ifdef NDEBUG
-            run_sudoku_test<v1::Solver>(filename, "v1");
-            run_sudoku_test<v2::Solver>(filename, "v2");
+            run_sudoku_test<dlx::v1::Solver>(filename, "dlx::v1");
+            run_sudoku_test<dlx::v2::Solver>(filename, "dlx::v2");
 #endif
-            run_sudoku_test<v3::Solver>(filename, "v3");
+            run_sudoku_test<dlx::v3::Solver>(filename, "dlx::v3");
         }
     }
 
