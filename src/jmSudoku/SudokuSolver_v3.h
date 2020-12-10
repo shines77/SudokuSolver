@@ -115,7 +115,6 @@ public:
     static const size_t TotalSize = Sudoku::TotalSize;
     static const size_t TotalSize2 = Sudoku::TotalSize2;
 
-    static size_t init_counter;
     static size_t num_guesses;
     static size_t num_unique_candidate;
     static size_t num_early_return;
@@ -164,7 +163,6 @@ public:
 
     int cols() const { return (int)Sudoku::TotalConditions; }
 
-    static size_t get_init_counter() { return DancingLinks::init_counter; }
     static size_t get_num_guesses() { return DancingLinks::num_guesses; }
     static size_t get_num_unique_candidate() { return DancingLinks::num_unique_candidate; }
     static size_t get_num_early_return() { return DancingLinks::num_early_return; }
@@ -888,7 +886,6 @@ public:
         if (kSearchMode > SEARCH_MODE_ONE_ANSWER) {
             this->answers_.clear();
         }
-        init_counter = 0;
         num_guesses = 0;
         num_unique_candidate = 0;
         num_early_return = 0;
@@ -1118,7 +1115,6 @@ public:
     }
 };
 
-size_t DancingLinks::init_counter = 0;
 size_t DancingLinks::num_guesses = 0;
 size_t DancingLinks::num_unique_candidate = 0;
 size_t DancingLinks::num_early_return = 0;
@@ -1158,11 +1154,10 @@ public:
                 solver_.display_answers(board);
             else
                 solver_.display_answer(board);
-            printf("elapsed time: %0.3f ms, init_counter: %" PRIuPTR ", recur_counter: %" PRIuPTR "\n\n"
+            printf("elapsed time: %0.3f ms, recur_counter: %" PRIuPTR "\n\n"
                    "num_guesses: %" PRIuPTR ", num_early_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
                    "guess %% = %0.1f %%, early_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
-                   elapsed_time, DancingLinks::get_init_counter(),
-                   DancingLinks::get_search_counter(),
+                   elapsed_time, DancingLinks::get_search_counter(),
                    DancingLinks::get_num_guesses(),
                    DancingLinks::get_num_early_return(),
                    DancingLinks::get_num_unique_candidate(),
