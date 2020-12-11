@@ -18,10 +18,13 @@
 #include <cstring>      // For std::memset()
 #include <initializer_list>
 #include <type_traits>
+#include <cassert>
 
 #include "BitUtils.h"
 
 namespace jstd {
+
+struct dont_init_t {};
 
 template <size_t Bits, bool NeedTrim = true>
 class SmallBitSet {
@@ -44,7 +47,15 @@ private:
     unit_type array_[kUnits];
 
 public:
-    SmallBitSet() noexcept = default;
+    SmallBitSet() noexcept {
+        static_assert((Bits != 0), "SmallBitSet<Bits>: Bits can not be 0 size.");
+        this->reset();
+    }
+
+    SmallBitSet(dont_init_t & dont_init) noexcept {
+        static_assert((Bits != 0), "SmallBitSet<Bits>: Bits can not be 0 size.");
+        /* Here we don't need initialize for optimize sometimes. */
+    }
 
     SmallBitSet(const SmallBitSet<Bits, NeedTrim> & src) noexcept {
         for (size_t i = 0; i < kUnits; i++) {
@@ -59,6 +70,10 @@ public:
         for (size_t i = 0; i < copyUnits; i++) {
             this->array_[i] = src.array(i);
         }
+    }
+
+    SmallBitSet(unit_type value) noexcept {
+        this->array_[0] = value;
     }
 
     SmallBitSet(std::initializer_list<unit_type> init_list) noexcept {
@@ -187,6 +202,11 @@ public:
             return (!this->bitmap_->test(pos_));
         }
 
+        bool operator ! () const noexcept {
+            // return complemented element
+            return (!this->bitmap_->test(pos_));
+        }
+
         operator bool () const noexcept {
             // return element
             return (this->bitmap_->test(pos_));
@@ -221,6 +241,36 @@ public:
         return reference(*this, pos);
     }
 
+    this_type & operator & (unit_type value) noexcept {
+        this->array_[0] &= value;
+        return (*this);
+    }
+
+    this_type & operator | (unit_type value) noexcept {
+        this->array_[0] |= value;
+        return (*this);
+    }
+
+    this_type & operator ^ (unit_type value) noexcept {
+        this->array_[0] ^= value;
+        return (*this);
+    }
+
+    this_type & operator &= (unit_type value) noexcept {
+        this->array_[0] &= value;
+        return (*this);
+    }
+
+    this_type & operator |= (unit_type value) noexcept {
+        this->array_[0] |= value;
+        return (*this);
+    }
+
+    this_type & operator ^= (unit_type value) noexcept {
+        this->array_[0] ^= value;
+        return (*this);
+    }
+
     this_type & operator &= (const this_type & right) noexcept {
         for (size_t i = 0; i < kUnits; i++) {
             this->array_[i] &= right.array(i);
@@ -242,7 +292,12 @@ public:
         return (*this);
     }
 
-	this_type operator ~() const noexcept {
+	this_type operator ~ () const noexcept {
+        // Flip all bits
+		return (this_type(*this).flip());
+    }
+
+	this_type operator ! () const noexcept {
         // Flip all bits
 		return (this_type(*this).flip());
     }
@@ -265,11 +320,6 @@ public:
         return true;
     }
 
-    this_type & clear() noexcept {
-        std::memset(this->array_, 0, kUnits * sizeof(unit_type));
-        return (*this);
-    }
-
     this_type & fill(size_t value) noexcept {
         for (size_t i = 0; i < kUnits; i++) {
             this->array_[i] = (unit_type)value;
@@ -280,36 +330,95 @@ public:
         return (*this);
     }
 
-    size_t bsf() const noexcept {
-        for (size_t i = 0; i < kUnits; i++) {
-            size_t unit = this->array_[i];
-            if (unit != 0) {
-                unsigned int index = jstd::BitUtils::bsf(unit);
-                return (i * kUnitBits + index);
+    this_type & set() noexcept {
+        if (kUnits <= 8) {
+            for (size_t i = 0; i < kUnits; i++) {
+                this->array_[i] = kFullMask;
             }
         }
-        return 0;
+        else {
+            std::memset(this->array_, (kFullMask & 0xFF), kUnits * sizeof(unit_type));
+        }
+        if (need_trim()) {
+            this->trim();
+        }
+        return (*this);
     }
 
-    size_t bsr() const noexcept {
-        for (ptrdiff_t i = kUnits - 1; i >= 0; i--) {
-            size_t unit = this->array_[i];
-            if (unit != 0) {
-                unsigned int index = jstd::BitUtils::bsr(unit);
-                return size_t(i * kUnitBits + index);
+    this_type & set(size_t pos) {
+        assert(pos < Bits);
+        if (Bits <= kUnitBits) {
+            this->array_[0] |= unit_type(size_t(1) << pos);
+        }
+        else {
+            size_t index = pos / kUnitBits;
+            size_t shift = pos % kUnitBits;
+            this->array_[index] |= unit_type(size_t(1) << shift);
+        }
+        return (*this);
+    }
+
+    this_type & set(size_t pos, bool value) {
+        if (value)
+            this->set(pos);
+        else
+            this->reset(pos);
+        return (*this);
+    }
+
+    this_type & reset() noexcept {
+        if (kUnits <= 8) {
+            for (size_t i = 0; i < kUnits; i++) {
+                this->array_[i] = 0;
             }
         }
-        return Bits;
+        else {
+            std::memset(this->array_, 0, kUnits * sizeof(unit_type));
+        }
+        return (*this);
     }
 
-    size_t count() const {
-        size_t total_popcnt = 0;
-        for (size_t i = 0; i < kUnits; i++) {
-            size_t unit = this->array_[i];
-            unsigned int popcnt = jstd::BitUtils::popcnt(unit);
-            total_popcnt += popcnt;
+    this_type & reset(size_t pos) {
+        assert(pos < Bits);
+        if (Bits <= kUnitBits) {
+            this->array_[0] &= unit_type(~(size_t(1) << pos));
         }
-        return total_popcnt;
+        else {
+            size_t index = pos / kUnitBits;
+            size_t shift = pos % kUnitBits;
+            this->array_[index] &= unit_type(~(size_t(1) << shift));
+        }
+        return (*this);
+    }
+
+    this_type & flip() noexcept {
+        for (size_t i = 0; i < kUnits; i++) {
+            this->array_[i] ^= unit_type(-1);
+        }
+        if (need_trim()) {
+            this->trim();
+        }
+        return (*this);
+    }
+
+    this_type & flip(size_t pos) {
+        assert(pos < Bits);
+        if (Bits <= kUnitBits) {
+            this->array_[0] ^= unit_type(~(size_t(1) << pos));
+        }
+        else {
+            size_t index = pos / kUnitBits;
+            size_t shift = pos % kUnitBits;
+            this->array_[index] ^= unit_type(~(size_t(1) << shift));
+        }
+        return (*this);
+    }
+
+    this_type & trim() noexcept {
+        if (kRestBits != 0) {
+		    this->array_[kUnits - 1] &= kTrimMask;
+        }
+        return (*this);
     }
 
     bool test(size_t pos) const {
@@ -385,85 +494,54 @@ public:
         }
     }
 
-    this_type & set() noexcept {
+    size_t bsf() const noexcept {
         for (size_t i = 0; i < kUnits; i++) {
-            this->array_[i] = kFullMask;
+            size_t unit = this->array_[i];
+            if (unit != 0) {
+                unsigned int index = jstd::BitUtils::bsf(unit);
+                return (i * kUnitBits + index);
+            }
         }
-        if (need_trim()) {
-            this->trim();
-        }
-        return (*this);
+        return 0;
     }
 
-    this_type & set(size_t pos) {
-        assert(pos < Bits);
-        if (Bits <= kUnitBits) {
-            this->array_[0] |= unit_type(size_t(1) << pos);
+    size_t bsr() const noexcept {
+        for (ptrdiff_t i = kUnits - 1; i >= 0; i--) {
+            size_t unit = this->array_[i];
+            if (unit != 0) {
+                unsigned int index = jstd::BitUtils::bsr(unit);
+                return size_t(i * kUnitBits + index);
+            }
+        }
+        return Bits;
+    }
+
+    size_t count() const noexcept {
+        size_t total_popcnt = 0;
+        for (size_t i = 0; i < kUnits; i++) {
+            size_t unit = this->array_[i];
+            unsigned int popcnt = jstd::BitUtils::popcnt(unit);
+            total_popcnt += popcnt;
+        }
+        return total_popcnt;
+    }
+
+    unsigned long to_ulong() const {
+        if (Bits <= sizeof(uint32_t) * 8) {
+            return this->array_[0];
         }
         else {
-            size_t index = pos / kUnitBits;
-            size_t shift = pos % kUnitBits;
-            this->array_[index] |= unit_type(size_t(1) << shift);
+            return static_cast<unsigned long>(this->array_[0]);
         }
-        return (*this);
     }
 
-    this_type & set(size_t pos, bool value) {
-        if (value)
-            this->set(pos);
-        else
-            this->reset(pos);
-        return (*this);
-    }
-
-    this_type & reset() noexcept {
-        for (size_t i = 0; i < kUnits; i++) {
-            this->array_[i] = 0;
-        }
-        return (*this);
-    }
-
-    this_type & reset(size_t pos) {
-        assert(pos < Bits);
-        if (Bits <= kUnitBits) {
-            this->array_[0] &= unit_type(~(size_t(1) << pos));
+    uint64_t to_ullong() const {
+        if (Bits <= sizeof(uint32_t) * 8) {
+            return static_cast<uint64_t>(this->array_[0]);
         }
         else {
-            size_t index = pos / kUnitBits;
-            size_t shift = pos % kUnitBits;
-            this->array_[index] &= unit_type(~(size_t(1) << shift));
+            return this->array_[0];
         }
-        return (*this);
-    }
-
-    this_type & flip() noexcept {
-        for (size_t i = 0; i < kUnits; i++) {
-            this->array_[i] ^= unit_type(-1);
-        }
-        if (need_trim()) {
-            this->trim();
-        }
-        return (*this);
-    }
-
-    this_type & flip(size_t pos) {
-        assert(pos < Bits);
-        if (Bits <= kUnitBits) {
-            this->array_[0] ^= unit_type(~(size_t(1) << pos));
-        }
-        else {
-            size_t index = pos / kUnitBits;
-            size_t shift = pos % kUnitBits;
-            this->array_[index] ^= unit_type(~(size_t(1) << shift));
-        }
-        return (*this);
-    }
-
-    this_type & trim() noexcept {
-        if (kRestBits != 0) {
-		    this->array_[kUnits - 1] &= kTrimMask;
-        }
-        return (*this);
     }
 };
 
@@ -558,7 +636,8 @@ public:
 template <size_t Rows, size_t Cols, typename TBitSet = std::bitset<Cols>>
 class SmallBitMatrix2 {
 private:
-    typedef TBitSet bitset_type;
+    typedef TBitSet                                 bitset_type;
+    typedef SmallBitMatrix2<Rows, Cols, TBitSet>    this_type;
 
     bitset_type array_[Rows];
 
@@ -577,22 +656,32 @@ public:
         return this->array_[row].test(col);
     }
 
-    void set() {
+    this_type & fill(size_t value) noexcept {
+        for (size_t row = 0; row < Rows; row++) {
+            this->array_[row].fill(value);
+        }
+        return (*this);
+    }
+
+    this_type & set() noexcept {
         for (size_t row = 0; row < Rows; row++) {
             this->array_[row].set();
         }
+        return (*this);
     }
 
-    void reset() {
+    this_type & reset() noexcept {
         for (size_t row = 0; row < Rows; row++) {
             this->array_[row].reset();
         }
+        return (*this);
     }
 
-    void flip() {
+    this_type & flip() noexcept {
         for (size_t row = 0; row < Rows; row++) {
             this->array_[row].flip();
         }
+        return (*this);
     }
 
     bitset_type & operator [] (size_t pos) {
@@ -610,7 +699,8 @@ template <size_t Depths, size_t Rows, size_t Cols,
           typename TSmallBitMatrix2 = SmallBitMatrix2<Rows, Cols>>
 class SmallBitMatrix3 {
 private:
-    typedef TSmallBitMatrix2 matrix_type;
+    typedef TSmallBitMatrix2                                        matrix_type;
+    typedef SmallBitMatrix3<Depths, Rows, Cols, TSmallBitMatrix2>   this_type;
 
     matrix_type matrix_[Depths];
 
@@ -631,22 +721,32 @@ public:
         return this->matrix_[depth][row].test(col);
     }
 
-    void set() {
+    this_type & fill(size_t value) {
+        for (size_t depth = 0; depth < Depths; depth++) {
+            this->matrix_[depth].fill(value);
+        }
+        return (*this);
+    }
+
+    this_type & set() {
         for (size_t depth = 0; depth < Depths; depth++) {
             this->matrix_[depth].set();
         }
+        return (*this);
     }
 
-    void reset() {
+    this_type & reset() {
         for (size_t depth = 0; depth < Depths; depth++) {
             this->matrix_[depth].reset();
         }
+        return (*this);
     }
 
-    void flip() {
+    this_type & flip() {
         for (size_t depth = 0; depth < Depths; depth++) {
             this->matrix_[depth].flip();
         }
+        return (*this);
     }
 
     matrix_type & operator [] (size_t pos) {
@@ -663,7 +763,8 @@ public:
 template <size_t Rows, size_t Cols, typename TBitSet = std::bitset<Cols>>
 class BitMatrix2 {
 private:
-    typedef TBitSet bitset_type;
+    typedef TBitSet                             bitset_type;
+    typedef BitMatrix2<Rows, Cols, TBitSet>     this_type;
 
     std::vector<bitset_type> array_;
 
@@ -679,7 +780,7 @@ public:
         }
     }
 
-    BitMatrix2(const SmallBitMatrix2<Rows, Cols> & src) {
+    BitMatrix2(const SmallBitMatrix2<Rows, Cols, TBitSet> & src) {
         this->array_.reserve(Rows);
         for (size_t row = 0; row < Rows; row++) {
             this->array_.push_back(src[row]);
@@ -688,7 +789,7 @@ public:
 
     ~BitMatrix2() = default;
 
-    BitMatrix2 & operator = (const BitMatrix2 & rhs) {
+    this_type & operator = (const this_type & rhs) {
         if (&rhs != this) {
             for (size_t row = 0; row < Rows; row++) {
                 this->array_[row] = rhs[row];
@@ -696,7 +797,7 @@ public:
         }
     }
 
-    BitMatrix2 & operator = (const SmallBitMatrix2<Rows, Cols> & rhs) {
+    this_type & operator = (const SmallBitMatrix2<Rows, Cols, TBitSet> & rhs) {
         for (size_t row = 0; row < Rows; row++) {
             this->array_[row] = rhs[row];
         }
@@ -713,22 +814,32 @@ public:
         return this->array_[row].test(col);
     }
 
-    void set() {
+    this_type & fill(size_t value) {
+        for (size_t row = 0; row < Rows; row++) {
+            this->array_[row].fill(value);
+        }
+        return (*this);
+    }
+
+    this_type & set() {
         for (size_t row = 0; row < Rows; row++) {
             this->array_[row].set();
         }
+        return (*this);
     }
 
-    void reset() {
+    this_type & reset() {
         for (size_t row = 0; row < Rows; row++) {
             this->array_[row].reset();
         }
+        return (*this);
     }
 
-    void flip() {
+    this_type & flip() {
         for (size_t row = 0; row < Rows; row++) {
             this->array_[row].flip();
         }
+        return (*this);
     }
 
     bitset_type & operator [] (size_t pos) {
@@ -746,7 +857,8 @@ template <size_t Depths, size_t Rows, size_t Cols,
           typename TBitMatrix2 = BitMatrix2<Rows, Cols>>
 class BitMatrix3 {
 private:
-    typedef TBitMatrix2 matrix_type;
+    typedef TBitMatrix2                                 matrix_type;
+    typedef BitMatrix3<Depths, Rows, Cols, TBitMatrix2> this_type;
 
     std::vector<matrix_type> matrix_;
 
@@ -755,14 +867,14 @@ public:
         this->matrix_.resize(Depths);
     }
 
-    BitMatrix3(const BitMatrix3 & src) {
+    BitMatrix3(const this_type & src) {
         this->matrix_.reserve(Depths);
         for (size_t depth = 0; depth < Depths; depth++) {
             this->matrix_.push_back(src[depth]);
         }
     }
 
-    BitMatrix3(const SmallBitMatrix3<Depths, Rows, Cols> & src) {
+    BitMatrix3(const SmallBitMatrix3<Depths, Rows, Cols, TBitMatrix2> & src) {
         this->matrix_.reserve(Depths);
         for (size_t depth = 0; depth < Depths; depth++) {
             this->matrix_.push_back(src[depth]);
@@ -771,7 +883,7 @@ public:
 
     ~BitMatrix3() = default;
 
-    BitMatrix3 & operator = (const BitMatrix3 & rhs) {
+    BitMatrix3 & operator = (const this_type & rhs) {
         if (&rhs != this) {
             for (size_t depth = 0; depth < Depths; depth++) {
                 this->matrix_[depth] = rhs[depth];
@@ -779,7 +891,7 @@ public:
         }
     }
 
-    BitMatrix3 & operator = (const SmallBitMatrix3<Depths, Rows, Cols> & rhs) {
+    BitMatrix3 & operator = (const SmallBitMatrix3<Depths, Rows, Cols, TBitMatrix2> & rhs) {
         for (size_t depth = 0; depth < Depths; depth++) {
             this->matrix_[depth] = rhs[depth];
         }
@@ -798,22 +910,32 @@ public:
         return this->matrix_[depth][row].test(col);
     }
 
-    void set() {
+    this_type & fill(size_t value) {
+        for (size_t depth = 0; depth < Depths; depth++) {
+            this->matrix_[depth].fill(value);
+        }
+        return (*this);
+    }
+
+    this_type & set() {
         for (size_t depth = 0; depth < Depths; depth++) {
             this->matrix_[depth].set();
         }
+        return (*this);
     }
 
-    void reset() {
+    this_type & reset() {
         for (size_t depth = 0; depth < Depths; depth++) {
             this->matrix_[depth].reset();
         }
+        return (*this);
     }
 
-    void flip() {
+    this_type & flip() {
         for (size_t depth = 0; depth < Depths; depth++) {
             this->matrix_[depth].flip();
         }
+        return (*this);
     }
 
     matrix_type & operator [] (size_t pos) {

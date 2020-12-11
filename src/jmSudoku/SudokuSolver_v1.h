@@ -101,9 +101,15 @@ public:
 private:
     SmallBitSet<81> cell_filled_;
 
+#if 1
+    SmallBitMatrix2<Sudoku::Cols, Sudoku::Numbers, SmallBitSet<Sudoku::Numbers>>    rows_;
+    SmallBitMatrix2<Sudoku::Rows, Sudoku::Numbers, SmallBitSet<Sudoku::Numbers>>    cols_;
+    SmallBitMatrix2<Sudoku::Palaces, Sudoku::Numbers, SmallBitSet<Sudoku::Numbers>> palaces_;
+#else
     std::array<uint32_t, Sudoku::Cols>      rows_;
     std::array<uint32_t, Sudoku::Rows>      cols_;
-    std::array<uint32_t, Sudoku::Numbers>   palaces_;
+    std::array<uint32_t, Sudoku::Palaces>   palaces_;
+#endif
 
     size_t empties_;
 
@@ -143,10 +149,10 @@ private:
     }
 
     void init_board(char board[Sudoku::BoardSize]) {
-        this->cell_filled_.clear();
+        this->cell_filled_.reset();
 
-        this->rows_.fill(Sudoku::kAllColsBit);
-        this->cols_.fill(Sudoku::kAllRowsBit);
+        this->rows_.fill(Sudoku::kAllNumbersBit);
+        this->cols_.fill(Sudoku::kAllNumbersBit);
         this->palaces_.fill(Sudoku::kAllNumbersBit);
 
         size_t empties = 0;
