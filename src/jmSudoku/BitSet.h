@@ -77,7 +77,6 @@ public:
                 }
             }
         }
-        return (*this);
     }
 
     ~SmallBitSet() = default;
@@ -158,7 +157,7 @@ public:
         size_t pos_;            // position of element in bitset
 
         // proxy for an element
-        friend class this_type;
+        friend class SmallBitSet<Bits, NeedTrim>;
 
     public:
         ~reference() noexcept {
