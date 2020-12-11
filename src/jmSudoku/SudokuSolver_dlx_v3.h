@@ -110,7 +110,7 @@ class DancingLinks {
 public:
     static const size_t Rows = Sudoku::Rows;
     static const size_t Cols = Sudoku::Cols;
-    static const size_t Palaces = Sudoku::Palaces;
+    static const size_t Boxes = Sudoku::Boxes;
     static const size_t Numbers = Sudoku::Numbers;
 
     static const size_t TotalSize = Sudoku::TotalSize;
@@ -132,7 +132,7 @@ private:
 
     SmallBitMatrix2<9, 9>  bit_rows;        // [row][num]
     SmallBitMatrix2<9, 9>  bit_cols;        // [col][num]
-    SmallBitMatrix2<9, 9>  bit_palaces;     // [palace][num]
+    SmallBitMatrix2<9, 9>  bit_boxes;     // [box][num]
 
 #if defined(__SSE4_1__)
     alignas(16) col_info_t col_info_[Sudoku::TotalConditions + 1];
@@ -767,21 +767,21 @@ private:
 #endif // __SSE4_1__
 
     std::bitset<9> getUsable(size_t row, size_t col) {
-        size_t palace = row / 3 * 3 + col / 3;
-        // size_t palace = tables.roundTo3[row] + tables.div3[col];
-        return ~(this->bit_rows[row] | this->bit_cols[col] | this->bit_palaces[palace]);
+        size_t box = row / 3 * 3 + col / 3;
+        // size_t box = tables.roundTo3[row] + tables.div3[col];
+        return ~(this->bit_rows[row] | this->bit_cols[col] | this->bit_boxes[box]);
     }
 
-    std::bitset<9> getUsable(size_t row, size_t col, size_t palace) {
-        return ~(this->bit_rows[row] | this->bit_cols[col] | this->bit_palaces[palace]);
+    std::bitset<9> getUsable(size_t row, size_t col, size_t box) {
+        return ~(this->bit_rows[row] | this->bit_cols[col] | this->bit_boxes[box]);
     }
 
     void fillNum(size_t row, size_t col, size_t num) {
-        size_t palace = row / 3 * 3 + col / 3;
-        // size_t palace = tables.roundTo3[row] + tables.div3[col];
+        size_t box = row / 3 * 3 + col / 3;
+        // size_t box = tables.roundTo3[row] + tables.div3[col];
         this->bit_rows[row].set(num);
         this->bit_cols[col].set(num);
-        this->bit_palaces[palace].set(num);
+        this->bit_boxes[box].set(num);
     }
 
     bool check_col_list_enable() {
@@ -813,7 +813,7 @@ public:
 
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
-            size_t palace_row = row / 3 * 3;
+            size_t box_row = row / 3 * 3;
             for (size_t col = 0; col < Cols; col++) {
                 unsigned char val = board[pos];
                 if (val != '.') {
@@ -821,9 +821,9 @@ public:
                     this->col_index_[0      + pos           + 1] = 0xFFFF;
                     this->col_index_[81 * 1 + row * 9 + num + 1] = 0xFFFF;
                     this->col_index_[81 * 2 + col * 9 + num + 1] = 0xFFFF;
-                    size_t palace = palace_row + col / 3;
-                    // size_t palace_x_9 = tables.palace_x_9[pos];
-                    this->col_index_[81 * 3 + palace * 9 + num + 1] = 0xFFFF;
+                    size_t box = box_row + col / 3;
+                    // size_t box_X_9 = tables.box_X_9[pos];
+                    this->col_index_[81 * 3 + box * 9 + num + 1] = 0xFFFF;
                 }
                 pos++;
             }
@@ -880,7 +880,7 @@ public:
 
         this->bit_rows.reset();
         this->bit_cols.reset();
-        this->bit_palaces.reset();
+        this->bit_boxes.reset();
 
         this->answer_.clear();
         this->answer_.reserve(81);
@@ -920,23 +920,23 @@ public:
 
         pos = 0;
         for (size_t row = 0; row < Rows; row++) {
-            size_t palace_row = row / 3 * 3;
+            size_t box_row = row / 3 * 3;
             for (size_t col = 0; col < Cols; col++) {
                 unsigned char val = board[pos];
                 if (val == '.') {
-                    size_t palace = palace_row + col / 3;
-                    // size_t palace = tables.palace[pos];
-                    // size_t palace_x_9 = tables.palace_x_9[pos];
-                    std::bitset<9> numsUsable = getUsable(row, col, palace);
+                    size_t box = box_row + col / 3;
+                    // size_t box = tables.box[pos];
+                    // size_t box_X_9 = tables.box_X_9[pos];
+                    std::bitset<9> numsUsable = getUsable(row, col, box);
                     for (size_t number = 0; number < Numbers; number++) {
                         if (numsUsable.test(number)) {
                             int head = last_idx_;
                             int index = last_idx_;
 
-                            this->insert(index + 0, row_idx, (int)(81 * 0 + pos                 + 1));
-                            this->insert(index + 1, row_idx, (int)(81 * 1 + row * 9    + number + 1));
-                            this->insert(index + 2, row_idx, (int)(81 * 2 + col * 9    + number + 1));
-                            this->insert(index + 3, row_idx, (int)(81 * 3 + palace * 9 + number + 1));
+                            this->insert(index + 0, row_idx, (int)(81 * 0 + pos              + 1));
+                            this->insert(index + 1, row_idx, (int)(81 * 1 + row * 9 + number + 1));
+                            this->insert(index + 2, row_idx, (int)(81 * 2 + col * 9 + number + 1));
+                            this->insert(index + 3, row_idx, (int)(81 * 3 + box * 9 + number + 1));
 
                             this->rows_[row_idx] = (unsigned short)row;
                             this->cols_[row_idx] = (unsigned short)col;

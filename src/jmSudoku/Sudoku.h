@@ -74,7 +74,7 @@ struct Tables {
         0, 1, 2, 3, 4, 5, 6, 7, 8
     };
 
-    const unsigned int palace[81] = {
+    const unsigned int box[81] = {
         0, 0, 0, 1, 1, 1, 2, 2, 2,
         0, 0, 0, 1, 1, 1, 2, 2, 2,
         0, 0, 0, 1, 1, 1, 2, 2, 2,
@@ -86,7 +86,7 @@ struct Tables {
         6, 6, 6, 7, 7, 7, 8, 8, 8
     };
 
-    const unsigned int palace_x_9[81] = {
+    const unsigned int box_X_9[81] = {
         0,   0,  0,  9,  9,  9, 18, 18, 18,
         0,   0,  0,  9,  9,  9, 18, 18, 18,
         0,   0,  0,  9,  9,  9, 18, 18, 18,
@@ -98,7 +98,7 @@ struct Tables {
         54, 54, 54, 63, 63, 63, 72, 72, 72
     };
 
-    const unsigned int palace_base[81] = {
+    const unsigned int box_base[81] = {
         0,   0,  0,  3,  3,  3,  6,  6,  6,
         0,   0,  0,  3,  3,  3,  6,  6,  6,
         0,   0,  0,  3,  3,  3,  6,  6,  6,
@@ -122,25 +122,25 @@ struct SudokuBoard {
     char board[TotalSize];
 };
 
-template <size_t nPalaceRows = 3, size_t nPalaceCols = 3,
-          size_t nPalaceCountX = 3, size_t nPalaceCountY = 3,
+template <size_t nBoxCellsX = 3, size_t nBoxCellsY = 3,
+          size_t nBoxCountX = 3, size_t nBoxCountY = 3,
           size_t nMinNumber = 1, size_t nMaxNumber = 9>
 struct BasicSudoku {
-    static const size_t PalaceRows = nPalaceRows;       // 3
-    static const size_t PalaceCols = nPalaceCols;       // 3
-    static const size_t PalaceCountX = nPalaceCountX;   // 3
-    static const size_t PalaceCountY = nPalaceCountY;   // 3
-    static const size_t MinNumber = nMinNumber;         // 1
-    static const size_t MaxNumber = nMaxNumber;         // 9
+    static const size_t BoxCellsX = nBoxCellsX;     // 3
+    static const size_t BoxCellsY = nBoxCellsY;     // 3
+    static const size_t BoxCountX = nBoxCountX;     // 3
+    static const size_t BoxCountY = nBoxCountY;     // 3
+    static const size_t MinNumber = nMinNumber;     // 1
+    static const size_t MaxNumber = nMaxNumber;     // 9
 
-    static const size_t Rows = PalaceRows * PalaceCountY;
-    static const size_t Cols = PalaceCols * PalaceCountX;
-    static const size_t Palaces = PalaceCountX * PalaceCountY;
+    static const size_t Cols = BoxCellsX * BoxCountX;
+    static const size_t Rows = BoxCellsY * BoxCountY;
+    static const size_t Boxes = BoxCountX * BoxCountY;
     static const size_t Numbers = (MaxNumber - MinNumber) + 1;
 
-    static const size_t PalaceSize = PalaceRows * PalaceCols;
+    static const size_t BoxSize = BoxCellsX * BoxCellsY;
     static const size_t BoardSize = Rows * Cols;
-    static const size_t TotalSize = PalaceSize * Palaces * Numbers;
+    static const size_t TotalSize = BoxSize * Boxes * Numbers;
 
     static const size_t TotalSize2 = Rows * Cols * Numbers;
 
@@ -148,7 +148,7 @@ struct BasicSudoku {
     static const size_t TotalConditions1 = Rows * Cols;
     static const size_t TotalConditions2 = Rows * Numbers;
     static const size_t TotalConditions3 = Cols * Numbers;
-    static const size_t TotalConditions4 = Palaces * Numbers;
+    static const size_t TotalConditions4 = Boxes * Numbers;
 
     static const size_t TotalConditions01 = TotalConditions0  + TotalConditions1;
     static const size_t TotalConditions02 = TotalConditions01 + TotalConditions2;
@@ -206,7 +206,7 @@ struct BasicSudoku {
         printf("\n");
         // printf("  ------- ------- -------\n");
         printf(" ");
-        for (size_t countX = 0; countX < PalaceCountX; countX++) {
+        for (size_t countX = 0; countX < BoxCountX; countX++) {
             printf(" -------");
         }
         printf("\n");
@@ -219,14 +219,14 @@ struct BasicSudoku {
                     printf(". ");
                 else
                     printf("%c ", val);
-                if ((col % PalaceCols) == (PalaceCols - 1))
+                if ((col % BoxCellsX) == (BoxCellsX - 1))
                     printf("| ");
             }
             printf("\n");
-            if ((row % PalaceRows) == (PalaceRows - 1)) {
+            if ((row % BoxCellsY) == (BoxCellsY - 1)) {
                 // printf("  ------- ------- -------\n");
                 printf(" ");
-                for (size_t countX = 0; countX < PalaceCountX; countX++) {
+                for (size_t countX = 0; countX < BoxCountX; countX++) {
                     printf(" -------");
                 }
                 printf("\n");
@@ -261,7 +261,7 @@ struct BasicSudoku {
         printf("\n");
         // printf("  ------- ------- -------\n");
         printf(" ");
-        for (size_t countX = 0; countX < PalaceCountX; countX++) {
+        for (size_t countX = 0; countX < BoxCountX; countX++) {
             printf(" -------");
         }
         printf("\n");
@@ -275,14 +275,14 @@ struct BasicSudoku {
                     printf(". ");
                 else
                     printf("%c ", val);
-                if ((col % PalaceCols) == (PalaceCols - 1))
+                if ((col % BoxCellsX) == (BoxCellsX - 1))
                     printf("| ");
             }
             printf("\n");
-            if ((row % PalaceRows) == (PalaceRows - 1)) {
+            if ((row % BoxCellsY) == (BoxCellsY - 1)) {
                 // printf("  ------- ------- -------\n");
                 printf(" ");
-                for (size_t countX = 0; countX < PalaceCountX; countX++) {
+                for (size_t countX = 0; countX < BoxCountX; countX++) {
                     printf(" -------");
                 }
                 printf("\n");

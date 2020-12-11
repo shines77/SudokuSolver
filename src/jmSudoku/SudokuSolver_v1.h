@@ -86,7 +86,7 @@ class Solver {
 public:
     static const size_t Rows = Sudoku::Rows;
     static const size_t Cols = Sudoku::Cols;
-    static const size_t Palaces = Sudoku::Palaces;
+    static const size_t Boxes = Sudoku::Boxes;
     static const size_t Numbers = Sudoku::Numbers;
 
     static const size_t TotalSize = Sudoku::TotalSize;
@@ -104,11 +104,11 @@ private:
 #if 1
     SmallBitMatrix2<Sudoku::Cols, Sudoku::Numbers, SmallBitSet<Sudoku::Numbers>>    rows_;
     SmallBitMatrix2<Sudoku::Rows, Sudoku::Numbers, SmallBitSet<Sudoku::Numbers>>    cols_;
-    SmallBitMatrix2<Sudoku::Palaces, Sudoku::Numbers, SmallBitSet<Sudoku::Numbers>> palaces_;
+    SmallBitMatrix2<Sudoku::Boxes, Sudoku::Numbers, SmallBitSet<Sudoku::Numbers>>   boxes_;
 #else
     std::array<uint32_t, Sudoku::Cols>      rows_;
     std::array<uint32_t, Sudoku::Rows>      cols_;
-    std::array<uint32_t, Sudoku::Palaces>   palaces_;
+    std::array<uint32_t, Sudoku::Boxes>     boxes_;
 #endif
 
     size_t empties_;
@@ -141,11 +141,11 @@ public:
     }
 
 private:
-    inline void fillNum(size_t row, size_t col, size_t palace, uint32_t num_bit) {
+    inline void fillNum(size_t row, size_t col, size_t box, uint32_t num_bit) {
         this->cell_filled_.set(row * Sudoku::Cols + col);
         this->rows_[row] ^= num_bit;
         this->cols_[col] ^= num_bit;
-        this->palaces_[palace] ^= num_bit;
+        this->boxes_[box] ^= num_bit;
     }
 
     void init_board(char board[Sudoku::BoardSize]) {
@@ -153,22 +153,22 @@ private:
 
         this->rows_.fill(Sudoku::kAllNumbersBit);
         this->cols_.fill(Sudoku::kAllNumbersBit);
-        this->palaces_.fill(Sudoku::kAllNumbersBit);
+        this->boxes_.fill(Sudoku::kAllNumbersBit);
 
         size_t empties = 0;
         size_t pos = 0;
         for (size_t row = 0; row < Sudoku::Rows; row++) {
-            size_t palace_base = row / 3 * 3;
+            size_t box_base = row / 3 * 3;
             for (size_t col = 0; col < Sudoku::Cols; col++) {
                 unsigned char val = board[pos++];
                 if (val == '.') {
                     empties++;
                 }
                 else {
-                    size_t palace = palace_base + col / 3;
+                    size_t box = box_base + col / 3;
                     uint32_t num = val - '1';
                     uint32_t num_bit = 1u << num;
-                    this->fillNum(row, col, palace, num_bit);
+                    this->fillNum(row, col, box, num_bit);
                 }
             }
         }
