@@ -19,9 +19,6 @@
     <ClInclude Include="..\..\..\src\jmSudoku\TestCase.h">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\jmSudoku\BitScan.h">
-      <Filter>src</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_dlx_v1.h">
       <Filter>src</Filter>
     </ClInclude>
@@ -32,6 +29,15 @@
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_dlx_v3.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v1.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jmSudoku\BitUtils.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jmSudoku\BitSet.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>

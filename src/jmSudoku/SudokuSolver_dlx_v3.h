@@ -62,7 +62,7 @@
 
 #include "Sudoku.h"
 #include "StopWatch.h"
-#include "BitScan.h"
+#include "BitUtils.h"
 
 using namespace jstd;
 
@@ -551,22 +551,22 @@ private:
                                 assert(false);
                             }
                             else {
-                                int min_col_offset = BitScan::bsf(equal_mask);
+                                int min_col_offset = BitUtils::bsf(equal_mask);
                                 min_col_index = index_base + 3 * 16 + min_col_offset;
                             }
                         }
                         else {
-                            int min_col_offset = BitScan::bsf(equal_mask);
+                            int min_col_offset = BitUtils::bsf(equal_mask);
                             min_col_index = index_base + 2 * 16 + min_col_offset;
                         }
                     }
                     else {
-                        int min_col_offset = BitScan::bsf(equal_mask);
+                        int min_col_offset = BitUtils::bsf(equal_mask);
                         min_col_index = index_base + 1 * 16 + min_col_offset;
                     }
                 }
                 else {
-                    int min_col_offset = BitScan::bsf(equal_mask);
+                    int min_col_offset = BitUtils::bsf(equal_mask);
                     min_col_index = index_base + 0 * 16 + min_col_offset;
                 }
 
@@ -637,12 +637,12 @@ private:
                         assert(false);
                     }
                     else {
-                        int min_col_offset = BitScan::bsf(equal_mask);
+                        int min_col_offset = BitUtils::bsf(equal_mask);
                         min_col_index = index_base + 1 * 16 + min_col_offset;
                     }
                 }
                 else {
-                    int min_col_offset = BitScan::bsf(equal_mask);
+                    int min_col_offset = BitUtils::bsf(equal_mask);
                     min_col_index = index_base + 0 * 16 + min_col_offset;
                 }
 
@@ -692,7 +692,7 @@ private:
                     assert(false);
                 }
                 else {
-                    int min_col_offset = BitScan::bsf(equal_mask);
+                    int min_col_offset = BitUtils::bsf(equal_mask);
                     min_col_index = index_base + min_col_offset;
                 }
 
@@ -1122,7 +1122,7 @@ size_t DancingLinks::num_early_return = 0;
 
 class Solver {
 public:
-    typedef DancingLinks algorithm;
+    typedef DancingLinks slover_type;
 
 private:
     DancingLinks solver_;

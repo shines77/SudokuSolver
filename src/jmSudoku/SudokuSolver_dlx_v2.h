@@ -721,7 +721,7 @@ size_t DancingLinks::num_early_return = 0;
 
 class Solver {
 public:
-    typedef DancingLinks algorithm;
+    typedef DancingLinks slover_type;
 
 private:
     DancingLinks solver_;

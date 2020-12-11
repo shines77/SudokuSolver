@@ -18,6 +18,10 @@
 	#include <intrin.h>
 #endif
 
+#if (defined(_MSC_VER))
+    #include <nmmintrin.h>      // For SSE 4.2, _mm_popcnt_u32(), _mm_popcnt_u64()
+#endif
+
 #if (defined(__GNUC__) && (__GNUC__ * 1000 + __GNUC_MINOR__ >= 4005)) \
  || (defined(__INTEL_COMPILER) && (__INTEL_COMPILER >= 900)) || defined(__clang__)
 	#include <x86intrin.h>
@@ -65,7 +69,7 @@ typedef unsigned int    size_t;
 #endif
 #endif // (USE_STD_INT == 0)
 
-struct BitScan {
+struct BitUtils {
 
     //
     // popcount() algorithm
@@ -138,71 +142,95 @@ struct BitScan {
     }
 
     static inline
-    int __internal_clz(unsigned int x) {
+    unsigned int __internal_clz(unsigned int x) {
         x |= (x >> 1);
         x |= (x >> 2);
         x |= (x >> 4);
         x |= (x >> 8);
         x |= (x >> 16);
-        return (int)(32U - __internal_popcnt(x));
+        return (unsigned int)(32U - __internal_popcnt(x));
     }
 
     static inline
-    int __internal_clzll(uint64_t x) {
+    unsigned int __internal_clzll(uint64_t x) {
         x |= (x >> 1);
         x |= (x >> 2);
         x |= (x >> 4);
         x |= (x >> 8);
         x |= (x >> 16);
         x |= (x >> 32);
-        return (int)(64U - __internal_popcnt64(x));
+        return (unsigned int)(64U - __internal_popcnt64(x));
     }
 
     static inline
-    int __internal_ctz(unsigned int x) {
-        return (int)__internal_popcnt((x & -(int)x) - 1);
+    unsigned int __internal_ctz(unsigned int x) {
+        return __internal_popcnt((x & -(int)x) - 1);
     }
 
     static inline
-    int __internal_ctzll(uint64_t x) {
-        return (int)__internal_popcnt64((x & -(int64_t)x) - 1);
+    unsigned int __internal_ctzll(uint64_t x) {
+        return __internal_popcnt64((x & -(int64_t)x) - 1);
     }
 
 #if (defined(_MSC_VER) && (_MSC_VER >= 1500)) || defined(__MINGW32__) || defined(__CYGWIN__)
 
     static inline
-    int bsf32(unsigned int x) {
+    unsigned int bsf32(unsigned int x) {
         assert(x != 0);
         unsigned long index;
         ::_BitScanForward(&index, (unsigned long)x);
-        return (int)index;
+        return (unsigned int)index;
     }
 
 #if (JSTD_WORD_SIZE == 64)
     static inline
-    int bsf64(unsigned __int64 x) {
+    unsigned int bsf64(unsigned __int64 x) {
         assert(x != 0);
         unsigned long index;
         ::_BitScanForward64(&index, x);
-        return (int)index;
+        return (unsigned int)index;
     }
 #endif
 
     static inline
-    int bsr32(unsigned int x) {
+    unsigned int bsr32(unsigned int x) {
         assert(x != 0);
         unsigned long index;
         ::_BitScanReverse(&index, (unsigned long)x);
-        return (int)index;
+        return (unsigned int)index;
     }
 
 #if (JSTD_WORD_SIZE == 64)
     static inline
-    int bsr64(unsigned __int64 x) {
+    unsigned int bsr64(unsigned __int64 x) {
         assert(x != 0);
         unsigned long index;
         ::_BitScanReverse64(&index, x);
-        return (int)index;
+        return (unsigned int)index;
+    }
+#endif
+
+    static inline
+    unsigned int popcnt32(unsigned int x) {
+#if defined(__SSE4_2__)
+        int popcount = _mm_popcnt_u32(x);
+        return (unsigned int)popcount;
+#else
+        int popcount = __popcnt(x);
+        return (unsigned int)popcount;
+#endif
+    }
+
+#if (JSTD_WORD_SIZE == 64)
+    static inline
+    unsigned int popcnt64(unsigned __int64 x) {
+#if defined(__SSE4_2__)
+        __int64 popcount = _mm_popcnt_u64(x);
+        return (unsigned int)popcount;
+#else
+        unsigned __int64 popcount = __popcnt64(x);
+        return (unsigned int)popcount;
+#endif
     }
 #endif
 
@@ -211,81 +239,112 @@ struct BitScan {
    || defined(__clang__)
 
     static inline
-    int bsf32(unsigned int x) {
+    unsigned int bsf32(unsigned int x) {
         assert(x != 0);
         // gcc: __bsfd(x)
-        return __builtin_ctz(x);
+        return (unsigned int)__builtin_ctz(x);
     }
 
 #if (JSTD_WORD_SIZE == 64)
     static inline
-    int bsf64(unsigned long long x) {
+    unsigned int bsf64(unsigned long long x) {
         assert(x != 0);
         // gcc: __bsfq(x)
-        return __builtin_ctzll(x);
+        return (unsigned int)__builtin_ctzll(x);
     }
 #endif
 
     static inline
-    int bsr32(unsigned int x) {
+    unsigned int bsr32(unsigned int x) {
         assert(x != 0);
         // gcc: __bsrd(x)
-        return __builtin_clz(x);
+        return (unsigned int)__builtin_clz(x);
     }
 
 #if (JSTD_WORD_SIZE == 64)
     static inline
-    int bsr64(unsigned long long x) {
+    unsigned int bsr64(unsigned long long x) {
         assert(x != 0);
         // gcc: __bsrq(x)
-        return __builtin_clzll(x);
+        return (unsigned int)__builtin_clzll(x);
+    }
+#endif
+
+    static inline
+    unsigned int popcnt32(unsigned int x) {
+        // gcc: __bsfd(x)
+        return (unsigned int)__builtin_popcount(x);
+    }
+
+#if (JSTD_WORD_SIZE == 64)
+    static inline
+    unsigned int popcnt64(unsigned long long x) {
+        // gcc: __bsfq(x)
+        return (unsigned int)__builtin_popcountll(x);
     }
 #endif
 
 #else
 
     static inline
-    int bsf32(unsigned int x) {
+    unsigned int bsf32(unsigned int x) {
         assert(x != 0);
-        return BitScan::__internal_ctz(x);
+        return BitUtils::__internal_ctz(x);
     }
 
     static inline
-    int bsf64(unsigned long long x) {
+    unsigned int bsf64(unsigned long long x) {
         assert(x != 0);
-        return BitScan::__internal_ctzll(x);
+        return BitUtils::__internal_ctzll(x);
     }
 
     static inline
-    int bsr32(unsigned int x) {
+    unsigned int bsr32(unsigned int x) {
         assert(x != 0);
-        return BitScan::__internal_clz(x);
+        return BitUtils::__internal_clz(x);
     }
 
     static inline
-    int bsr64(unsigned long long x) {
+    unsigned int bsr64(unsigned long long x) {
         assert(x != 0);
-        return BitScan::__internal_clzll(x);
+        return BitUtils::__internal_clzll(x);
+    }
+
+    static inline
+    unsigned int popcnt32(unsigned int x) {
+        return BitUtils::__internal_popcnt(x);
+    }
+
+    static inline
+    unsigned int popcnt64(uint64_t x) {
+        return BitUtils::__internal_popcnt64(x);
     }
 
 #endif // (_MSC_VER && _MSC_VER >= 1500)
 
-    static inline int bsf(size_t x) {
+    static inline unsigned int bsf(size_t x) {
 #if (JSTD_WORD_SIZE == 64)
-        return BitScan::bsf64(x);
+        return BitUtils::bsf64(x);
 #else
-        return BitScan::bsf32(x);
+        return BitUtils::bsf32(x);
 #endif
     }
 
-    static inline int bsr(size_t x) {
+    static inline unsigned int bsr(size_t x) {
 #if (JSTD_WORD_SIZE == 64)
-        return BitScan::bsr64(x);
+        return BitUtils::bsr64(x);
 #else
-        return BitScan::bsr32(x);
+        return BitUtils::bsr32(x);
 #endif
     }
 
+    static inline unsigned int popcnt(size_t x) {
+#if (JSTD_WORD_SIZE == 64)
+        return BitUtils::popcnt64(x);
+#else
+        return BitUtils::popcnt32(x);
+#endif
+    }
 };
 
 } // namespace jstd

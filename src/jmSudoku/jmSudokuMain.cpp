@@ -24,15 +24,20 @@
 #include "SudokuSolver_dlx_v2.h"
 #include "SudokuSolver_dlx_v3.h"
 
+#include "SudokuSolver_v1.h"
+
 #include "CPUWarmUp.h"
 #include "StopWatch.h"
 
 using namespace jmSudoku;
 
+static const size_t kEnableDlxV1Solution =   1;
+static const size_t kEnableDlxV2Solution =   1;
+static const size_t kEnableDlxV3Solution =   1;
+
 static const size_t kEnableV1Solution =   1;
 static const size_t kEnableV2Solution =   1;
 static const size_t kEnableV3Solution =   1;
-static const size_t kEnableV4Solution =   1;
 
 // Index: [0 - 4]
 #define TEST_CASE_INDEX         4
@@ -170,7 +175,7 @@ size_t read_sudoku_board(std::vector<std::vector<char>> & board, char line[256])
 void run_a_testcase(size_t index)
 {
     double elapsed_time = 0.0;
-    if (kEnableV1Solution)
+    if (kEnableDlxV1Solution)
     {
         printf("------------------------------------------\n\n");
         printf("jmSudoku: dlx::v1::Solver - Dancing Links\n\n");
@@ -182,7 +187,7 @@ void run_a_testcase(size_t index)
         bool success = solver.solve(board, elapsed_time);
     }
 
-    if (kEnableV2Solution)
+    if (kEnableDlxV2Solution)
     {
         printf("------------------------------------------\n\n");
         printf("jmSudoku: dlx::v2::Solution - Dancing Links\n\n");
@@ -194,7 +199,7 @@ void run_a_testcase(size_t index)
         bool success = solver.solve(board, elapsed_time);
     }
 
-    if (kEnableV3Solution)
+    if (kEnableDlxV3Solution)
     {
         printf("------------------------------------------\n\n");
         printf("jmSudoku: dlx::v3::Solution - Dancing Links\n\n");
@@ -206,18 +211,29 @@ void run_a_testcase(size_t index)
         bool success = solver.solve(board, elapsed_time);
     }
 
-#if 0
-#ifdef NDEBUG
-
-    if (kEnableV4Solution)
+    if (kEnableV1Solution)
     {
         printf("------------------------------------------\n\n");
-        printf("jmSudoku: v4::Solution - dfs\n\n");
+        printf("jmSudoku: v1::Solution - dfs\n\n");
 
-        std::vector<std::vector<char>> board;
+        char board[Sudoku::BoardSize];
         read_sudoku_board(board, index);
 
-        v4::Solver solver;
+        v1::Solver solver;
+        bool success = solver.solve(board, elapsed_time);
+    }
+
+#if 0
+#ifdef NDEBUG
+    if (kEnableV1Solution)
+    {
+        printf("------------------------------------------\n\n");
+        printf("jmSudoku: v1::Solution - dfs\n\n");
+
+        char board[Sudoku::BoardSize];
+        read_sudoku_board(board, index);
+
+        v1::Solver solver;
         bool success = solver.solve(board, elapsed_time);
     }
 #endif
@@ -229,7 +245,7 @@ void run_a_testcase(size_t index)
 template <typename SudokuSolver>
 void run_sudoku_test(const char * filename, const char * name)
 {
-    typedef typename SudokuSolver::algorithm algorithm;
+    typedef typename SudokuSolver::slover_type Slover;
 
     //printf("------------------------------------------\n\n");
     printf("jmSudoku: %s::Solver\n\n", name);
@@ -260,11 +276,11 @@ void run_sudoku_test(const char * filename, const char * name)
                     bool success = solver.solve(board, elapsed_time, false);
                     total_time += elapsed_time;
                     if (success) {
-                        total_guesses += algorithm::num_guesses;
-                        total_unique_candidate += algorithm::num_unique_candidate;
-                        total_early_return += algorithm::num_early_return;
+                        total_guesses += Slover::num_guesses;
+                        total_unique_candidate += Slover::num_unique_candidate;
+                        total_early_return += Slover::num_early_return;
 
-                        if (algorithm::num_guesses == 0) {
+                        if (Slover::num_guesses == 0) {
                             total_no_guess++;
                         }
 
@@ -283,10 +299,10 @@ void run_sudoku_test(const char * filename, const char * name)
         std::cout << "Exception info: " << ex.what() << std::endl << std::endl;
     }
 
-    size_t recur_counter = total_guesses + total_unique_candidate + total_early_return;
-    double unique_candidate_percent = calc_percent(total_unique_candidate, recur_counter);
-    double early_return_percent = calc_percent(total_early_return, recur_counter);
-    double guesses_percent = calc_percent(total_guesses, recur_counter);
+    size_t total_recur_counter = total_guesses + total_unique_candidate + total_early_return;
+    double unique_candidate_percent = calc_percent(total_unique_candidate, total_recur_counter);
+    double early_return_percent = calc_percent(total_early_return, total_recur_counter);
+    double guesses_percent = calc_percent(total_guesses, total_recur_counter);
     double no_guess_percent = calc_percent(total_no_guess, puzzleCount);
 
     printf("Total puzzle count = %u, total_no_guess: %" PRIuPTR ", no_guess %% = %0.1f %%\n\n",
@@ -295,7 +311,7 @@ void run_sudoku_test(const char * filename, const char * name)
     printf("recur_counter: %" PRIuPTR "\n\n"
            "total_guesses: %" PRIuPTR ", total_early_return: %" PRIuPTR ", total_unique_candidate: %" PRIuPTR "\n\n"
            "guess %% = %0.1f %%, early_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
-           recur_counter,
+           total_recur_counter,
            total_guesses, total_early_return, total_unique_candidate,
            guesses_percent, early_return_percent, unique_candidate_percent);
 
