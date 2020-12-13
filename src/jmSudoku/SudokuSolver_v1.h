@@ -48,7 +48,7 @@
 
 #include <cstdint>
 #include <cstddef>
-#include <cstring>      // For std::memset()
+#include <cstring>      // For std::memset(), std::memcpy()
 #include <vector>
 #include <bitset>
 #include <array>        // For std::array<T, Size>
@@ -118,7 +118,7 @@ public:
 
     static size_t num_guesses;
     static size_t num_unique_candidate;
-    static size_t num_early_return;
+    static size_t num_failed_return;
 
 private:
 #pragma pack(push, 1)
@@ -128,7 +128,7 @@ private:
     };
 #pragma pack(pop)
 
-    SmallBitSet<BoardSize>  cell_filled_;
+    SmallBitSet<BoardSize>          cell_filled_;
 
     SmallBitSet2D<Boxes, Numbers>   boxes_;
     SmallBitSet2D<Cols, Numbers>    rows_;
@@ -143,7 +143,7 @@ private:
 #if defined(__SSE4_1__)
     alignas(16) literal_info_t literal_info_[TotalConditions];
 #else
-    alignas(16) uint8_t literal_cnt_[TotalConditions];
+    alignas(16) uint8_t literal_count_[TotalConditions];
     alignas(16) uint8_t literal_enable_[TotalConditions];
 #endif
 
@@ -158,18 +158,18 @@ public:
 
     static size_t get_num_guesses() { return slover_type::num_guesses; }
     static size_t get_num_unique_candidate() { return slover_type::num_unique_candidate; }
-    static size_t get_num_early_return() { return slover_type::num_early_return; }
+    static size_t get_num_failed_return() { return slover_type::num_failed_return; }
 
     static size_t get_search_counter() {
-        return (slover_type::num_guesses + slover_type::num_unique_candidate + slover_type::num_early_return);
+        return (slover_type::num_guesses + slover_type::num_unique_candidate + slover_type::num_failed_return);
     }
 
     static double get_guess_percent() {
         return calc_percent(slover_type::num_guesses, slover_type::get_search_counter());
     }
 
-    static double get_early_return_percent() {
-        return calc_percent(slover_type::num_early_return, slover_type::get_search_counter());
+    static double get_failed_return_percent() {
+        return calc_percent(slover_type::num_failed_return, slover_type::get_search_counter());
     }
 
     static double get_unique_candidate_percent() {
@@ -189,6 +189,10 @@ private:
 
     inline uint8_t get_literal_cnt(size_t literal) {
         return this->literal_info_[literal].count;
+    }
+
+    inline void set_literal_cnt(size_t literal, uint8_t count) {
+        this->literal_info_[literal].count = count;
     }
 
     inline void inc_literal_cnt(size_t literal) {
@@ -211,6 +215,10 @@ private:
 
     inline uint8_t get_literal_cnt(size_t literal) {
         return this->literal_count_[literal];
+    }
+
+    inline void set_literal_cnt(size_t literal, uint8_t count) {
+        this->literal_count_[literal] = count;
     }
 
     inline void inc_literal_cnt(size_t literal) {
@@ -265,6 +273,27 @@ private:
         this->disable_literal(literal);
     }
 
+    // set_xxxx_literal_cnt()
+    inline void set_cell_literal_cnt(size_t pos, uint8_t count) {
+        size_t literal = TotalConditions0 + pos;
+        this->set_literal_cnt(literal, count);
+    }
+
+    inline void set_box_literal_cnt(size_t box, size_t num, uint8_t count) {
+        size_t literal = TotalConditions01 + box * Numbers + num;
+        this->set_literal_cnt(literal, count);
+    }
+
+    inline void set_row_literal_cnt(size_t row, size_t num, uint8_t count) {
+        size_t literal = TotalConditions02 + row * Numbers + num;
+        this->set_literal_cnt(literal, count);
+    }
+
+    inline void set_col_literal_cnt(size_t col, size_t num, uint8_t count) {
+        size_t literal = TotalConditions03 + col * Numbers + num;
+        this->set_literal_cnt(literal, count);
+    }
+
     // inc_xxxx_literal_cnt()
     inline void inc_cell_literal_cnt(size_t pos) {
         size_t literal = TotalConditions0 + pos;
@@ -307,6 +336,538 @@ private:
         this->dec_literal_cnt(literal);
     }
 
+#if defined(__SSE4_1__)
+    int get_min_literal(int & out_min_literal_cnt) const {
+        int min_literal_cnt = 254;
+        int min_literal_id = -1;
+        for (int i = 0; i < TotalConditions; i++) {
+            if (literal_info_[i].enable == 0) {
+                int literal_cnt = literal_info_[i].count;
+                if (literal_cnt < min_literal_cnt) {
+                    assert(literal_cnt >= 0);
+                    if (literal_cnt <= 1) {
+                        if (literal_cnt == 0) {
+                            out_min_literal_cnt = 0;
+                            return i;
+                        }
+                        else {
+                            out_min_literal_cnt = 1;
+                            return i;
+                        }
+                    }
+                    min_literal_cnt = literal_cnt;
+                    min_literal_id = i;
+                }
+            }
+        }
+        out_min_literal_cnt = min_literal_cnt;
+        return min_literal_id;
+    }
+
+    int get_min_literal_simd(int & out_min_literal_cnt) {
+        int min_literal_cnt = 254;
+        int min_literal_id = -1;
+        int index_base = 0;
+
+        const char * pinfo     = (const char *)&literal_info_[0];
+        const char * pinfo_end = (const char *)&literal_info_[TotalConditions];
+        while ((pinfo_end - pinfo) >= 64) {
+            __m128i xmm0 = _mm_load_si128((const __m128i *)(pinfo + 0));
+            __m128i xmm1 = _mm_load_si128((const __m128i *)(pinfo + 16));
+            __m128i xmm2 = _mm_load_si128((const __m128i *)(pinfo + 32));
+            __m128i xmm3 = _mm_load_si128((const __m128i *)(pinfo + 48));
+
+            __m128i xmm4 = _mm_minpos_epu16(xmm0);      // SSE 4.1
+            __m128i xmm5 = _mm_minpos_epu16(xmm1);      // SSE 4.1
+            __m128i xmm6 = _mm_minpos_epu16(xmm2);      // SSE 4.1
+            __m128i xmm7 = _mm_minpos_epu16(xmm3);      // SSE 4.1
+
+            __m128i xmm5_ = _mm_slli_epi64(xmm5, 32);
+            __m128i xmm7_ = _mm_slli_epi64(xmm7, 32);
+            __m128i xmm4_5  = _mm_blend_epi16(xmm4, xmm5_, 0b00001100); // SSE 4.1
+            __m128i xmm6_7  = _mm_blend_epi16(xmm6, xmm7_, 0b00001100); // SSE 4.1
+            __m128i xmm6_7_ = _mm_slli_si128(xmm6_7, 8);
+            __m128i comb_0  = _mm_or_si128(xmm4_5, xmm6_7_);
+            __m128i __literal_index = comb_0;
+
+            __m128i kLiteralCntMask = _mm_set1_epi32((int)0xFFFF0000L);
+            __m128i __literal_cnt = _mm_or_si128(comb_0, kLiteralCntMask);
+            __m128i __min_literal_cnt = _mm_minpos_epu16(__literal_cnt);      // SSE 4.1
+
+            uint32_t min_literal_cnt32 = (uint32_t)_mm_cvtsi128_si32(__min_literal_cnt);
+            int min_literal_cnt16 = (int)(min_literal_cnt32 & 0x0000FFFFULL);
+            if (min_literal_cnt16 < min_literal_cnt) {
+                min_literal_cnt = min_literal_cnt16;
+
+                uint32_t min_block_index16 = min_literal_cnt32 >> 17U;
+                __m128i __min_literal_id_sr15 = _mm_srli_epi64(__min_literal_cnt, 15);
+
+                __m128i __literal_index_sr16 = _mm_srli_epi32(__literal_index, 16);
+
+                // SSSE3
+                __m128i __min_literal_id = _mm_shuffle_epi8(__literal_index_sr16, __min_literal_id_sr15);
+                uint32_t min_literal_id32 = (uint32_t)_mm_cvtsi128_si32(__min_literal_id);
+                int min_literal_offset = (int)(min_literal_id32 & 0x000000FFUL);
+                min_literal_id = index_base + min_block_index16 * 8 + min_literal_offset;
+
+                if (min_literal_cnt == 0) {
+                    out_min_literal_cnt = 0;
+                    return min_literal_id;
+                }
+#if 0
+                else if (min_literal_cnt == 1) {
+                    out_min_literal_cnt = 1;
+                    return min_literal_id;
+                }
+#endif
+            }
+            index_base += 32;
+            pinfo += 64;
+        }
+
+        if ((pinfo_end - pinfo) >= 32) {
+            __m128i xmm0 = _mm_load_si128((const __m128i *)(pinfo + 0));
+            __m128i xmm1 = _mm_load_si128((const __m128i *)(pinfo + 16));
+
+            __m128i xmm2 = _mm_minpos_epu16(xmm0);      // SSE 4.1
+            __m128i xmm3 = _mm_minpos_epu16(xmm1);      // SSE 4.1
+
+            __m128i xmm3_ = _mm_slli_epi64(xmm3, 32);
+            __m128i comb_0 = _mm_blend_epi16(xmm2, xmm3_, 0b00001100);  // SSE 4.1
+            __m128i __literal_index = comb_0;
+
+            __m128i kLiteralCntMask = _mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFF0000L, 0xFFFF0000L);
+            __m128i __literal_cnt = _mm_or_si128(comb_0, kLiteralCntMask);
+            __m128i __min_literal_cnt = _mm_minpos_epu16(__literal_cnt);      // SSE 4.1
+
+            uint32_t min_literal_cnt32 = (uint32_t)_mm_cvtsi128_si32(__min_literal_cnt);
+            int min_literal_cnt16 = (int)(min_literal_cnt32 & 0x0000FFFFULL);
+            if (min_literal_cnt16 < min_literal_cnt) {
+                min_literal_cnt = min_literal_cnt16;
+
+                uint32_t min_block_index16 = min_literal_cnt32 >> 17U;
+                __m128i __min_literal_id_sr15 = _mm_srli_epi64(__min_literal_cnt, 15);
+
+                __m128i __literal_index_sr16 = _mm_srli_epi32(__literal_index, 16);
+
+                // SSSE3
+                __m128i __min_literal_id = _mm_shuffle_epi8(__literal_index_sr16, __min_literal_id_sr15);
+                uint32_t min_literal_id32 = (uint32_t)_mm_cvtsi128_si32(__min_literal_id);
+                int min_literal_offset = (int)(min_literal_id32 & 0x000000FFUL);
+                min_literal_id = index_base + min_block_index16 * 8 + min_literal_offset;
+
+                if (min_literal_cnt == 0) {
+                    out_min_literal_cnt = 0;
+                    return min_literal_id;
+                }
+#if 0
+                else if (min_literal_cnt == 1) {
+                    out_min_literal_cnt = 1;
+                    return min_literal_id;
+                }
+#endif
+            }
+            index_base += 16;
+            pinfo += 32;
+        }
+
+        if ((pinfo_end - pinfo) >= 16) {
+            __m128i xmm0 = _mm_load_si128((const __m128i *)(pinfo + 0));
+            __m128i __min_literal_cnt = _mm_minpos_epu16(xmm0);    // SSE 4.1
+
+            uint32_t min_literal_cnt32 = (uint32_t)_mm_cvtsi128_si32(__min_literal_cnt);
+            int min_literal_cnt16 = (int)(min_literal_cnt32 & 0x0000FFFFULL);
+            if (min_literal_cnt16 < min_literal_cnt) {
+                min_literal_cnt = min_literal_cnt16;
+
+                uint32_t min_literal_offset = min_literal_cnt32 >> 17U;
+                min_literal_id = index_base + min_literal_offset;
+
+                if (min_literal_cnt == 0) {
+                    out_min_literal_cnt = 0;
+                    return min_literal_id;
+                }
+#if 0
+                else if (min_literal_cnt == 1) {
+                    out_min_literal_cnt = 1;
+                    return min_literal_id;
+                }
+#endif
+            }
+            index_base += 8;
+            pinfo += 16;
+        }
+
+        // Last remain items (less than 8 items)
+        while (pinfo < pinfo_end) {
+            literal_info_t * pliteral_info = (literal_info_t *)pinfo;
+            if (pliteral_info->enable == 0) {
+                int literal_cnt = pliteral_info->count;
+                if (literal_cnt < min_literal_cnt) {
+                    if (literal_cnt == 0) {
+                        out_min_literal_cnt = 0;
+                        return index_base;
+                    }
+                    min_literal_cnt = literal_cnt;
+                    min_literal_id = index_base;
+                }
+            }
+            index_base++;
+            pinfo += 2;
+        }
+
+        out_min_literal_cnt = min_literal_cnt;
+        return min_literal_id;
+    }
+
+#elif defined(__SSE2__)
+
+    int get_min_literal(int & out_min_literal_cnt) const {
+        int min_literal_cnt = 254;
+        int min_literal_id = -1;
+        for (int i = 0; i < TotalConditions; i++) {
+            if (literal_enable_[i] == 0) {
+                int literal_cnt = literal_count_[i];
+                if (literal_cnt < min_literal_cnt) {
+                    assert(literal_cnt >= 0);
+                    if (literal_cnt <= 1) {
+                        if (literal_cnt == 0) {
+                            out_min_literal_cnt = 0;
+                            return i;
+                        }
+                        else {
+                            out_min_literal_cnt = 1;
+                            return i;
+                        }
+                    }
+                    min_literal_cnt = literal_cnt;
+                    min_literal_id = i;
+                }
+            }
+        }
+        out_min_literal_cnt = min_literal_cnt;
+        return min_literal_id;
+    }
+
+    //
+    // Horizontal minimum and maximum using SSE
+    // See: https://stackoverflow.com/questions/22256525/horizontal-minimum-and-maximum-using-sse
+    //
+    int get_min_literal_simd(int & out_min_literal_cnt) {
+        int min_literal_cnt = 254;
+        int min_literal_id = 0;
+        int index_base = 0;
+
+        const char * pcount     = (const char *)&literal_count_[0];
+        const char * pcount_end = (const char *)&literal_count_[TotalConditions];
+        const char * penable    = (const char *)&literal_enable_[0];
+        while ((pcount_end - pcount) >= 64) {
+            __m128i xmm0 = _mm_load_si128((const __m128i *)(pcount + 0));
+            __m128i xmm1 = _mm_load_si128((const __m128i *)(pcount + 16));
+
+            __m128i xmm2 = _mm_load_si128((const __m128i *)(penable + 0));
+            __m128i xmm3 = _mm_load_si128((const __m128i *)(penable + 16));
+
+            xmm0 = _mm_or_si128(xmm0, xmm2);
+            xmm1 = _mm_or_si128(xmm1, xmm3);
+
+            xmm0 = _mm_min_epu8(xmm0, _mm_shuffle_epi32(xmm0, _MM_SHUFFLE(3, 2, 3, 2)));
+            xmm1 = _mm_min_epu8(xmm1, _mm_shuffle_epi32(xmm1, _MM_SHUFFLE(3, 2, 3, 2)));
+
+            xmm0 = _mm_min_epu8(xmm0, _mm_shuffle_epi32(xmm0, _MM_SHUFFLE(1, 1, 1, 1)));
+            xmm1 = _mm_min_epu8(xmm1, _mm_shuffle_epi32(xmm1, _MM_SHUFFLE(1, 1, 1, 1)));
+
+            xmm0 = _mm_min_epu8(xmm0, _mm_shufflelo_epi16(xmm0, _MM_SHUFFLE(1, 1, 1, 1)));
+            xmm1 = _mm_min_epu8(xmm1, _mm_shufflelo_epi16(xmm1, _MM_SHUFFLE(1, 1, 1, 1)));
+
+            xmm0 = _mm_min_epu8(xmm0, _mm_srli_epi16(xmm0, 8));
+            xmm1 = _mm_min_epu8(xmm1, _mm_srli_epi16(xmm1, 8));
+
+            xmm0 = _mm_min_epu8(xmm0, xmm1);
+
+            __m128i xmm4 = _mm_load_si128((const __m128i *)(pcount + 32));
+            __m128i xmm5 = _mm_load_si128((const __m128i *)(pcount + 48));
+
+            __m128i xmm6 = _mm_load_si128((const __m128i *)(penable + 32));
+            __m128i xmm7 = _mm_load_si128((const __m128i *)(penable + 48));
+
+            xmm4 = _mm_or_si128(xmm4, xmm6);
+            xmm5 = _mm_or_si128(xmm5, xmm7);
+
+            xmm4 = _mm_min_epu8(xmm4, _mm_shuffle_epi32(xmm4, _MM_SHUFFLE(3, 2, 3, 2)));
+            xmm5 = _mm_min_epu8(xmm5, _mm_shuffle_epi32(xmm5, _MM_SHUFFLE(3, 2, 3, 2)));
+
+            xmm4 = _mm_min_epu8(xmm4, _mm_shuffle_epi32(xmm4, _MM_SHUFFLE(1, 1, 1, 1)));
+            xmm5 = _mm_min_epu8(xmm5, _mm_shuffle_epi32(xmm5, _MM_SHUFFLE(1, 1, 1, 1)));
+
+            xmm4 = _mm_min_epu8(xmm4, _mm_shufflelo_epi16(xmm4, _MM_SHUFFLE(1, 1, 1, 1)));
+            xmm5 = _mm_min_epu8(xmm5, _mm_shufflelo_epi16(xmm5, _MM_SHUFFLE(1, 1, 1, 1)));
+
+            xmm4 = _mm_min_epu8(xmm4, _mm_srli_epi16(xmm4, 8));
+            xmm5 = _mm_min_epu8(xmm5, _mm_srli_epi16(xmm5, 8));
+
+            xmm4 = _mm_min_epu8(xmm4, xmm5);
+
+            // The minimum literal count of per 64 numbers
+            __m128i min_count_64 = _mm_min_epu8(xmm0, xmm4);
+
+            int min_literal_cnt16 = _mm_cvtsi128_si32(min_count_64) & 0x000000FFL;
+            if (min_literal_cnt16 < min_literal_cnt) {
+                min_literal_cnt = min_literal_cnt16;
+
+                __m128i xmm0 = _mm_load_si128((const __m128i *)(pcount + 0));
+                __m128i xmm2 = _mm_load_si128((const __m128i *)(penable + 0));
+
+                __m128i min_cmp = _mm_set1_epi8((char)min_literal_cnt);
+
+                xmm0 = _mm_or_si128(xmm0, xmm2);
+                xmm0 = _mm_cmpeq_epi8(xmm0, min_cmp);
+
+                int equal_mask = _mm_movemask_epi8(xmm0);
+                if (equal_mask == 0) {
+                    __m128i xmm1 = _mm_load_si128((const __m128i *)(pcount + 16));
+                    __m128i xmm3 = _mm_load_si128((const __m128i *)(penable + 16));
+                
+                    xmm1 = _mm_or_si128(xmm1, xmm3);  
+                    xmm1 = _mm_cmpeq_epi8(xmm1, min_cmp);
+
+                    equal_mask = _mm_movemask_epi8(xmm1);
+                    if (equal_mask == 0) {
+                        __m128i xmm4 = _mm_load_si128((const __m128i *)(pcount + 32));
+                        __m128i xmm6 = _mm_load_si128((const __m128i *)(penable + 32));
+                
+                        xmm4 = _mm_or_si128(xmm4, xmm6);  
+                        xmm4 = _mm_cmpeq_epi8(xmm4, min_cmp);
+
+                        equal_mask = _mm_movemask_epi8(xmm4);
+                        if (equal_mask == 0) {
+                            __m128i xmm5 = _mm_load_si128((const __m128i *)(pcount + 48));
+                            __m128i xmm7 = _mm_load_si128((const __m128i *)(penable + 48));
+                
+                            xmm5 = _mm_or_si128(xmm5, xmm7);  
+                            xmm5 = _mm_cmpeq_epi8(xmm5, min_cmp);
+
+                            equal_mask = _mm_movemask_epi8(xmm5);
+                            if (equal_mask == 0) {
+                                assert(false);
+                            }
+                            else {
+                                int min_literal_offset = BitUtils::bsf(equal_mask);
+                                min_literal_id = index_base + 3 * 16 + min_literal_offset;
+                            }
+                        }
+                        else {
+                            int min_literal_offset = BitUtils::bsf(equal_mask);
+                            min_literal_id = index_base + 2 * 16 + min_literal_offset;
+                        }
+                    }
+                    else {
+                        int min_literal_offset = BitUtils::bsf(equal_mask);
+                        min_literal_id = index_base + 1 * 16 + min_literal_offset;
+                    }
+                }
+                else {
+                    int min_literal_offset = BitUtils::bsf(equal_mask);
+                    min_literal_id = index_base + 0 * 16 + min_literal_offset;
+                }
+
+                if (min_literal_cnt == 0) {
+                    out_min_literal_cnt = 0;
+                    return min_literal_id;
+                }
+#if 0
+                else if (min_literal_cnt == 1) {
+                    out_min_literal_cnt = 1;
+                    return min_literal_id;
+                }
+#endif
+            }
+
+            index_base += 64;
+            penable += 64;
+            pcount += 64;
+        }
+
+        if ((pcount_end - pcount) >= 32) {
+            __m128i xmm0 = _mm_load_si128((const __m128i *)(pcount + 0));
+            __m128i xmm1 = _mm_load_si128((const __m128i *)(pcount + 16));
+
+            __m128i xmm2 = _mm_load_si128((const __m128i *)(penable + 0));
+            __m128i xmm3 = _mm_load_si128((const __m128i *)(penable + 16));
+
+            xmm0 = _mm_or_si128(xmm0, xmm2);
+            xmm1 = _mm_or_si128(xmm1, xmm3);
+
+            xmm0 = _mm_min_epu8(xmm0, _mm_shuffle_epi32(xmm0, _MM_SHUFFLE(3, 2, 3, 2)));
+            xmm1 = _mm_min_epu8(xmm1, _mm_shuffle_epi32(xmm1, _MM_SHUFFLE(3, 2, 3, 2)));
+
+            xmm0 = _mm_min_epu8(xmm0, _mm_shuffle_epi32(xmm0, _MM_SHUFFLE(1, 1, 1, 1)));
+            xmm1 = _mm_min_epu8(xmm1, _mm_shuffle_epi32(xmm1, _MM_SHUFFLE(1, 1, 1, 1)));
+
+            xmm0 = _mm_min_epu8(xmm0, _mm_shufflelo_epi16(xmm0, _MM_SHUFFLE(1, 1, 1, 1)));
+            xmm1 = _mm_min_epu8(xmm1, _mm_shufflelo_epi16(xmm1, _MM_SHUFFLE(1, 1, 1, 1)));
+
+            xmm0 = _mm_min_epu8(xmm0, _mm_srli_epi16(xmm0, 8));
+            xmm1 = _mm_min_epu8(xmm1, _mm_srli_epi16(xmm1, 8));
+
+            // The minimum literal count of per 32 numbers
+            __m128i min_count_32 = _mm_min_epu8(xmm0, xmm1);
+
+            int min_literal_cnt16 = _mm_cvtsi128_si32(min_count_32) & 0x000000FFL;
+            if (min_literal_cnt16 < min_literal_cnt) {
+                min_literal_cnt = min_literal_cnt16;
+
+                __m128i xmm0 = _mm_load_si128((const __m128i *)(pcount + 0));
+                __m128i xmm2 = _mm_load_si128((const __m128i *)(penable + 0));
+
+                __m128i min_cmp = _mm_set1_epi8((char)min_literal_cnt);
+
+                xmm0 = _mm_or_si128(xmm0, xmm2);
+                xmm0 = _mm_cmpeq_epi8(xmm0, min_cmp);
+
+                int equal_mask = _mm_movemask_epi8(xmm0);
+                if (equal_mask == 0) {
+                    __m128i xmm1 = _mm_load_si128((const __m128i *)(pcount + 16));
+                    __m128i xmm3 = _mm_load_si128((const __m128i *)(penable + 16));
+                
+                    xmm1 = _mm_or_si128(xmm1, xmm3);  
+                    xmm1 = _mm_cmpeq_epi8(xmm1, min_cmp);
+
+                    equal_mask = _mm_movemask_epi8(xmm1);
+                    if (equal_mask == 0) {
+                        assert(false);
+                    }
+                    else {
+                        int min_literal_offset = BitUtils::bsf(equal_mask);
+                        min_literal_id = index_base + 1 * 16 + min_literal_offset;
+                    }
+                }
+                else {
+                    int min_literal_offset = BitUtils::bsf(equal_mask);
+                    min_literal_id = index_base + 0 * 16 + min_literal_offset;
+                }
+
+                if (min_literal_cnt == 0) {
+                    out_min_literal_cnt = 0;
+                    return min_literal_id;
+                }
+#if 0
+                else if (min_literal_cnt == 1) {
+                    out_min_literal_cnt = 1;
+                    return min_literal_id;
+                }
+#endif
+            }
+
+            index_base += 32;
+            penable += 32;
+            pcount += 32;
+        }
+
+        if ((pcount_end - pcount) >= 16) {
+            __m128i xmm0 = _mm_load_si128((const __m128i *)(pcount + 0));
+            __m128i xmm2 = _mm_load_si128((const __m128i *)(penable + 0));
+
+            xmm0 = _mm_or_si128(xmm0, xmm2);
+            xmm0 = _mm_min_epu8(xmm0, _mm_shuffle_epi32(xmm0, _MM_SHUFFLE(3, 2, 3, 2)));
+            xmm0 = _mm_min_epu8(xmm0, _mm_shuffle_epi32(xmm0, _MM_SHUFFLE(1, 1, 1, 1)));
+            xmm0 = _mm_min_epu8(xmm0, _mm_shufflelo_epi16(xmm0, _MM_SHUFFLE(1, 1, 1, 1)));
+
+            // The minimum literal count of per 16 numbers
+            __m128i min_count_16 = _mm_min_epu8(xmm0, _mm_srli_epi16(xmm0, 8));
+
+            int min_literal_cnt16 = _mm_cvtsi128_si32(min_count_16) & 0x000000FFL;
+            if (min_literal_cnt16 < min_literal_cnt) {
+                min_literal_cnt = min_literal_cnt16;
+
+                __m128i xmm0 = _mm_load_si128((const __m128i *)(pcount + 0));
+                __m128i xmm2 = _mm_load_si128((const __m128i *)(penable + 0));
+
+                __m128i min_cmp = _mm_set1_epi8((char)min_literal_cnt);
+
+                xmm0 = _mm_or_si128(xmm0, xmm2);
+                xmm0 = _mm_cmpeq_epi8(xmm0, min_cmp);
+
+                int equal_mask = _mm_movemask_epi8(xmm0);
+                if (equal_mask == 0) {
+                    assert(false);
+                }
+                else {
+                    int min_literal_offset = BitUtils::bsf(equal_mask);
+                    min_literal_id = index_base + min_literal_offset;
+                }
+
+                if (min_literal_cnt == 0) {
+                    out_min_literal_cnt = 0;
+                    return min_literal_id;
+                }
+#if 0
+                else if (min_literal_cnt == 1) {
+                    out_min_literal_cnt = 1;
+                    return min_literal_id;
+                }
+#endif
+            }
+
+            index_base += 16;
+            penable += 16;
+            pcount += 16;
+        }
+
+        // Last remain items (less than 16 items)
+        while (pcount < pcount_end) {
+            uint8_t * pcol_enable = (uint8_t *)penable;
+            if (*pcol_enable == 0) {
+                int literal_cnt = *pcount;
+                if (literal_cnt < min_literal_cnt) {
+                    if (literal_cnt == 0) {
+                        out_min_literal_cnt = 0;
+                        return index_base;
+                    }
+                    min_literal_cnt = literal_cnt;
+                    min_literal_id = index_base;
+                }
+            }
+            index_base++;
+            penable++;
+            pcount++;
+        }
+
+        out_min_literal_cnt = min_literal_cnt;
+        return min_literal_id;
+    }
+
+#else
+
+    int get_min_literal(int & out_min_literal_cnt) const {
+        int min_literal_cnt = 254;
+        int min_literal_id = -1;
+        for (int i = 0; i < TotalConditions; i++) {
+            if (literal_enable_[i] == 0) {
+                int literal_cnt = literal_count_[i];
+                if (literal_cnt < min_literal_cnt) {
+                    assert(literal_cnt >= 0);
+                    if (literal_cnt <= 1) {
+                        if (literal_cnt == 0) {
+                            out_min_literal_cnt = 0;
+                            return i;
+                        }
+                        else {
+                            out_min_literal_cnt = 1;
+                            return i;
+                        }
+                    }
+                    min_literal_cnt = literal_cnt;
+                    min_literal_id = i;
+                }
+            }
+        }
+        out_min_literal_cnt = min_literal_cnt;
+        return min_literal_id;
+    }
+
+#endif // __SSE4_1__
+
     inline SmallBitSet<Numbers> getCanFillNums(size_t row, size_t col, size_t box) {
         return (this->rows_[row] & this->cols_[col] & this->boxes_[box]);
     }
@@ -318,18 +879,18 @@ private:
         this->cols_[col] ^= num_bit;
 
         size_t pos = row * Cols + col;
-        this->cell_filled_.set(row * Cols + col);
+        this->cell_filled_.set(pos);
+
+        disable_cell_literal(pos);
+        disable_box_literal(box, num);
+        disable_row_literal(row, num);
+        disable_col_literal(col, num);
 
         for (size_t _num = MinNumber - 1; _num < MaxNumber; _num++) {
             this->box_nums_[box][_num].reset(box_pos);
             this->row_nums_[row][_num].reset(col);
             this->col_nums_[col][_num].reset(row);
         }
-
-        disable_cell_literal(pos);
-        disable_box_literal(box, num);
-        disable_row_literal(row, num);
-        disable_col_literal(col, num);
     }
 
     inline void doFillNum(size_t row, size_t col, size_t box, size_t box_pos, size_t num) {
@@ -346,32 +907,47 @@ private:
         disable_row_literal(row, num);
         disable_col_literal(col, num);
 
-        size_t box_nums = this->boxes_[box].value_sz();
-        while (box_nums != 0) {
-            size_t bit_num = BitUtils::ms1b(box_nums);
-            size_t _num = BitUtils::bsf(bit_num);
+        size_t box_bits = this->boxes_[box].value_sz();
+        while (box_bits != 0) {
+            size_t num_bit = BitUtils::ms1b(box_bits);
+            size_t _num = BitUtils::bsf(num_bit);
             this->box_nums_[box][_num].reset(box_pos);
             dec_box_literal_cnt(box, _num);
-            box_nums ^= bit_num;
+            box_bits ^= num_bit;
         }
 
-        size_t row_nums = this->rows_[row].value_sz();
-        while (row_nums != 0) {
-            size_t bit_num = BitUtils::ms1b(row_nums);
-            size_t _num = BitUtils::bsf(bit_num);
+        size_t row_bits = this->rows_[row].value_sz();
+        while (row_bits != 0) {
+            size_t num_bit = BitUtils::ms1b(row_bits);
+            size_t _num = BitUtils::bsf(num_bit);
             this->row_nums_[row][_num].reset(col);
             dec_row_literal_cnt(row, _num);
-            row_nums ^= bit_num;
+            row_bits ^= num_bit;
         }
 
-        size_t col_nums = this->cols_[col].value_sz();
-        while (col_nums != 0) {
-            size_t bit_num = BitUtils::ms1b(col_nums);
-            size_t _num = BitUtils::bsf(bit_num);
+        size_t col_bits = this->cols_[col].value_sz();
+        while (col_bits != 0) {
+            size_t num_bit = BitUtils::ms1b(col_bits);
+            size_t _num = BitUtils::bsf(num_bit);
             this->col_nums_[col][_num].reset(row);
             dec_box_literal_cnt(col, _num);
-            col_nums ^= bit_num;
+            col_bits ^= num_bit;
         }
+    }
+
+    inline void undoFillNum(size_t row, size_t col, size_t box, size_t box_pos, size_t num) {
+        uint32_t num_bit = 1u << num;
+        this->boxes_[box] |= num_bit;
+        this->rows_[row] |= num_bit;
+        this->cols_[col] |= num_bit;
+
+        size_t pos = row * Cols + col;
+        this->cell_filled_.reset(pos);
+
+        enable_cell_literal(pos);
+        enable_box_literal(box, num);
+        enable_row_literal(row, num);
+        enable_col_literal(col, num);
     }
 
     void init_board(char board[BoardSize]) {
@@ -441,33 +1017,125 @@ private:
             size_t box_base = row / 3 * 3;
             for (size_t col = 0; col < Cols; col++) {
                 uint8_t cell_nums = (uint8_t)this->cell_nums_[pos].count();
-#if defined(__SSE4_1__)
-                this->literal_info_[TotalConditions0 + pos].count = cell_nums;
-#else
-                this->literal_count_[TotalConditions0 + pos] = cell_nums;
-#endif
+                set_cell_literal_cnt(pos, cell_nums);
                 pos++;
+
                 size_t box = box_base + col / 3;
                 for (size_t num = MinNumber - 1; num < MaxNumber; num++) {
                     uint8_t box_nums = (uint8_t)this->box_nums_[box][num].count();
                     uint8_t row_nums = (uint8_t)this->row_nums_[row][num].count();
                     uint8_t col_nums = (uint8_t)this->col_nums_[col][num].count();
-#if defined(__SSE4_1__)
-                    this->literal_info_[TotalConditions01 + box * Numbers + num].count = box_nums;
-                    this->literal_info_[TotalConditions02 + row * Numbers + num].count = row_nums;
-                    this->literal_info_[TotalConditions03 + col * Numbers + num].count = col_nums;
-#else
-                    this->literal_count_[TotalConditions01 + box * Numbers + num] = box_nums;
-                    this->literal_count_[TotalConditions02 + row * Numbers + num] = row_nums;
-                    this->literal_count_[TotalConditions03 + col * Numbers + num] = col_nums;
-#endif
+
+                    set_box_literal_cnt(box, num, box_nums);
+                    set_row_literal_cnt(row, num, row_nums);
+                    set_col_literal_cnt(col, num, col_nums);
                 }
             }
         }
     }
 
 public:
-    bool solve() {
+    enum LiteralType {
+        CellNums,
+        BoxNums,
+        RowNums,
+        ColNums,
+        MaxLiteralType
+    };
+
+    bool solve(char board[BoardSize], size_t empties) {
+        if (empties == 0) {
+            if (kSearchMode > SearchMode::OneAnswer) {
+                SudokuBoard<BoardSize> answer;
+                std::memcpy((void *)&answer.board[0], (const void *)&board[0], sizeof(board));
+                this->answers_.push_back(answer);
+                if (kSearchMode == SearchMode::MoreThanOneAnswer) {
+                    if (this->answers_.size() > 1)
+                        return true;
+                }
+            }
+            else {
+                return true;
+            }
+        }
+      
+        int min_literal_cnt;
+#if defined(__SSE2__) || defined(__SSE4_1__)
+        int min_literal_id = get_min_literal_simd(min_literal_cnt);
+#else
+        int min_literal_id = get_min_literal(min_literal_cnt);
+#endif
+        assert(min_literal_id < TotalConditions);
+
+        if (min_literal_id >= 0) {
+            if (min_literal_cnt == 1)
+                num_unique_candidate++;
+            else
+                num_guesses++;
+            size_t pos, row, col, box, box_pos, num;
+            int literal_type = min_literal_id / BoardSize;
+            assert(literal_type < LiteralType::MaxLiteralType);
+            switch (literal_type) {
+                case LiteralType::CellNums:
+                {
+                    pos = min_literal_id % BoardSize;
+                    row = pos / Cols;
+                    col = pos % Cols;
+                    box = row / 3 * 3 + col / 3;
+                    box_pos = (row % 3) * 3 + (col % 3);
+
+                    disable_cell_literal(pos);
+
+                    size_t num_bits = this->cell_nums_[pos].value_sz();
+                    while (num_bits != 0) {
+                        size_t num_bit = BitUtils::ms1b(num_bits);
+                        num = BitUtils::bsf(num_bit);
+
+                        this->cell_nums_[pos].reset(num);
+                        doFillNum(row, col, box, box_pos, num);
+
+                        board[pos] = (char)(num + '1');
+
+                        if (this->solve(board, empties - 1)) {
+                            if (kSearchMode == SearchMode::OneAnswer) {
+                                return true;
+                            }
+                            else if (kSearchMode == SearchMode::MoreThanOneAnswer) {
+                                if (this->answers_.size() > 1)
+                                    return true;
+                            }
+                        }
+
+                        undoFillNum(row, col, box, box_pos, num);
+                        this->cell_nums_[pos].set(num);
+
+                        num_bits ^= num_bit;
+                    }
+
+                    enable_cell_literal(pos);
+                    break;
+                }
+
+                case LiteralType::BoxNums:
+                {
+                    break;
+                }
+
+                case LiteralType::RowNums:
+                {
+                    break;
+                }
+
+                case LiteralType::ColNums:
+                {
+                    break;
+                }
+            }
+        }
+        else {
+            num_failed_return++;
+        }
+
         return false;
     }
 
@@ -484,7 +1152,7 @@ public:
         this->init_board(board);
         this->setup_state(board);
 
-        bool success = this->solve();
+        bool success = this->solve(board, this->empties_);
 
         sw.stop();
         elapsed_time = sw.getElapsedMillisec();
@@ -495,14 +1163,14 @@ public:
             else
                 Sudoku::display_board(board);
             printf("elapsed time: %0.3f ms, recur_counter: %" PRIuPTR "\n\n"
-                   "num_guesses: %" PRIuPTR ", num_early_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
-                   "guess %% = %0.1f %%, early_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
+                   "num_guesses: %" PRIuPTR ", num_failed_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
+                   "guess %% = %0.1f %%, failed_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
                    elapsed_time, slover_type::get_search_counter(),
                    slover_type::get_num_guesses(),
-                   slover_type::get_num_early_return(),
+                   slover_type::get_num_failed_return(),
                    slover_type::get_num_unique_candidate(),
                    slover_type::get_guess_percent(),
-                   slover_type::get_early_return_percent(),
+                   slover_type::get_failed_return_percent(),
                    slover_type::get_unique_candidate_percent());
         }
 
@@ -512,7 +1180,7 @@ public:
 
 size_t Solver::num_guesses = 0;
 size_t Solver::num_unique_candidate = 0;
-size_t Solver::num_early_return = 0;
+size_t Solver::num_failed_return = 0;
 
 } // namespace v1
 } // namespace jmSudoku

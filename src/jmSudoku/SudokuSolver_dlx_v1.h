@@ -139,7 +139,7 @@ public:
 
     static size_t num_guesses;
     static size_t num_unique_candidate;
-    static size_t num_early_return;
+    static size_t num_failed_return;
 
 private:    
 #if 0
@@ -179,18 +179,18 @@ public:
 
     static size_t get_num_guesses() { return DancingLinks::num_guesses; }
     static size_t get_num_unique_candidate() { return DancingLinks::num_unique_candidate; }
-    static size_t get_num_early_return() { return DancingLinks::num_early_return; }
+    static size_t get_num_failed_return() { return DancingLinks::num_failed_return; }
 
     static size_t get_search_counter() {
-        return (DancingLinks::num_guesses + DancingLinks::num_unique_candidate + DancingLinks::num_early_return);
+        return (DancingLinks::num_guesses + DancingLinks::num_unique_candidate + DancingLinks::num_failed_return);
     }
 
     static double get_guess_percent() {
         return calc_percent(DancingLinks::num_guesses, DancingLinks::get_search_counter());
     }
 
-    static double get_early_return_percent() {
-        return calc_percent(DancingLinks::num_early_return, DancingLinks::get_search_counter());
+    static double get_failed_return_percent() {
+        return calc_percent(DancingLinks::num_failed_return, DancingLinks::get_search_counter());
     }
 
     static double get_unique_candidate_percent() {
@@ -307,7 +307,7 @@ public:
 #endif
         num_guesses = 0;
         num_unique_candidate = 0;
-        num_early_return = 0;
+        num_failed_return = 0;
     }
 
     void build(char board[Sudoku::BoardSize]) {
@@ -476,7 +476,7 @@ public:
             this->restore(index);
         }
         else {
-            num_early_return++;
+            num_failed_return++;
         }
 
         return false;
@@ -516,7 +516,7 @@ public:
 
 size_t DancingLinks::num_guesses = 0;
 size_t DancingLinks::num_unique_candidate = 0;
-size_t DancingLinks::num_early_return = 0;
+size_t DancingLinks::num_failed_return = 0;
 
 class Solver {
 public:
@@ -554,14 +554,14 @@ public:
             else
                 solver_.display_answer(board);
             printf("elapsed time: %0.3f ms, recur_counter: %" PRIuPTR "\n\n"
-                   "num_guesses: %" PRIuPTR ", num_early_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
-                   "guess %% = %0.1f %%, early_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
+                   "num_guesses: %" PRIuPTR ", num_failed_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
+                   "guess %% = %0.1f %%, failed_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
                    elapsed_time, DancingLinks::get_search_counter(),
                    DancingLinks::get_num_guesses(),
-                   DancingLinks::get_num_early_return(),
+                   DancingLinks::get_num_failed_return(),
                    DancingLinks::get_num_unique_candidate(),
                    DancingLinks::get_guess_percent(),
-                   DancingLinks::get_early_return_percent(),
+                   DancingLinks::get_failed_return_percent(),
                    DancingLinks::get_unique_candidate_percent());
         }
 

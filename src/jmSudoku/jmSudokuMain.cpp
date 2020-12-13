@@ -252,7 +252,7 @@ void run_sudoku_test(const char * filename, const char * name)
 
     size_t total_guesses = 0;
     size_t total_unique_candidate = 0;
-    size_t total_early_return = 0;
+    size_t total_failed_return = 0;
     size_t total_no_guess = 0;
 
     size_t puzzleCount = 0;
@@ -278,7 +278,7 @@ void run_sudoku_test(const char * filename, const char * name)
                     if (success) {
                         total_guesses += Slover::num_guesses;
                         total_unique_candidate += Slover::num_unique_candidate;
-                        total_early_return += Slover::num_early_return;
+                        total_failed_return += Slover::num_failed_return;
 
                         if (Slover::num_guesses == 0) {
                             total_no_guess++;
@@ -299,9 +299,9 @@ void run_sudoku_test(const char * filename, const char * name)
         std::cout << "Exception info: " << ex.what() << std::endl << std::endl;
     }
 
-    size_t total_recur_counter = total_guesses + total_unique_candidate + total_early_return;
+    size_t total_recur_counter = total_guesses + total_unique_candidate + total_failed_return;
     double unique_candidate_percent = calc_percent(total_unique_candidate, total_recur_counter);
-    double early_return_percent = calc_percent(total_early_return, total_recur_counter);
+    double failed_return_percent = calc_percent(total_failed_return, total_recur_counter);
     double guesses_percent = calc_percent(total_guesses, total_recur_counter);
     double no_guess_percent = calc_percent(total_no_guess, puzzleCount);
 
@@ -309,11 +309,11 @@ void run_sudoku_test(const char * filename, const char * name)
            (uint32_t)puzzleCount, total_no_guess, no_guess_percent);
     printf("Total elapsed time: %0.3f ms\n\n", total_time);
     printf("recur_counter: %" PRIuPTR "\n\n"
-           "total_guesses: %" PRIuPTR ", total_early_return: %" PRIuPTR ", total_unique_candidate: %" PRIuPTR "\n\n"
-           "guess %% = %0.1f %%, early_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
+           "total_guesses: %" PRIuPTR ", total_failed_return: %" PRIuPTR ", total_unique_candidate: %" PRIuPTR "\n\n"
+           "guess %% = %0.1f %%, failed_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
            total_recur_counter,
-           total_guesses, total_early_return, total_unique_candidate,
-           guesses_percent, early_return_percent, unique_candidate_percent);
+           total_guesses, total_failed_return, total_unique_candidate,
+           guesses_percent, failed_return_percent, unique_candidate_percent);
 
     if (puzzleCount != 0) {
         printf("%0.1f usec/puzzle, %0.2f guesses/puzzle, %0.1f puzzles/sec\n\n",
