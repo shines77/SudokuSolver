@@ -83,6 +83,10 @@ public:
             this->array_[0] = value & kTrimMask;
     }
 
+    SmallBitSet(std::initializer_list<dont_init_t> init_list) noexcept {
+        /* Do nothing !! */
+    }
+
     SmallBitSet(std::initializer_list<unit_type> init_list) noexcept {
         if (init_list.size() <= kUnits) {
             size_t i = 0;

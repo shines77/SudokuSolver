@@ -135,7 +135,7 @@ public:
     static const size_t Numbers = Sudoku::Numbers;
 
     static const size_t TotalSize = Sudoku::TotalSize;
-    static const size_t TotalSize2 = Sudoku::TotalSize2;
+    static const size_t TotalConditions = Sudoku::TotalConditions;
 
     static size_t num_guesses;
     static size_t num_unique_candidate;
@@ -153,12 +153,12 @@ private:
     SmallBitMatrix2<9, 9>  bit_cols;        // [col][num]
     SmallBitMatrix2<9, 9>  bit_boxes;       // [box][num]
 
-    short               col_size_[Sudoku::TotalConditions + 1];
+    short               col_size_[TotalConditions + 1];
 
     std::vector<int>    answer_;
     int                 last_idx_;
 
-    unsigned short      col_index_[Sudoku::TotalConditions + 1];
+    unsigned short      col_index_[TotalConditions + 1];
 
     unsigned short rows_[TotalSize + 1];
     unsigned short cols_[TotalSize + 1];
@@ -175,7 +175,7 @@ public:
 
     bool is_empty() const { return (list_.next[0] == 0); }
 
-    int cols() const { return (int)Sudoku::TotalConditions; }
+    int cols() const { return (int)TotalConditions; }
 
     static size_t get_num_guesses() { return DancingLinks::num_guesses; }
     static size_t get_num_unique_candidate() { return DancingLinks::num_unique_candidate; }
@@ -271,7 +271,7 @@ public:
         }
 
         size_t index = 1;
-        for (size_t i = 1; i < (Sudoku::TotalConditions + 1); i++) {
+        for (size_t i = 1; i < (TotalConditions + 1); i++) {
             if (this->col_index_[i] == 0) {
                 this->col_index_[i] = (unsigned short)index;
                 index++;

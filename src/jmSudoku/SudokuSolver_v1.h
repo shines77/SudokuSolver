@@ -92,7 +92,20 @@ public:
 
     static const size_t BoardSize = Sudoku::BoardSize;
     static const size_t TotalSize = Sudoku::TotalSize;
-    static const size_t TotalSize2 = Sudoku::TotalSize2;
+
+    static const size_t TotalConditions0 = 0;
+    static const size_t TotalConditions1 = Rows * Cols;
+    static const size_t TotalConditions2 = Boxes * Numbers;
+    static const size_t TotalConditions3 = Rows * Numbers;
+    static const size_t TotalConditions4 = Cols * Numbers;
+
+    static const size_t TotalConditions01 = TotalConditions0  + TotalConditions1;
+    static const size_t TotalConditions02 = TotalConditions01 + TotalConditions2;
+    static const size_t TotalConditions03 = TotalConditions02 + TotalConditions3;
+    static const size_t TotalConditions04 = TotalConditions03 + TotalConditions4;
+
+    static const size_t TotalConditions =
+        TotalConditions1 + TotalConditions2 + TotalConditions3 + TotalConditions4;
 
     static const size_t kAllRowsBit = Sudoku::kAllRowsBit;
     static const size_t kAllColsBit = Sudoku::kAllColsBit;
@@ -106,17 +119,31 @@ public:
     static size_t num_early_return;
 
 private:
+#pragma pack(push, 1)
+    struct literal_info_t {
+        uint8_t size;
+        uint8_t enable;
+    };
+#pragma pack(pop)
+
     SmallBitSet<BoardSize>  cell_filled_;
 
+    SmallBitSet2D<Boxes, Numbers>   boxes_;
     SmallBitSet2D<Cols, Numbers>    rows_;
     SmallBitSet2D<Rows, Numbers>    cols_;
-    SmallBitSet2D<Boxes, Numbers>   boxes_;
 
-    SmallBitSet2D<BoardSize, Numbers>       cell_nums_;     // [row * 9 + col][num]
-    SmallBitSet3D<Boxes, BoxSize, Numbers>  box_cells_;     // [box][box_size][num]
-    SmallBitSet3D<Boxes, Numbers, BoxSize>  box_nums_;      // [box][num][box_size]
-    SmallBitSet2D<Numbers, BoardSize>       nums_pos_;      // [box][row * 9 + col], normal
-    SmallBitSet2D<Numbers, BoardSize>       nums_pos_rt_;   // [box][col * 9 + row], rotate
+    alignas(16) SmallBitSet2D<BoardSize, Numbers>       cell_nums_;     // [row * 9 + col][num]
+
+    alignas(16) SmallBitSet3D<Boxes, Numbers, BoxSize>  box_nums_;      // [box][num][box_size]
+    alignas(16) SmallBitSet3D<Rows,  Numbers, Cols>     row_nums_;      // [row][num][col]
+    alignas(16) SmallBitSet3D<Cols,  Numbers, Rows>     col_nums_;      // [col][num][row]
+
+#if defined(__SSE4_1__)
+    alignas(16) literal_info_t literal_info_[TotalConditions];
+#else
+    alignas(16) uint8_t literal_cnt_[TotalConditions];
+    alignas(16) uint8_t literal_enable_[TotalConditions];
+#endif
 
     size_t empties_;
 
@@ -152,25 +179,72 @@ private:
         return (this->rows_[row] & this->cols_[col] & this->boxes_[box]);
     }
 
-    inline void fillNum(size_t row, size_t col, size_t box, uint32_t num_bit) {
-        this->cell_filled_.set(row * Cols + col);
-
+    inline void fillNum(size_t row, size_t col, size_t box, size_t box_pos, size_t num) {
+        uint32_t num_bit = 1u << num;
+        this->boxes_[box] ^= num_bit;
         this->rows_[row] ^= num_bit;
         this->cols_[col] ^= num_bit;
+
+        this->cell_filled_.set(row * Cols + col);
+        this->box_nums_[box][num].reset(box_pos);
+        this->row_nums_[row][num].reset(col);
+        this->col_nums_[col][num].reset(row);
+
+#if defined(__SSE4_1__)
+        this->literal_info_[TotalConditions0  + row * Cols    + col].enable = 0xFF;
+        this->literal_info_[TotalConditions01 + box * Numbers + num].enable = 0xFF;
+        this->literal_info_[TotalConditions02 + row * Numbers + num].enable = 0xFF;
+        this->literal_info_[TotalConditions03 + col * Numbers + num].enable = 0xFF;
+#else
+        this->literal_enable_[TotalConditions0  + row * Cols    + col] = 0xF0;
+        this->literal_enable_[TotalConditions01 + box * Numbers + num] = 0xF0;
+        this->literal_enable_[TotalConditions02 + row * Numbers + num] = 0xF0;
+        this->literal_enable_[TotalConditions03 + col * Numbers + num] = 0xF0;
+#endif
+    }
+
+    inline void doFillNum(size_t row, size_t col, size_t box, size_t box_pos, size_t num) {
+        uint32_t num_bit = 1u << num;
         this->boxes_[box] ^= num_bit;
+        this->rows_[row] ^= num_bit;
+        this->cols_[col] ^= num_bit;
+
+        this->cell_filled_.set(row * Cols + col);
+        this->box_nums_[box][num].reset(box_pos);
+        this->row_nums_[row][num].reset(col);
+        this->col_nums_[col][num].reset(row);
+
+#if defined(__SSE4_1__)
+        this->literal_info_[TotalConditions0  + row * Cols    + col].enable = 0xFF;
+        this->literal_info_[TotalConditions01 + box * Numbers + num].enable = 0xFF;
+        this->literal_info_[TotalConditions02 + row * Numbers + num].enable = 0xFF;
+        this->literal_info_[TotalConditions03 + col * Numbers + num].enable = 0xFF;
+#else
+        this->literal_enable_[TotalConditions0  + row * Cols    + col] = 0xF0;
+        this->literal_enable_[TotalConditions01 + box * Numbers + num] = 0xF0;
+        this->literal_enable_[TotalConditions02 + row * Numbers + num] = 0xF0;
+        this->literal_enable_[TotalConditions03 + col * Numbers + num] = 0xF0;
+#endif
     }
 
     void init_board(char board[BoardSize]) {
         this->cell_filled_.reset();
 
+        this->boxes_.set();
         this->rows_.set();
         this->cols_.set();
-        this->boxes_.set();
+
+        this->cell_nums_.reset();
+
+        this->box_nums_.set();
+        this->row_nums_.set();
+        this->col_nums_.set();
 
         size_t empties = 0;
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
             size_t box_base = row / 3 * 3;
+            size_t box_cell_y_base = (row % 3) * 3;
             for (size_t col = 0; col < Cols; col++) {
                 unsigned char val = board[pos++];
                 if (val == '.') {
@@ -178,9 +252,10 @@ private:
                 }
                 else {
                     size_t box = box_base + col / 3;
-                    uint32_t num = val - '1';
-                    uint32_t num_bit = 1u << num;
-                    this->fillNum(row, col, box, num_bit);
+                    size_t box_cell_x = (col % 3);
+                    size_t box_pos = box_cell_y_base + box_cell_x;
+                    size_t num = val - '1';
+                    this->fillNum(row, col, box, box_pos, num);
                 }
             }
         }
@@ -192,7 +267,6 @@ private:
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
             size_t box_base = row / 3 * 3;
-            size_t box_cell_y_base = (row % 3) * 3;
             for (size_t col = 0; col < Cols; col++) {
                 char val = board[pos];
                 if (val == '.') {
@@ -200,29 +274,6 @@ private:
                     size_t box = box_base + col / 3;
                     SmallBitSet<Numbers> bitNums = getCanFillNums(row, col, box);
                     this->cell_nums_[pos] = bitNums;
-
-                    // Get can fill positions each number in the same box.
-                    size_t box_cell_x = (col % 3);
-                    size_t box_pos = box_cell_y_base + box_cell_x;
-
-                    SmallBitSet<Numbers> bitBoxNums = this->boxes_[box];
-                    bitBoxNums &= bitNums;
-                    this->box_cells_[box][box_pos] = bitBoxNums;
-
-                    for (size_t num = 0; num < Numbers; num++) {
-                        bool canFill = bitBoxNums.test(num);
-                        if (canFill) {
-                            this->box_nums_[box][num].set(box_pos);
-                        }
-                    }
-
-                    for (size_t num = 0; num < Numbers; num++) {
-                        bool canFill = bitNums.test(num);
-                        if (canFill) {
-                            this->nums_pos_[num].set(pos);
-                            this->nums_pos_rt_[num].set(col * Rows + row);
-                        }
-                    }
                 }
                 pos++;
             }
