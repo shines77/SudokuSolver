@@ -89,6 +89,8 @@ public:
     static const size_t Boxes = Sudoku::Boxes;
     static const size_t BoxSize = Sudoku::BoxSize;
     static const size_t Numbers = Sudoku::Numbers;
+    static const size_t MinNumber = Sudoku::MinNumber;
+    static const size_t MaxNumber = Sudoku::MaxNumber;
 
     static const size_t BoardSize = Sudoku::BoardSize;
     static const size_t TotalSize = Sudoku::TotalSize;
@@ -121,7 +123,7 @@ public:
 private:
 #pragma pack(push, 1)
     struct literal_info_t {
-        uint8_t size;
+        uint8_t count;
         uint8_t enable;
     };
 #pragma pack(pop)
@@ -175,6 +177,136 @@ public:
     }
 
 private:
+#if defined(__SSE4_1__)
+
+    inline void enable_literal(size_t literal) {
+        this->literal_info_[literal].enable = 0x00;
+    }
+
+    inline void disable_literal(size_t literal) {
+        this->literal_info_[literal].enable = 0xFF;
+    }
+
+    inline uint8_t get_literal_cnt(size_t literal) {
+        return this->literal_info_[literal].count;
+    }
+
+    inline void inc_literal_cnt(size_t literal) {
+        this->literal_info_[literal].count++;
+    }
+
+    inline void dec_literal_cnt(size_t literal) {
+        this->literal_info_[literal].count--;
+    }
+
+#else // !__SSE4_1__
+
+    inline void enable_literal(size_t literal) {
+        this->literal_enable_[literal] = 0x00;
+    }
+
+    inline void disable_literal(size_t literal) {
+        this->literal_enable_[literal] = 0xF0;
+    }
+
+    inline uint8_t get_literal_cnt(size_t literal) {
+        return this->literal_count_[literal];
+    }
+
+    inline void inc_literal_cnt(size_t literal) {
+        this->literal_count_[literal]++;
+    }
+
+    inline void dec_literal_cnt(int literal) {
+        this->literal_count_[literal]--;
+    }
+
+#endif // __SSE4_1__
+
+    // enable_xxxx_literal()
+    inline void enable_cell_literal(size_t pos) {
+        size_t literal = TotalConditions0 + pos;
+        this->enable_literal(literal);
+    }
+
+    inline void enable_box_literal(size_t box, size_t num) {
+        size_t literal = TotalConditions01 + box * Numbers + num;
+        this->enable_literal(literal);
+    }
+
+    inline void enable_row_literal(size_t row, size_t num) {
+        size_t literal = TotalConditions02 + row * Numbers + num;
+        this->enable_literal(literal);
+    }
+
+    inline void enable_col_literal(size_t col, size_t num) {
+        size_t literal = TotalConditions03 + col * Numbers + num;
+        this->enable_literal(literal);
+    }
+
+    // disable_xxxx_literal()
+    inline void disable_cell_literal(size_t pos) {
+        size_t literal = TotalConditions0 + pos;
+        this->disable_literal(literal);
+    }
+
+    inline void disable_box_literal(size_t box, size_t num) {
+        size_t literal = TotalConditions01 + box * Numbers + num;
+        this->disable_literal(literal);
+    }
+
+    inline void disable_row_literal(size_t row, size_t num) {
+        size_t literal = TotalConditions02 + row * Numbers + num;
+        this->disable_literal(literal);
+    }
+
+    inline void disable_col_literal(size_t col, size_t num) {
+        size_t literal = TotalConditions03 + col * Numbers + num;
+        this->disable_literal(literal);
+    }
+
+    // inc_xxxx_literal_cnt()
+    inline void inc_cell_literal_cnt(size_t pos) {
+        size_t literal = TotalConditions0 + pos;
+        this->inc_literal_cnt(literal);
+    }
+
+    inline void inc_box_literal_cnt(size_t box, size_t num) {
+        size_t literal = TotalConditions01 + box * Numbers + num;
+        this->inc_literal_cnt(literal);
+    }
+
+    inline void inc_row_literal_cnt(size_t row, size_t num) {
+        size_t literal = TotalConditions02 + row * Numbers + num;
+        this->inc_literal_cnt(literal);
+    }
+
+    inline void inc_col_literal_cnt(size_t col, size_t num) {
+        size_t literal = TotalConditions03 + col * Numbers + num;
+        this->inc_literal_cnt(literal);
+    }
+
+    // dec_xxxx_literal_cnt()
+    inline void dec_cell_literal_cnt(size_t pos) {
+        size_t literal = TotalConditions0 + pos;
+        this->dec_literal_cnt(literal);
+    }
+
+    inline void dec_box_literal_cnt(size_t box, size_t num) {
+        size_t literal = TotalConditions01 + box * Numbers + num;
+        this->dec_literal_cnt(literal);
+    }
+
+    inline void dec_row_literal_cnt(size_t row, size_t num) {
+        size_t literal = TotalConditions02 + row * Numbers + num;
+        this->dec_literal_cnt(literal);
+    }
+
+    inline void dec_col_literal_cnt(size_t col, size_t num) {
+        size_t literal = TotalConditions03 + col * Numbers + num;
+        this->dec_literal_cnt(literal);
+    }
+
     inline SmallBitSet<Numbers> getCanFillNums(size_t row, size_t col, size_t box) {
         return (this->rows_[row] & this->cols_[col] & this->boxes_[box]);
     }
@@ -185,22 +317,19 @@ private:
         this->rows_[row] ^= num_bit;
         this->cols_[col] ^= num_bit;
 
+        size_t pos = row * Cols + col;
         this->cell_filled_.set(row * Cols + col);
-        this->box_nums_[box][num].reset(box_pos);
-        this->row_nums_[row][num].reset(col);
-        this->col_nums_[col][num].reset(row);
 
-#if defined(__SSE4_1__)
-        this->literal_info_[TotalConditions0  + row * Cols    + col].enable = 0xFF;
-        this->literal_info_[TotalConditions01 + box * Numbers + num].enable = 0xFF;
-        this->literal_info_[TotalConditions02 + row * Numbers + num].enable = 0xFF;
-        this->literal_info_[TotalConditions03 + col * Numbers + num].enable = 0xFF;
-#else
-        this->literal_enable_[TotalConditions0  + row * Cols    + col] = 0xF0;
-        this->literal_enable_[TotalConditions01 + box * Numbers + num] = 0xF0;
-        this->literal_enable_[TotalConditions02 + row * Numbers + num] = 0xF0;
-        this->literal_enable_[TotalConditions03 + col * Numbers + num] = 0xF0;
-#endif
+        for (size_t _num = MinNumber - 1; _num < MaxNumber; _num++) {
+            this->box_nums_[box][_num].reset(box_pos);
+            this->row_nums_[row][_num].reset(col);
+            this->col_nums_[col][_num].reset(row);
+        }
+
+        disable_cell_literal(pos);
+        disable_box_literal(box, num);
+        disable_row_literal(row, num);
+        disable_col_literal(col, num);
     }
 
     inline void doFillNum(size_t row, size_t col, size_t box, size_t box_pos, size_t num) {
@@ -209,22 +338,40 @@ private:
         this->rows_[row] ^= num_bit;
         this->cols_[col] ^= num_bit;
 
-        this->cell_filled_.set(row * Cols + col);
-        this->box_nums_[box][num].reset(box_pos);
-        this->row_nums_[row][num].reset(col);
-        this->col_nums_[col][num].reset(row);
+        size_t pos = row * Cols + col;
+        this->cell_filled_.set(pos);
 
-#if defined(__SSE4_1__)
-        this->literal_info_[TotalConditions0  + row * Cols    + col].enable = 0xFF;
-        this->literal_info_[TotalConditions01 + box * Numbers + num].enable = 0xFF;
-        this->literal_info_[TotalConditions02 + row * Numbers + num].enable = 0xFF;
-        this->literal_info_[TotalConditions03 + col * Numbers + num].enable = 0xFF;
-#else
-        this->literal_enable_[TotalConditions0  + row * Cols    + col] = 0xF0;
-        this->literal_enable_[TotalConditions01 + box * Numbers + num] = 0xF0;
-        this->literal_enable_[TotalConditions02 + row * Numbers + num] = 0xF0;
-        this->literal_enable_[TotalConditions03 + col * Numbers + num] = 0xF0;
-#endif
+        disable_cell_literal(pos);
+        disable_box_literal(box, num);
+        disable_row_literal(row, num);
+        disable_col_literal(col, num);
+
+        size_t box_nums = this->boxes_[box].value_sz();
+        while (box_nums != 0) {
+            size_t bit_num = BitUtils::ms1b(box_nums);
+            size_t _num = BitUtils::bsf(bit_num);
+            this->box_nums_[box][_num].reset(box_pos);
+            dec_box_literal_cnt(box, _num);
+            box_nums ^= bit_num;
+        }
+
+        size_t row_nums = this->rows_[row].value_sz();
+        while (row_nums != 0) {
+            size_t bit_num = BitUtils::ms1b(row_nums);
+            size_t _num = BitUtils::bsf(bit_num);
+            this->row_nums_[row][_num].reset(col);
+            dec_row_literal_cnt(row, _num);
+            row_nums ^= bit_num;
+        }
+
+        size_t col_nums = this->cols_[col].value_sz();
+        while (col_nums != 0) {
+            size_t bit_num = BitUtils::ms1b(col_nums);
+            size_t _num = BitUtils::bsf(bit_num);
+            this->col_nums_[col][_num].reset(row);
+            dec_box_literal_cnt(col, _num);
+            col_nums ^= bit_num;
+        }
     }
 
     void init_board(char board[BoardSize]) {
@@ -239,6 +386,12 @@ private:
         this->box_nums_.set();
         this->row_nums_.set();
         this->col_nums_.set();
+
+#if defined(__SSE4_1__)
+        std::memset((void *)&this->literal_info_[0], 0, sizeof(this->literal_info_));
+#else
+        std::memset((void *)&this->literal_enable_[0], 0, sizeof(this->literal_enable_));
+#endif
 
         size_t empties = 0;
         size_t pos = 0;
@@ -276,6 +429,39 @@ private:
                     this->cell_nums_[pos] = bitNums;
                 }
                 pos++;
+            }
+        }
+
+        this->calc_literal_count();
+    }
+
+    void calc_literal_count() {
+        size_t pos = 0;
+        for (size_t row = 0; row < Rows; row++) {
+            size_t box_base = row / 3 * 3;
+            for (size_t col = 0; col < Cols; col++) {
+                uint8_t cell_nums = (uint8_t)this->cell_nums_[pos].count();
+#if defined(__SSE4_1__)
+                this->literal_info_[TotalConditions0 + pos].count = cell_nums;
+#else
+                this->literal_count_[TotalConditions0 + pos] = cell_nums;
+#endif
+                pos++;
+                size_t box = box_base + col / 3;
+                for (size_t num = MinNumber - 1; num < MaxNumber; num++) {
+                    uint8_t box_nums = (uint8_t)this->box_nums_[box][num].count();
+                    uint8_t row_nums = (uint8_t)this->row_nums_[row][num].count();
+                    uint8_t col_nums = (uint8_t)this->col_nums_[col][num].count();
+#if defined(__SSE4_1__)
+                    this->literal_info_[TotalConditions01 + box * Numbers + num].count = box_nums;
+                    this->literal_info_[TotalConditions02 + row * Numbers + num].count = row_nums;
+                    this->literal_info_[TotalConditions03 + col * Numbers + num].count = col_nums;
+#else
+                    this->literal_count_[TotalConditions01 + box * Numbers + num] = box_nums;
+                    this->literal_count_[TotalConditions02 + row * Numbers + num] = row_nums;
+                    this->literal_count_[TotalConditions03 + col * Numbers + num] = col_nums;
+#endif
+                }
             }
         }
     }

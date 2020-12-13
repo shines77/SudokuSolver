@@ -464,12 +464,11 @@ public:
     size_t value(size_t pos) const {
         assert(pos < Bits);
         if (Bits <= kUnitBits) {
-            return (this->array_[0] & unit_type(size_t(1) << pos));
+            return (this->array_[0]);
         }
         else {
             size_t index = pos / kUnitBits;
-            size_t shift = pos % kUnitBits;
-            return (this->array_[index] & unit_type(size_t(1) << shift));
+            return (this->array_[index]);
         }
     }
 
@@ -557,6 +556,19 @@ public:
     uint64_t to_ullong() const {
         if (Bits <= sizeof(uint32_t) * 8) {
             return static_cast<uint64_t>(this->array_[0]);
+        }
+        else {
+            return this->array_[0];
+        }
+    }
+
+    unit_type value() const {
+        return this->array_[0];
+    }
+
+    size_t value_sz() const {
+        if (Bits <= sizeof(uint32_t) * 8) {
+            return static_cast<size_t>(this->array_[0]);
         }
         else {
             return this->array_[0];

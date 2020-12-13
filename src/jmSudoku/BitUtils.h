@@ -172,6 +172,30 @@ struct BitUtils {
         return __internal_popcnt64((x & -(int64_t)x) - 1);
     }
 
+#ifdef _MSC_VER
+#pragma warning (push)
+#pragma warning (disable: 4146)
+#endif
+
+    //
+    // The most significant bit
+    //
+    static inline uint32_t ms1b32(uint32_t x) {
+        return (x & (uint32_t)-x);
+    }
+
+    static inline uint64_t ms1b64(uint64_t x) {
+        return (x & (uint64_t)-x);
+    }
+
+    static inline size_t ms1b(size_t x) {
+        return (x & (size_t)-x);
+    }
+
+#ifdef _MSC_VER
+#pragma warning (pop)
+#endif
+
 #if (defined(_MSC_VER) && (_MSC_VER >= 1500)) || defined(__MINGW32__) || defined(__CYGWIN__)
 
     static inline
