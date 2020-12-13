@@ -160,6 +160,7 @@ struct BasicSudoku {
 
     static const size_t kAllRowsBit = (size_t(1) << Rows) - 1;
     static const size_t kAllColsBit = (size_t(1) << Cols) - 1;
+    static const size_t kAllBoxesBit = (size_t(1) << Boxes) - 1;
     static const size_t kAllNumbersBit = (size_t(1) << Numbers) - 1;
 
     static void clear_board(char board[BasicSudoku::BoardSize]) {

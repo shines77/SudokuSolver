@@ -15,9 +15,10 @@
 #include <cstdint>
 #include <cstddef>
 #include <bitset>
-#include <cstring>      // For std::memset()
+#include <cstring>          // For std::memset()
 #include <initializer_list>
 #include <type_traits>
+#include <algorithm>        // For std::min()
 #include <cassert>
 
 #include "BitUtils.h"
@@ -26,13 +27,13 @@ namespace jstd {
 
 struct dont_init_t {};
 
-template <size_t Bits, bool NeedTrim = true>
+template <size_t Bits>
 class SmallBitSet {
 public:
     typedef typename std::conditional<
                 (Bits <= sizeof(uint32_t) * 8), uint32_t, size_t
             >::type  unit_type;
-    typedef SmallBitSet<Bits, NeedTrim> this_type;
+    typedef SmallBitSet<Bits> this_type;
 
     static const size_t kUnitBytes = sizeof(unit_type);
     static const size_t kUnitBits  = 8 * kUnitBytes;
@@ -57,23 +58,29 @@ public:
         /* Here we don't need initialize for optimize sometimes. */
     }
 
-    SmallBitSet(const SmallBitSet<Bits, NeedTrim> & src) noexcept {
+    SmallBitSet(const this_type & src) noexcept {
         for (size_t i = 0; i < kUnits; i++) {
             this->array_[i] = src.array(i);
         }
     }
 
-    template <size_t UBits, bool UNeedTrim>
-    SmallBitSet(const SmallBitSet<UBits, UNeedTrim> & src) noexcept {
-        typedef SmallBitSet<UBits, UNeedTrim> SourceBitMap;
-        size_t copyUnits = std::min(kUnits, SourceBitMap::kUnits);
+    template <size_t UBits>
+    SmallBitSet(const SmallBitSet<UBits> & src) noexcept {
+        typedef SmallBitSet<UBits> SourceBitMap;
+        static const size_t copyUnits = std::min(kUnits, SourceBitMap::kUnits);
         for (size_t i = 0; i < copyUnits; i++) {
             this->array_[i] = src.array(i);
+        }
+        if (kRestBits != 0) {
+            this->trim();
         }
     }
 
     SmallBitSet(unit_type value) noexcept {
-        this->array_[0] = value;
+        if (kRestBits == 0)
+            this->array_[0] = value;
+        else
+            this->array_[0] = value & kTrimMask;
     }
 
     SmallBitSet(std::initializer_list<unit_type> init_list) noexcept {
@@ -81,6 +88,9 @@ public:
             size_t i = 0;
             for (auto iter : init_list) {
                 this->array_[i++] = *iter;
+            }
+            if (kRestBits != 0) {
+                this->trim();
             }
         }
         else {
@@ -90,6 +100,9 @@ public:
                 if (i >= kUnits) {
                     break;
                 }
+            }
+            if (kRestBits != 0) {
+                this->trim();
             }
         }
     }
@@ -105,53 +118,19 @@ public:
     size_t unit_size() const { return kUnits; }
     size_t per_unit_bytes() const { return sizeof(unit_type); }
 
-    bool need_trim() const { return NeedTrim; }
-
-    size_t array(size_t index) const {
+    unit_type array(size_t index) const {
         assert(index < kUnits);
         return this->array_[index];
     }
 
-private:
-    template <size_t Pos>
-    inline bool tail_is_any() const noexcept {
-        if (need_trim() && (kRestBits != 0)) {
-            size_t unit = this->array_[Pos] & kTrimMask;
-            return (unit != 0);
-        }
-        else {
-            return (this->array_[Pos] != 0);
-        }
-    }
-
-    template <size_t Pos>
-    inline bool tail_is_none() const noexcept {
-        if (need_trim() && (kRestBits != 0)) {
-            size_t unit = this->array_[Pos] & kTrimMask;
-            return (unit == 0);
-        }
-        else {
-            return (this->array_[Pos] == 0);
-        }
-    }
-
-    template <size_t Pos>
-    inline bool tail_is_all() const noexcept {
-        if (need_trim() && (kRestBits != 0)) {
-            size_t unit = this->array_[Pos] & kTrimMask;
-            return (unit == kTrimMask);
-        }
-        else {
-            return (this->array_[Pos] == kTrimMask);
-        }
-    }
-
-public:
     this_type & init(std::initializer_list<unit_type> init_list) noexcept {
         if (init_list.size() <= kUnits) {
             size_t i = 0;
             for (auto iter : init_list) {
                 this->array_[i++] = *iter;
+            }
+            if (kRestBits != 0) {
+                this->trim();
             }
         }
         else {
@@ -162,17 +141,20 @@ public:
                     break;
                 }
             }
+            if (kRestBits != 0) {
+                this->trim();
+            }
         }
         return (*this);
     }
 
     class reference {
     private:
-        this_type * bitmap_;    // pointer to the bitmap
+        this_type * bitset_;    // pointer to the bitmap
         size_t pos_;            // position of element in bitset
 
         // proxy for an element
-        friend class SmallBitSet<Bits, NeedTrim>;
+        friend class SmallBitSet<Bits>;
 
     public:
         ~reference() noexcept {
@@ -181,45 +163,45 @@ public:
 
         reference & operator = (bool value) noexcept {
             // assign Boolean to element
-            this->bitmap_->set(pos_, value);
+            this->bitset_->set(pos_, value);
             return (*this);
         }
 
         reference & operator = (const reference & right) noexcept {
             // assign reference to element
-            this->bitmap_->set(pos_, bool(right));
+            this->bitset_->set(pos_, bool(right));
             return (*this);
         }
 
         reference & flip() noexcept {
             // complement stored element
-            this->bitmap_->flip(pos_);
+            this->bitset_->flip(pos_);
             return (*this);
         }
 
         bool operator ~ () const noexcept {
             // return complemented element
-            return (!this->bitmap_->test(pos_));
+            return (!this->bitset_->test(pos_));
         }
 
         bool operator ! () const noexcept {
             // return complemented element
-            return (!this->bitmap_->test(pos_));
+            return (!this->bitset_->test(pos_));
         }
 
         operator bool () const noexcept {
             // return element
-            return (this->bitmap_->test(pos_));
+            return (this->bitset_->test(pos_));
         }
 
     private:
         reference() noexcept
-            : bitmap_(nullptr), pos_(0) {
+            : bitset_(nullptr), pos_(0) {
             // default construct
         }
 
-        reference(this_type & bitmap, size_t pos) noexcept
-            : bitmap_(&bitmap), pos_(pos) {
+        reference(this_type & bitsets, size_t pos) noexcept
+            : bitset_(&bitsets), pos_(pos) {
             // construct from bitmap reference and position
         }
     };
@@ -242,32 +224,50 @@ public:
     }
 
     this_type & operator & (unit_type value) noexcept {
-        this->array_[0] &= value;
+        if (kRestBits == 0)
+            this->array_[0] &= value;
+        else
+            this->array_[0] &= value & kTrimMask;
         return (*this);
     }
 
     this_type & operator | (unit_type value) noexcept {
-        this->array_[0] |= value;
+        if (kRestBits == 0)
+            this->array_[0] |= value;
+        else
+            this->array_[0] |= value & kTrimMask;
         return (*this);
     }
 
     this_type & operator ^ (unit_type value) noexcept {
-        this->array_[0] ^= value;
+        if (kRestBits == 0)
+            this->array_[0] ^= value;
+        else
+            this->array_[0] ^= value & kTrimMask;
         return (*this);
     }
 
     this_type & operator &= (unit_type value) noexcept {
-        this->array_[0] &= value;
+        if (kRestBits == 0)
+            this->array_[0] &= value;
+        else
+            this->array_[0] &= value & kTrimMask;
         return (*this);
     }
 
     this_type & operator |= (unit_type value) noexcept {
-        this->array_[0] |= value;
+        if (kRestBits == 0)
+            this->array_[0] |= value;
+        else
+            this->array_[0] |= value & kTrimMask;
         return (*this);
     }
 
     this_type & operator ^= (unit_type value) noexcept {
-        this->array_[0] ^= value;
+        if (kRestBits == 0)
+            this->array_[0] ^= value;
+        else
+            this->array_[0] ^= value & kTrimMask;
         return (*this);
     }
 
@@ -321,26 +321,44 @@ public:
     }
 
     this_type & fill(size_t value) noexcept {
-        for (size_t i = 0; i < kUnits; i++) {
-            this->array_[i] = (unit_type)value;
+        if (kRestBits != 0) {
+            size_t i = 0;
+            for (; i < kUnits - 1; i++) {
+                this->array_[i] = (unit_type)value;
+            }
+            this->array_[i] = value & kTrimMask;
         }
-        if (need_trim()) {
-            this->trim();
+        else {
+            for (size_t i = 0; i < kUnits; i++) {
+                this->array_[i] = (unit_type)value;
+            }
         }
         return (*this);
     }
 
     this_type & set() noexcept {
-        if (kUnits <= 8) {
-            for (size_t i = 0; i < kUnits; i++) {
-                this->array_[i] = kFullMask;
+        if (kRestBits != 0) {
+            if (kUnits <= 8) {
+                size_t i = 0;
+                for (; i < kUnits - 1; i++) {
+                    this->array_[i] = kFullMask;
+                }
+                this->array_[i] = kTrimMask;
+            }
+            else {
+                std::memset(this->array_, (kFullMask & 0xFF), (kUnits - 1) * sizeof(unit_type));
+                this->array_[kUnits - 1] = kTrimMask;
             }
         }
         else {
-            std::memset(this->array_, (kFullMask & 0xFF), kUnits * sizeof(unit_type));
-        }
-        if (need_trim()) {
-            this->trim();
+            if (kUnits <= 8) {
+                for (size_t i = 0; i < kUnits; i++) {
+                    this->array_[i] = kFullMask;
+                }
+            }
+            else {
+                std::memset(this->array_, (kFullMask & 0xFF), kUnits * sizeof(unit_type));
+            }
         }
         return (*this);
     }
@@ -392,11 +410,17 @@ public:
     }
 
     this_type & flip() noexcept {
-        for (size_t i = 0; i < kUnits; i++) {
-            this->array_[i] ^= unit_type(-1);
+        if (kRestBits != 0) {
+            size_t i = 0;
+            for (; i < kUnits - 1; i++) {
+                this->array_[i] ^= kFullMask;
+            }
+            this->array_[i] ^= kTrimMask;
         }
-        if (need_trim()) {
-            this->trim();
+        else {
+            for (size_t i = 0; i < kUnits; i++) {
+                this->array_[i] ^= kFullMask;
+            }
         }
         return (*this);
     }
@@ -446,51 +470,42 @@ public:
     }
 
     bool any() const noexcept {
-        if (Bits <= kUnitBits) {
-            return tail_is_any<0>();
-        }
-        else {
-            for (size_t i = 0; i < kUnits - 1; i++) {
-                size_t unit = this->array_[i];
-                if (unit != 0) {
-                    return true;
-                }
+        for (size_t i = 0; i < kUnits - 1; i++) {
+            size_t unit = this->array_[i];
+            if (unit != 0) {
+                return true;
             }
-            return tail_is_any<kUnits - 1>();
         }
+        return (this->array_[kUnits - 1] != 0);
     }
 
     bool none() const noexcept {
 #if 1
         return !(this->any());
 #else
-        if (Bits <= kUnitBits) {
-            return tail_is_none<0>();
-        }
-        else {
-            for (size_t i = 0; i < kUnits - 1; i++) {
-                size_t unit = this->array_[i];
-                if (unit != 0) {
-                    return false;
-                }
+        for (size_t i = 0; i < kUnits - 1; i++) {
+            size_t unit = this->array_[i];
+            if (unit != 0) {
+                return false;
             }
-            return tail_is_none<kUnits - 1>();
         }
+        return (this->array_[kUnits - 1] == 0);
 #endif
     }
 
     bool all() const noexcept {
-        if (Bits <= kUnitBits) {
-            return tail_is_all<0>();
+        for (size_t i = 0; i < kUnits - 1; i++) {
+            size_t unit = this->array_[i];
+            if (unit != kFullMask) {
+                return false;
+            }
+        }
+        if (kRestBits != 0) {
+            size_t unit = this->array_[kUnits - 1] & kTrimMask;
+            return (unit == kTrimMask);
         }
         else {
-            for (size_t i = 0; i < kUnits - 1; i++) {
-                size_t unit = this->array_[i];
-                if (unit != kFullMask) {
-                    return false;
-                }
-            }
-            return tail_is_all<kUnits - 1>();
+            return (this->array_[kUnits - 1] == kFullMask);
         }
     }
 
@@ -545,30 +560,30 @@ public:
     }
 };
 
-template <size_t Bits, bool NeedTrim>
+template <size_t Bits>
 inline
-SmallBitSet<Bits, NeedTrim> operator & (const SmallBitSet<Bits, NeedTrim> & left,
-                                        const SmallBitSet<Bits, NeedTrim> & right) noexcept {
+SmallBitSet<Bits> operator & (const SmallBitSet<Bits> & left,
+                              const SmallBitSet<Bits> & right) noexcept {
     // left And right
-    SmallBitSet<Bits, NeedTrim> answer = left;
+    SmallBitSet<Bits> answer = left;
     return (answer &= right);
 }
 
-template <size_t Bits, bool NeedTrim>
+template <size_t Bits>
 inline
-SmallBitSet<Bits, NeedTrim> operator | (const SmallBitSet<Bits, NeedTrim> & left,
-                                        const SmallBitSet<Bits, NeedTrim> & right) noexcept {
+SmallBitSet<Bits> operator | (const SmallBitSet<Bits> & left,
+                              const SmallBitSet<Bits> & right) noexcept {
     // left Or right
-    SmallBitSet<Bits, NeedTrim> answer = left;
+    SmallBitSet<Bits> answer = left;
     return (answer |= right);
 }
 
-template <size_t Bits, bool NeedTrim>
+template <size_t Bits>
 inline
-SmallBitSet<Bits, NeedTrim> operator ^ (const SmallBitSet<Bits, NeedTrim> & left,
-                                        const SmallBitSet<Bits, NeedTrim> & right) noexcept {
+SmallBitSet<Bits> operator ^ (const SmallBitSet<Bits> & left,
+                              const SmallBitSet<Bits> & right) noexcept {
     // left Xor right
-    SmallBitSet<Bits, NeedTrim> answer = left;
+    SmallBitSet<Bits> answer = left;
     return (answer ^= right);
 }
 
@@ -696,7 +711,7 @@ public:
 };
 
 template <size_t Depths, size_t Rows, size_t Cols,
-          typename TSmallBitMatrix2 = SmallBitMatrix2<Rows, Cols>>
+          typename TSmallBitMatrix2 = SmallBitMatrix2<Rows, Cols, std::bitset<Cols>>>
 class SmallBitMatrix3 {
 private:
     typedef TSmallBitMatrix2                                        matrix_type;
@@ -759,6 +774,12 @@ public:
         return this->matrix_[pos];
     }
 };
+
+template <size_t Rows, size_t Cols>
+using SmallBitSet2D = SmallBitMatrix2<Rows, Cols, SmallBitSet<Cols>>;
+
+template <size_t Depths, size_t Rows, size_t Cols>
+using SmallBitSet3D = SmallBitMatrix3<Depths, Rows, Cols, SmallBitMatrix2<Rows, Cols, SmallBitSet<Cols>>>;
 
 template <size_t Rows, size_t Cols, typename TBitSet = std::bitset<Cols>>
 class BitMatrix2 {

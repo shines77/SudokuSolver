@@ -87,10 +87,17 @@ public:
     static const size_t Rows = Sudoku::Rows;
     static const size_t Cols = Sudoku::Cols;
     static const size_t Boxes = Sudoku::Boxes;
+    static const size_t BoxSize = Sudoku::BoxSize;
     static const size_t Numbers = Sudoku::Numbers;
 
+    static const size_t BoardSize = Sudoku::BoardSize;
     static const size_t TotalSize = Sudoku::TotalSize;
     static const size_t TotalSize2 = Sudoku::TotalSize2;
+
+    static const size_t kAllRowsBit = Sudoku::kAllRowsBit;
+    static const size_t kAllColsBit = Sudoku::kAllColsBit;
+    static const size_t kAllBoxesBit = Sudoku::kAllBoxesBit;
+    static const size_t kAllNumbersBit = Sudoku::kAllNumbersBit;
 
     typedef Solver slover_type;
 
@@ -99,21 +106,21 @@ public:
     static size_t num_early_return;
 
 private:
-    SmallBitSet<81> cell_filled_;
+    SmallBitSet<BoardSize>  cell_filled_;
 
-#if 1
-    SmallBitMatrix2<Sudoku::Cols, Sudoku::Numbers, SmallBitSet<Sudoku::Numbers>>    rows_;
-    SmallBitMatrix2<Sudoku::Rows, Sudoku::Numbers, SmallBitSet<Sudoku::Numbers>>    cols_;
-    SmallBitMatrix2<Sudoku::Boxes, Sudoku::Numbers, SmallBitSet<Sudoku::Numbers>>   boxes_;
-#else
-    std::array<uint32_t, Sudoku::Cols>      rows_;
-    std::array<uint32_t, Sudoku::Rows>      cols_;
-    std::array<uint32_t, Sudoku::Boxes>     boxes_;
-#endif
+    SmallBitSet2D<Cols, Numbers>    rows_;
+    SmallBitSet2D<Rows, Numbers>    cols_;
+    SmallBitSet2D<Boxes, Numbers>   boxes_;
+
+    SmallBitSet2D<BoardSize, Numbers>       cell_nums_;     // [row * 9 + col][num]
+    SmallBitSet3D<Boxes, BoxSize, Numbers>  box_cells_;     // [box][box_size][num]
+    SmallBitSet3D<Boxes, Numbers, BoxSize>  box_nums_;      // [box][num][box_size]
+    SmallBitSet2D<Numbers, BoardSize>       nums_pos_;      // [box][row * 9 + col], normal
+    SmallBitSet2D<Numbers, BoardSize>       nums_pos_rt_;   // [box][col * 9 + row], rotate
 
     size_t empties_;
 
-    std::vector<SudokuBoard<Sudoku::BoardSize>> answers_;
+    std::vector<SudokuBoard<BoardSize>> answers_;
 
 public:
     Solver() : empties_(0) {
@@ -141,25 +148,30 @@ public:
     }
 
 private:
+    inline SmallBitSet<Numbers> getCanFillNums(size_t row, size_t col, size_t box) {
+        return (this->rows_[row] & this->cols_[col] & this->boxes_[box]);
+    }
+
     inline void fillNum(size_t row, size_t col, size_t box, uint32_t num_bit) {
-        this->cell_filled_.set(row * Sudoku::Cols + col);
+        this->cell_filled_.set(row * Cols + col);
+
         this->rows_[row] ^= num_bit;
         this->cols_[col] ^= num_bit;
         this->boxes_[box] ^= num_bit;
     }
 
-    void init_board(char board[Sudoku::BoardSize]) {
+    void init_board(char board[BoardSize]) {
         this->cell_filled_.reset();
 
-        this->rows_.fill(Sudoku::kAllNumbersBit);
-        this->cols_.fill(Sudoku::kAllNumbersBit);
-        this->boxes_.fill(Sudoku::kAllNumbersBit);
+        this->rows_.set();
+        this->cols_.set();
+        this->boxes_.set();
 
         size_t empties = 0;
         size_t pos = 0;
-        for (size_t row = 0; row < Sudoku::Rows; row++) {
+        for (size_t row = 0; row < Rows; row++) {
             size_t box_base = row / 3 * 3;
-            for (size_t col = 0; col < Sudoku::Cols; col++) {
+            for (size_t col = 0; col < Cols; col++) {
                 unsigned char val = board[pos++];
                 if (val == '.') {
                     empties++;
@@ -176,12 +188,53 @@ private:
         this->empties_ = empties;
     }
 
+    void setup_state(char board[BoardSize]) {
+        size_t pos = 0;
+        for (size_t row = 0; row < Rows; row++) {
+            size_t box_base = row / 3 * 3;
+            size_t box_cell_y_base = (row % 3) * 3;
+            for (size_t col = 0; col < Cols; col++) {
+                char val = board[pos];
+                if (val == '.') {
+                    // Get can fill numbers each cell.
+                    size_t box = box_base + col / 3;
+                    SmallBitSet<Numbers> bitNums = getCanFillNums(row, col, box);
+                    this->cell_nums_[pos] = bitNums;
+
+                    // Get can fill positions each number in the same box.
+                    size_t box_cell_x = (col % 3);
+                    size_t box_pos = box_cell_y_base + box_cell_x;
+
+                    SmallBitSet<Numbers> bitBoxNums = this->boxes_[box];
+                    bitBoxNums &= bitNums;
+                    this->box_cells_[box][box_pos] = bitBoxNums;
+
+                    for (size_t num = 0; num < Numbers; num++) {
+                        bool canFill = bitBoxNums.test(num);
+                        if (canFill) {
+                            this->box_nums_[box][num].set(box_pos);
+                        }
+                    }
+
+                    for (size_t num = 0; num < Numbers; num++) {
+                        bool canFill = bitNums.test(num);
+                        if (canFill) {
+                            this->nums_pos_[num].set(pos);
+                            this->nums_pos_rt_[num].set(col * Rows + row);
+                        }
+                    }
+                }
+                pos++;
+            }
+        }
+    }
+
 public:
     bool solve() {
         return false;
     }
 
-    bool solve(char board[Sudoku::BoardSize],
+    bool solve(char board[BoardSize],
                double & elapsed_time,
                bool verbose = true) {
         if (verbose) {
@@ -192,6 +245,8 @@ public:
         sw.start();
 
         this->init_board(board);
+        this->setup_state(board);
+
         bool success = this->solve();
 
         sw.stop();
