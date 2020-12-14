@@ -1148,7 +1148,7 @@ private:
             num_bits ^= num_bit;
         }
 
-        restoreNeighborCellsEffect(empties, effect_count, pos, num);
+        restoreNeighborCellsEffect(empties, effect_count, num);
     }
 
     inline size_t updateNeighborCellsEffect(size_t empties, size_t in_pos, size_t num) {
@@ -1168,23 +1168,24 @@ private:
 
                 size_t box = cellInfo.box;
                 size_t cell = cellInfo.cell;
-                this->box_nums_[box][num].reset(cell);
-                dec_box_literal_cnt(box, num);
-
                 size_t row = cellInfo.row;
                 size_t col = cellInfo.col;
-                this->row_nums_[row][num].reset(col);
-                dec_row_literal_cnt(row, num);
 
+                this->box_nums_[box][num].reset(cell);
+                this->row_nums_[row][num].reset(col);
                 this->col_nums_[col][num].reset(row);
+
+                dec_box_literal_cnt(box, num);
+                dec_row_literal_cnt(row, num);                
                 dec_col_literal_cnt(col, num);
             }
         }
         return count;
     }
 
-    inline void restoreNeighborCellsEffect(size_t empties, size_t effect_count,
-                                           size_t in_pos, size_t num) {
+    inline void restoreNeighborCellsEffect(size_t empties,
+                                           size_t effect_count,
+                                           size_t num) {
         const EffectList & effect_list = this->effect_list_[empties];
         for (size_t index = 0; index < effect_count; index++) {
             size_t pos = effect_list.cells[index];
