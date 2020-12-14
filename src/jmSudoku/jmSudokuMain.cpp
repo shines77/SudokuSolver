@@ -219,7 +219,7 @@ void run_a_testcase(size_t index)
         char board[Sudoku::BoardSize];
         read_sudoku_board(board, index);
 
-        v1::Solver solver;
+        v1::Solver<Sudoku> solver;
         bool success = solver.solve(board, elapsed_time);
     }
 
