@@ -230,7 +230,7 @@ private:
             }
         }
 
-        this->effect_list_.resize(empties);
+        this->effect_list_.resize(empties + 1);
         this->empties_ = empties;
     }
 
@@ -296,9 +296,11 @@ private:
 
     inline void inc_literal_cnt(size_t literal) {
         this->literal_info_[literal].count++;
+        assert(this->literal_info_[literal].count <= Numbers);
     }
 
     inline void dec_literal_cnt(size_t literal) {
+        //assert(this->literal_info_[literal].count > 0);
         this->literal_info_[literal].count--;
     }
 
@@ -322,9 +324,11 @@ private:
 
     inline void inc_literal_cnt(size_t literal) {
         this->literal_count_[literal]++;
+        assert(this->literal_count_[literal] <= Numbers);
     }
 
     inline void dec_literal_cnt(int literal) {
+        assert(this->literal_count_[literal] > 0);
         this->literal_count_[literal]--;
     }
 
@@ -449,10 +453,12 @@ private:
                             out_min_literal_cnt = 0;
                             return i;
                         }
+#if 0
                         else {
                             out_min_literal_cnt = 1;
                             return i;
                         }
+#endif
                     }
                     min_literal_cnt = literal_cnt;
                     min_literal_id = i;
@@ -992,29 +998,9 @@ private:
         }
     }
 
-    inline size_t doFillNum(size_t empties, size_t pos, size_t row, size_t col,
-                            size_t box, size_t cell, size_t num,
-                            SmallBitSet<Numbers> & nums_bit) {
-        uint32_t num_bit = 1u << num;
-        this->boxes_[box] ^= num_bit;
-        this->rows_[row] ^= num_bit;
-        this->cols_[col] ^= num_bit;
+    void remove_box_other_numbers(size_t box, size_t cell) {
+        size_t row = 0, col = 0;
 
-        this->cell_filled_.set(pos);
-
-        disable_cell_literal(pos);
-        disable_box_literal(box, num);
-        disable_row_literal(row, num);
-        disable_col_literal(col, num);
-
-        nums_bit = this->cell_nums_[pos];
-
-        this->cell_nums_[pos].reset(num);
-        this->box_nums_[box][num].reset(cell);
-        this->row_nums_[row][num].reset(col);
-        this->col_nums_[col][num].reset(row);
-
-#if 0
         size_t box_bits = this->boxes_[box].value_sz();
         while (box_bits != 0) {
             size_t num_bit = BitUtils::ms1b(box_bits);
@@ -1047,15 +1033,57 @@ private:
             }
             col_bits ^= num_bit;
         }
-#endif
-        size_t effect_count = removeNeighborCellsEffect(empties, pos, num);
+    }
+
+    inline size_t doFillNum(size_t empties, size_t pos, size_t row, size_t col,
+                            size_t box, size_t cell, size_t num,
+                            SmallBitSet<Numbers> & save_bits) {
+        uint32_t n_num_bit = 1u << num;
+        this->boxes_[box] ^= n_num_bit;
+        this->rows_[row] ^= n_num_bit;
+        this->cols_[col] ^= n_num_bit;
+
+        this->cell_filled_.set(pos);
+
+        disable_cell_literal(pos);
+        disable_box_literal(box, num);
+        disable_row_literal(row, num);
+        disable_col_literal(col, num);
+
+        this->box_nums_[box][num].reset(cell);
+        this->row_nums_[row][num].reset(col);
+        this->col_nums_[col][num].reset(row);
+
+        // Save cell num bits
+        save_bits = this->cell_nums_[pos];
+        this->cell_nums_[pos].reset();
+
+        size_t num_bits = save_bits.value_sz();
+        // Exclude the current number, because it has been processed.
+        num_bits ^= (size_t)n_num_bit;
+        while (num_bits != 0) {
+            size_t num_bit = BitUtils::ms1b(num_bits);
+            size_t _num = BitUtils::bsf(num_bit);
+
+            this->box_nums_[box][_num].reset(cell);
+            this->row_nums_[row][_num].reset(col);
+            this->col_nums_[col][_num].reset(row);
+
+            dec_box_literal_cnt(box, _num);
+            dec_row_literal_cnt(row, _num);
+            dec_row_literal_cnt(col, _num);
+
+            num_bits ^= num_bit;
+        }
+
+        size_t effect_count = updateNeighborCellsEffect(empties, pos, num);
         return effect_count;
     }
 
     inline void undoFillNum(size_t empties, size_t effect_count,
                             size_t pos, size_t row, size_t col,
                             size_t box, size_t cell, size_t num,
-                            SmallBitSet<Numbers> & nums_bit) {
+                            SmallBitSet<Numbers> & save_bits) {
         uint32_t num_bit = 1u << num;
         this->boxes_[box] |= num_bit;
         this->rows_[row] |= num_bit;
@@ -1068,40 +1096,46 @@ private:
         enable_row_literal(row, num);
         enable_col_literal(col, num);
 
-        this->cell_nums_[pos] = nums_bit;
+        // Restore cell num bits
+        this->cell_nums_[pos] = save_bits;
 
-        this->cell_nums_[pos].set(num);
         this->box_nums_[box][num].set(cell);
         this->row_nums_[row][num].set(col);
         this->col_nums_[col][num].set(row);
 
+        // Exclude the current number, because it has been processed.
+        save_bits.reset(num);
+
+        size_t num_bits = save_bits.value_sz();
+        while (num_bits != 0) {
+            size_t num_bit = BitUtils::ms1b(num_bits);
+            size_t _num = BitUtils::bsf(num_bit);
+
+            this->box_nums_[box][_num].set(cell);
+            this->row_nums_[row][_num].set(col);
+            this->col_nums_[col][_num].set(row);
+
+            inc_box_literal_cnt(box, _num);
+            inc_row_literal_cnt(row, _num);
+            inc_row_literal_cnt(col, _num);
+
+            num_bits ^= num_bit;
+        }
+
         restoreNeighborCellsEffect(empties, effect_count, pos, num);
     }
 
-    void remove_box_other_number(size_t box, size_t cell) {
-        size_t box_bits = this->boxes_[box].value_sz();
-        while (box_bits != 0) {
-            size_t num_bit = BitUtils::ms1b(box_bits);
-            size_t _num = BitUtils::bsf(num_bit);
-            if (this->box_nums_[box][_num].test(cell)) {
-                this->box_nums_[box][_num].reset(cell);
-                dec_box_literal_cnt(box, _num);
-            }
-            box_bits ^= num_bit;
-        }
-    }
-
-    inline size_t removeNeighborCellsEffect(size_t empties, size_t in_pos, size_t num) {
+    inline size_t updateNeighborCellsEffect(size_t empties, size_t in_pos, size_t num) {
         EffectList & effect_list = this->effect_list_[empties];
         size_t count = 0;
         const NeighborCells & cellList = SudokuTy::neighbor_cells[in_pos];
         for (size_t index = 0; index < Neighbors; index++) {
             size_t pos = cellList.cells[index];
-            if ((!this->cell_filled_.test(pos)) && this->cell_nums_[pos].test(num)) {
+            if (/* (!this->cell_filled_.test(pos)) && */ this->cell_nums_[pos].test(num)) {
                 this->cell_nums_[pos].reset(num);
                 dec_cell_literal_cnt(pos);
 
-                effect_list.cells[count++] = (uint8_t)pos;
+                effect_list.cells[++count] = (uint8_t)pos;
 
                 const CellInfo & cellInfo = SudokuTy::cell_info[pos];
 
@@ -1119,13 +1153,15 @@ private:
                 dec_col_literal_cnt(col, num);
             }
         }
+        effect_list.cells[0] = (uint8_t)count;
         return count;
     }
 
     inline void restoreNeighborCellsEffect(size_t empties, size_t effect_count,
                                            size_t in_pos, size_t num) {
         const EffectList & effect_list = this->effect_list_[empties];
-        for (size_t index = 0; index < effect_count; index++) {
+        assert(effect_count == effect_list.cells[0]);
+        for (size_t index = 1; index <= effect_count; index++) {
             size_t pos = effect_list.cells[index];
             this->cell_nums_[pos].set(num);
             inc_cell_literal_cnt(pos);
@@ -1173,7 +1209,7 @@ public:
         }
       
         int min_literal_cnt;
-#if defined(__SSE2__) || defined(__SSE4_1__)
+#if (defined(__SSE2__) || defined(__SSE4_1__)) && 1
         int min_literal_id = get_min_literal_simd(min_literal_cnt);
 #else
         int min_literal_id = get_min_literal(min_literal_cnt);
@@ -1186,7 +1222,7 @@ public:
             else
                 num_guesses++;
 
-            SmallBitSet<Numbers> nums_bits;
+            SmallBitSet<Numbers> save_bits;
             size_t pos, row, col, box, cell, num;
 
             int literal_type = min_literal_id / BoardSize;
@@ -1220,9 +1256,9 @@ public:
                         size_t num_bit = BitUtils::ms1b(num_bits);
                         num = BitUtils::bsf(num_bit);
 
-                        this->cell_nums_[pos].reset(num);
+                        //this->cell_nums_[pos].reset(num);
                         size_t effect_count = doFillNum(empties, pos, row, col,
-                                                        box, cell, num, nums_bits);
+                                                        box, cell, num, save_bits);
 
                         board[pos] = (char)(num + '1');
 
@@ -1236,9 +1272,9 @@ public:
                             }
                         }
 
-                        this->cell_nums_[pos].set(num);
+                        //this->cell_nums_[pos].set(num);
                         undoFillNum(empties, effect_count, pos, row, col,
-                                    box, cell, num, nums_bits);
+                                    box, cell, num, save_bits);
 
                         num_bits ^= num_bit;
                     }
@@ -1265,9 +1301,9 @@ public:
                         col = (box % BoxCountX) * BoxCellsX;
                         pos = row * Cols + col;
 
-                        this->box_nums_[box][num].reset(cell);
+                        //this->box_nums_[box][num].reset(cell);
                         size_t effect_count = doFillNum(empties, pos, row, col,
-                                                        box, cell, num, nums_bits);
+                                                        box, cell, num, save_bits);
 
                         board[pos] = (char)(num + '1');
 
@@ -1281,9 +1317,9 @@ public:
                             }
                         }
 
-                        this->box_nums_[box][num].set(cell);
+                        //this->box_nums_[box][num].set(cell);
                         undoFillNum(empties, effect_count, pos, row, col,
-                                    box, cell, num, nums_bits);
+                                    box, cell, num, save_bits);
 
                         cell_bits ^= cell_bit;
                     }
@@ -1307,12 +1343,16 @@ public:
                         size_t col_bit = BitUtils::ms1b(col_bits);
                         col = BitUtils::bsf(col_bits);
                         pos = row * Cols + col;
-                        box = row / 3 * 3 + col / 3;
-                        cell = (row % 3) * 3 + (col % 3);
+                        size_t box_x = col / BoxCellsX;
+                        size_t box_y = row / BoxCellsY;
+                        box = box_y * BoxCountX + box_x;
+                        size_t cell_x = col % BoxCellsX;
+                        size_t cell_y = row % BoxCellsY;
+                        cell = cell_y * BoxCellsX + cell_x;
 
-                        this->row_nums_[row][num].reset(col);
+                        //this->row_nums_[row][num].reset(col);
                         size_t effect_count = doFillNum(empties, pos, row, col,
-                                                        box, cell, num, nums_bits);
+                                                        box, cell, num, save_bits);
 
                         board[pos] = (char)(num + '1');
 
@@ -1326,9 +1366,9 @@ public:
                             }
                         }
 
-                        this->row_nums_[row][num].set(col);
+                        //this->row_nums_[row][num].set(col);
                         undoFillNum(empties, effect_count, pos, row, col,
-                                    box, cell, num, nums_bits);
+                                    box, cell, num, save_bits);
 
                         col_bits ^= col_bit;
                     }
@@ -1352,12 +1392,16 @@ public:
                         size_t row_bit = BitUtils::ms1b(row_bits);
                         row = BitUtils::bsf(row_bits);
                         pos = row * Cols + col;
-                        box = row / 3 * 3 + col / 3;
-                        cell = (row % 3) * 3 + (col % 3);
+                        size_t box_x = col / BoxCellsX;
+                        size_t box_y = row / BoxCellsY;
+                        box = box_y * BoxCountX + box_x;
+                        size_t cell_x = col % BoxCellsX;
+                        size_t cell_y = row % BoxCellsY;
+                        cell = cell_y * BoxCellsX + cell_x;
 
                         this->col_nums_[col][num].reset(row);
                         size_t effect_count = doFillNum(empties, pos, row, col,
-                                                        box, cell, num, nums_bits);
+                                                        box, cell, num, save_bits);
 
                         board[pos] = (char)(num + '1');
 
@@ -1373,7 +1417,7 @@ public:
 
                         this->col_nums_[col][num].set(row);
                         undoFillNum(empties, effect_count, pos, row, col,
-                                    box, cell, num, nums_bits);
+                                    box, cell, num, save_bits);
 
                         row_bits ^= row_bit;
                     }

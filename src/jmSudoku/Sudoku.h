@@ -353,8 +353,8 @@ struct BasicSudoku {
 
     // Aligned to sizeof(size_t) for cache friendly
     struct EffectList {
-        uint8_t cells[Neighbors];
-        uint8_t reserve[AlignedNeighbors - Neighbors];
+        uint8_t cells[Neighbors + 1];
+        uint8_t reserve[AlignedNeighbors - (Neighbors + 1)];
     };
 
     struct CellInfo {
