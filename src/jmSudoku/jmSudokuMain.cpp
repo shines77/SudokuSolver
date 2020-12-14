@@ -339,6 +339,8 @@ int main(int argc, char * argv[])
 
     jtest::CPU::warmup(1000);
 
+    Sudoku::initialize();
+
     if (1)
     {
         if (filename == nullptr) {
@@ -356,6 +358,8 @@ int main(int argc, char * argv[])
             run_sudoku_test<dlx::v3::Solver>(filename, "dlx::v3");
         }
     }
+
+    Sudoku::finalize();
 
 #if !defined(NDEBUG) && defined(_MSC_VER)
     ::system("pause");

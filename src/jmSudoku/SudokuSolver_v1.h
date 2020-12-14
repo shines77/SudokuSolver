@@ -85,6 +85,10 @@ static const size_t kSearchMode = V1_SEARCH_MODE;
 template <typename SudokuTy>
 class Solver {
 public:
+    typedef typename SudokuTy::NeighborCells    NeighborCells;
+    typedef typename SudokuTy::EffectList       EffectList;
+    typedef typename SudokuTy::CellInfo         CellInfo;
+
     static const size_t BoxCellsX = SudokuTy::BoxCellsX;      // 3
     static const size_t BoxCellsY = SudokuTy::BoxCellsY;      // 3
     static const size_t BoxCountX = SudokuTy::BoxCountX;      // 3
@@ -100,6 +104,7 @@ public:
 
     static const size_t BoardSize = SudokuTy::BoardSize;
     static const size_t TotalSize = SudokuTy::TotalSize;
+    static const size_t Neighbors = SudokuTy::Neighbors;
 
     static const size_t TotalLiterals0 = 0;
     static const size_t TotalLiterals1 = Rows * Cols;
@@ -128,10 +133,12 @@ public:
 
 private:
 #pragma pack(push, 1)
+
     struct literal_info_t {
         uint8_t count;
         uint8_t enable;
     };
+
 #pragma pack(pop)
 
     SmallBitSet<BoardSize>          cell_filled_;
@@ -155,6 +162,7 @@ private:
 
     size_t empties_;
 
+    std::vector<EffectList>             effect_list_;
     std::vector<SudokuBoard<BoardSize>> answers_;
 
 public:
@@ -183,6 +191,91 @@ public:
     }
 
 private:
+    void init_board(char board[BoardSize]) {
+        this->cell_filled_.reset();
+
+        this->boxes_.set();
+        this->rows_.set();
+        this->cols_.set();
+
+        this->cell_nums_.reset();
+
+        this->box_nums_.set();
+        this->row_nums_.set();
+        this->col_nums_.set();
+
+#if defined(__SSE4_1__)
+        std::memset((void *)&this->literal_info_[0], 0, sizeof(this->literal_info_));
+#else
+        std::memset((void *)&this->literal_enable_[0], 0, sizeof(this->literal_enable_));
+#endif
+
+        size_t empties = 0;
+        size_t pos = 0;
+        for (size_t row = 0; row < Rows; row++) {
+            size_t box_base = row / 3 * 3;
+            size_t box_cell_y_base = (row % 3) * 3;
+            for (size_t col = 0; col < Cols; col++) {
+                unsigned char val = board[pos++];
+                if (val == '.') {
+                    empties++;
+                }
+                else {
+                    size_t box = box_base + col / 3;
+                    size_t box_cell_x = (col % 3);
+                    size_t box_pos = box_cell_y_base + box_cell_x;
+                    size_t num = val - '1';
+                    this->fillNum(row, col, box, box_pos, num);
+                }
+            }
+        }
+
+        this->effect_list_.resize(empties);
+        this->empties_ = empties;
+    }
+
+    void setup_state(char board[BoardSize]) {
+        size_t pos = 0;
+        for (size_t row = 0; row < Rows; row++) {
+            size_t box_base = row / 3 * 3;
+            for (size_t col = 0; col < Cols; col++) {
+                char val = board[pos];
+                if (val == '.') {
+                    // Get can fill numbers each cell.
+                    size_t box = box_base + col / 3;
+                    SmallBitSet<Numbers> bitNums = getCanFillNums(row, col, box);
+                    this->cell_nums_[pos] = bitNums;
+                }
+                pos++;
+            }
+        }
+
+        this->calc_literal_count();
+    }
+
+    void calc_literal_count() {
+        size_t pos = 0;
+        for (size_t row = 0; row < Rows; row++) {
+            size_t box_base = row / 3 * 3;
+            for (size_t col = 0; col < Cols; col++) {
+                uint8_t cell_nums = (uint8_t)this->cell_nums_[pos].count();
+                set_cell_literal_cnt(pos, cell_nums);
+                pos++;
+
+                size_t box = box_base + col / 3;
+                for (size_t num = MinNumber - 1; num < MaxNumber; num++) {
+                    uint8_t box_nums = (uint8_t)this->box_nums_[box][num].count();
+                    uint8_t row_nums = (uint8_t)this->row_nums_[row][num].count();
+                    uint8_t col_nums = (uint8_t)this->col_nums_[col][num].count();
+
+                    set_box_literal_cnt(box, num, box_nums);
+                    set_row_literal_cnt(row, num, row_nums);
+                    set_col_literal_cnt(col, num, col_nums);
+                }
+            }
+        }
+    }
+
 #if defined(__SSE4_1__)
 
     inline void enable_literal(size_t literal) {
@@ -899,8 +992,9 @@ private:
         }
     }
 
-    inline void doFillNum(size_t pos, size_t row, size_t col,
-                          size_t box, size_t cell, size_t num) {
+    inline size_t doFillNum(size_t empties, size_t pos, size_t row, size_t col,
+                            size_t box, size_t cell, size_t num,
+                            SmallBitSet<Numbers> & nums_bit) {
         uint32_t num_bit = 1u << num;
         this->boxes_[box] ^= num_bit;
         this->rows_[row] ^= num_bit;
@@ -913,8 +1007,14 @@ private:
         disable_row_literal(row, num);
         disable_col_literal(col, num);
 
-        dec_cell_literal_cnt(pos);
+        nums_bit = this->cell_nums_[pos];
 
+        this->cell_nums_[pos].reset(num);
+        this->box_nums_[box][num].reset(cell);
+        this->row_nums_[row][num].reset(col);
+        this->col_nums_[col][num].reset(row);
+
+#if 0
         size_t box_bits = this->boxes_[box].value_sz();
         while (box_bits != 0) {
             size_t num_bit = BitUtils::ms1b(box_bits);
@@ -947,10 +1047,15 @@ private:
             }
             col_bits ^= num_bit;
         }
+#endif
+        size_t effect_count = removeNeighborCellsEffect(empties, pos, num);
+        return effect_count;
     }
 
-    inline void undoFillNum(size_t pos, size_t row, size_t col,
-                            size_t box, size_t cell, size_t num) {
+    inline void undoFillNum(size_t empties, size_t effect_count,
+                            size_t pos, size_t row, size_t col,
+                            size_t box, size_t cell, size_t num,
+                            SmallBitSet<Numbers> & nums_bit) {
         uint32_t num_bit = 1u << num;
         this->boxes_[box] |= num_bit;
         this->rows_[row] |= num_bit;
@@ -963,90 +1068,82 @@ private:
         enable_row_literal(row, num);
         enable_col_literal(col, num);
 
-        inc_cell_literal_cnt(pos);
+        this->cell_nums_[pos] = nums_bit;
+
+        this->cell_nums_[pos].set(num);
+        this->box_nums_[box][num].set(cell);
+        this->row_nums_[row][num].set(col);
+        this->col_nums_[col][num].set(row);
+
+        restoreNeighborCellsEffect(empties, effect_count, pos, num);
     }
 
-    void init_board(char board[BoardSize]) {
-        this->cell_filled_.reset();
+    void remove_box_other_number(size_t box, size_t cell) {
+        size_t box_bits = this->boxes_[box].value_sz();
+        while (box_bits != 0) {
+            size_t num_bit = BitUtils::ms1b(box_bits);
+            size_t _num = BitUtils::bsf(num_bit);
+            if (this->box_nums_[box][_num].test(cell)) {
+                this->box_nums_[box][_num].reset(cell);
+                dec_box_literal_cnt(box, _num);
+            }
+            box_bits ^= num_bit;
+        }
+    }
 
-        this->boxes_.set();
-        this->rows_.set();
-        this->cols_.set();
+    inline size_t removeNeighborCellsEffect(size_t empties, size_t in_pos, size_t num) {
+        EffectList & effect_list = this->effect_list_[empties];
+        size_t count = 0;
+        const NeighborCells & cellList = SudokuTy::neighbor_cells[in_pos];
+        for (size_t index = 0; index < Neighbors; index++) {
+            size_t pos = cellList.cells[index];
+            if ((!this->cell_filled_.test(pos)) && this->cell_nums_[pos].test(num)) {
+                this->cell_nums_[pos].reset(num);
+                dec_cell_literal_cnt(pos);
 
-        this->cell_nums_.reset();
+                effect_list.cells[count++] = (uint8_t)pos;
 
-        this->box_nums_.set();
-        this->row_nums_.set();
-        this->col_nums_.set();
+                const CellInfo & cellInfo = SudokuTy::cell_info[pos];
 
-#if defined(__SSE4_1__)
-        std::memset((void *)&this->literal_info_[0], 0, sizeof(this->literal_info_));
-#else
-        std::memset((void *)&this->literal_enable_[0], 0, sizeof(this->literal_enable_));
-#endif
+                size_t box = cellInfo.box;
+                size_t cell = cellInfo.cell;
+                this->box_nums_[box][num].reset(cell);
+                dec_box_literal_cnt(box, num);
 
-        size_t empties = 0;
-        size_t pos = 0;
-        for (size_t row = 0; row < Rows; row++) {
-            size_t box_base = row / 3 * 3;
-            size_t box_cell_y_base = (row % 3) * 3;
-            for (size_t col = 0; col < Cols; col++) {
-                unsigned char val = board[pos++];
-                if (val == '.') {
-                    empties++;
-                }
-                else {
-                    size_t box = box_base + col / 3;
-                    size_t box_cell_x = (col % 3);
-                    size_t box_pos = box_cell_y_base + box_cell_x;
-                    size_t num = val - '1';
-                    this->fillNum(row, col, box, box_pos, num);
-                }
+                size_t row = cellInfo.row;
+                size_t col = cellInfo.col;
+                this->row_nums_[row][num].reset(col);
+                dec_row_literal_cnt(row, num);
+
+                this->col_nums_[col][num].reset(row);
+                dec_col_literal_cnt(col, num);
             }
         }
-
-        this->empties_ = empties;
+        return count;
     }
 
-    void setup_state(char board[BoardSize]) {
-        size_t pos = 0;
-        for (size_t row = 0; row < Rows; row++) {
-            size_t box_base = row / 3 * 3;
-            for (size_t col = 0; col < Cols; col++) {
-                char val = board[pos];
-                if (val == '.') {
-                    // Get can fill numbers each cell.
-                    size_t box = box_base + col / 3;
-                    SmallBitSet<Numbers> bitNums = getCanFillNums(row, col, box);
-                    this->cell_nums_[pos] = bitNums;
-                }
-                pos++;
-            }
-        }
+    inline void restoreNeighborCellsEffect(size_t empties, size_t effect_count,
+                                           size_t in_pos, size_t num) {
+        const EffectList & effect_list = this->effect_list_[empties];
+        for (size_t index = 0; index < effect_count; index++) {
+            size_t pos = effect_list.cells[index];
+            this->cell_nums_[pos].set(num);
+            inc_cell_literal_cnt(pos);
 
-        this->calc_literal_count();
-    }
+            const CellInfo & cellInfo = SudokuTy::cell_info[pos];
 
-    void calc_literal_count() {
-        size_t pos = 0;
-        for (size_t row = 0; row < Rows; row++) {
-            size_t box_base = row / 3 * 3;
-            for (size_t col = 0; col < Cols; col++) {
-                uint8_t cell_nums = (uint8_t)this->cell_nums_[pos].count();
-                set_cell_literal_cnt(pos, cell_nums);
-                pos++;
+            size_t box = cellInfo.box;
+            size_t cell = cellInfo.cell;
+            this->box_nums_[box][num].set(cell);
+            inc_box_literal_cnt(box, num);
 
-                size_t box = box_base + col / 3;
-                for (size_t num = MinNumber - 1; num < MaxNumber; num++) {
-                    uint8_t box_nums = (uint8_t)this->box_nums_[box][num].count();
-                    uint8_t row_nums = (uint8_t)this->row_nums_[row][num].count();
-                    uint8_t col_nums = (uint8_t)this->col_nums_[col][num].count();
+            size_t row = cellInfo.row;
+            size_t col = cellInfo.col;
+            this->row_nums_[row][num].set(col);
+            inc_row_literal_cnt(row, num);
 
-                    set_box_literal_cnt(box, num, box_nums);
-                    set_row_literal_cnt(row, num, row_nums);
-                    set_col_literal_cnt(col, num, col_nums);
-                }
-            }
+            this->col_nums_[col][num].set(row);
+            inc_col_literal_cnt(col, num);
         }
     }
 
@@ -1083,33 +1180,49 @@ public:
 #endif
         assert(min_literal_id < TotalLiterals);
 
-        if (min_literal_id >= 0) {
+        if (min_literal_cnt > 0) {
             if (min_literal_cnt == 1)
                 num_unique_candidate++;
             else
                 num_guesses++;
+
+            SmallBitSet<Numbers> nums_bits;
+            size_t pos, row, col, box, cell, num;
+
             int literal_type = min_literal_id / BoardSize;
             assert(literal_type < LiteralType::MaxLiteralType);
             switch (literal_type) {
                 case LiteralType::CellNums:
                 {
-                    size_t pos = (size_t)min_literal_id;
+                    pos = (size_t)min_literal_id;
                     assert(min_literal_id >= TotalLiterals0);
                     assert(pos < Rows * Cols);
-                    size_t row = pos / Cols;
-                    size_t col = pos % Cols;
-                    size_t box = row / 3 * 3 + col / 3;
-                    size_t cell = (row % 3) * 3 + (col % 3);
-
+#if 0
+                    row = pos / Cols;
+                    col = pos % Cols;
+                    size_t box_x = col / BoxCellsX;
+                    size_t box_y = row / BoxCellsY;
+                    box = box_y * BoxCountX + box_x;
+                    size_t cell_x = col % BoxCellsX;
+                    size_t cell_y = row % BoxCellsY;
+                    cell = cell_y * BoxCellsX + cell_x;
+#else
+                    const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+                    row = cellInfo.row;
+                    col = cellInfo.col;
+                    box = cellInfo.box;
+                    cell = cellInfo.cell;
+#endif
                     disable_cell_literal(pos);
 
                     size_t num_bits = this->cell_nums_[pos].value_sz();
                     while (num_bits != 0) {
                         size_t num_bit = BitUtils::ms1b(num_bits);
-                        size_t num = BitUtils::bsf(num_bit);
+                        num = BitUtils::bsf(num_bit);
 
                         this->cell_nums_[pos].reset(num);
-                        doFillNum(pos, row, col, box, cell, num);
+                        size_t effect_count = doFillNum(empties, pos, row, col,
+                                                        box, cell, num, nums_bits);
 
                         board[pos] = (char)(num + '1');
 
@@ -1123,8 +1236,9 @@ public:
                             }
                         }
 
-                        undoFillNum(pos, row, col, box, cell, num);
                         this->cell_nums_[pos].set(num);
+                        undoFillNum(empties, effect_count, pos, row, col,
+                                    box, cell, num, nums_bits);
 
                         num_bits ^= num_bit;
                     }
@@ -1138,21 +1252,22 @@ public:
                     size_t literal = (size_t)min_literal_id - TotalLiterals01;
                     assert(min_literal_id >= TotalLiterals01);
                     assert(literal < Boxes * Numbers);
-                    size_t box = literal / Numbers;
-                    size_t num = literal % Numbers;
+                    box = literal / Numbers;
+                    num = literal % Numbers;
 
                     disable_box_literal(box, num);
 
                     size_t cell_bits = this->box_nums_[box][num].value_sz();
                     while (cell_bits != 0) {
                         size_t cell_bit = BitUtils::ms1b(cell_bits);
-                        size_t cell = BitUtils::bsf(cell_bits);
-                        size_t row = (box / BoxCountX) * BoxCellsY;
-                        size_t col = (box % BoxCountX) * BoxCellsX;
-                        size_t pos = row * Cols + col;
+                        cell = BitUtils::bsf(cell_bits);
+                        row = (box / BoxCountX) * BoxCellsY;
+                        col = (box % BoxCountX) * BoxCellsX;
+                        pos = row * Cols + col;
 
                         this->box_nums_[box][num].reset(cell);
-                        doFillNum(pos, row, col, box, cell, num);
+                        size_t effect_count = doFillNum(empties, pos, row, col,
+                                                        box, cell, num, nums_bits);
 
                         board[pos] = (char)(num + '1');
 
@@ -1166,8 +1281,9 @@ public:
                             }
                         }
 
-                        undoFillNum(pos, row, col, box, cell, num);
                         this->box_nums_[box][num].set(cell);
+                        undoFillNum(empties, effect_count, pos, row, col,
+                                    box, cell, num, nums_bits);
 
                         cell_bits ^= cell_bit;
                     }
@@ -1181,21 +1297,22 @@ public:
                     size_t literal = (size_t)min_literal_id - TotalLiterals02;
                     assert(min_literal_id >= TotalLiterals02);
                     assert(literal < Rows * Numbers);
-                    size_t row = literal / Numbers;
-                    size_t num = literal % Numbers;
+                    row = literal / Numbers;
+                    num = literal % Numbers;
 
                     disable_row_literal(row, num);
 
                     size_t col_bits = this->row_nums_[row][num].value_sz();
                     while (col_bits != 0) {
                         size_t col_bit = BitUtils::ms1b(col_bits);
-                        size_t col = BitUtils::bsf(col_bits);
-                        size_t pos = row * Cols + col;
-                        size_t box = row / 3 * 3 + col / 3;
-                        size_t cell = (row % 3) * 3 + (col % 3);
+                        col = BitUtils::bsf(col_bits);
+                        pos = row * Cols + col;
+                        box = row / 3 * 3 + col / 3;
+                        cell = (row % 3) * 3 + (col % 3);
 
                         this->row_nums_[row][num].reset(col);
-                        doFillNum(pos, row, col, box, cell, num);
+                        size_t effect_count = doFillNum(empties, pos, row, col,
+                                                        box, cell, num, nums_bits);
 
                         board[pos] = (char)(num + '1');
 
@@ -1209,8 +1326,9 @@ public:
                             }
                         }
 
-                        undoFillNum(pos, row, col, box, cell, num);
                         this->row_nums_[row][num].set(col);
+                        undoFillNum(empties, effect_count, pos, row, col,
+                                    box, cell, num, nums_bits);
 
                         col_bits ^= col_bit;
                     }
@@ -1224,21 +1342,22 @@ public:
                     size_t literal = (size_t)min_literal_id - TotalLiterals03;
                     assert(min_literal_id >= TotalLiterals03);
                     assert(literal < Cols * Numbers);
-                    size_t col = literal / Numbers;
-                    size_t num = literal % Numbers;
+                    col = literal / Numbers;
+                    num = literal % Numbers;
 
                     disable_col_literal(col, num);
 
                     size_t row_bits = this->col_nums_[col][num].value_sz();
                     while (row_bits != 0) {
                         size_t row_bit = BitUtils::ms1b(row_bits);
-                        size_t row = BitUtils::bsf(row_bits);
-                        size_t pos = row * Cols + col;
-                        size_t box = row / 3 * 3 + col / 3;
-                        size_t cell = (row % 3) * 3 + (col % 3);
+                        row = BitUtils::bsf(row_bits);
+                        pos = row * Cols + col;
+                        box = row / 3 * 3 + col / 3;
+                        cell = (row % 3) * 3 + (col % 3);
 
                         this->col_nums_[col][num].reset(row);
-                        doFillNum(pos, row, col, box, cell, num);
+                        size_t effect_count = doFillNum(empties, pos, row, col,
+                                                        box, cell, num, nums_bits);
 
                         board[pos] = (char)(num + '1');
 
@@ -1252,8 +1371,9 @@ public:
                             }
                         }
 
-                        undoFillNum(pos, row, col, box, cell, num);
                         this->col_nums_[col][num].set(row);
+                        undoFillNum(empties, effect_count, pos, row, col,
+                                    box, cell, num, nums_bits);
 
                         row_bits ^= row_bit;
                     }

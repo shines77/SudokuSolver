@@ -25,9 +25,6 @@
     <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_dlx_v2.h">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_dlx_v2a.h">
-      <Filter>src</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_dlx_v3.h">
       <Filter>src</Filter>
     </ClInclude>
