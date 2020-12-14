@@ -605,9 +605,10 @@ SmallBitSet<Bits> operator ^ (const SmallBitSet<Bits> & left,
 
 template <size_t Rows, size_t Cols, typename TBitSet = std::bitset<Cols>>
 class SmallBitMatrix {
-private:
+public:
     typedef TBitSet bitset_type;
 
+private:
     size_t rows_;
     bitset_type array_[Rows];
 
@@ -666,10 +667,11 @@ public:
 
 template <size_t Rows, size_t Cols, typename TBitSet = std::bitset<Cols>>
 class SmallBitMatrix2 {
-private:
+public:
     typedef TBitSet                                 bitset_type;
     typedef SmallBitMatrix2<Rows, Cols, TBitSet>    this_type;
 
+private:
     bitset_type array_[Rows];
 
 public:
@@ -729,10 +731,12 @@ public:
 template <size_t Depths, size_t Rows, size_t Cols,
           typename TSmallBitMatrix2 = SmallBitMatrix2<Rows, Cols, std::bitset<Cols>>>
 class SmallBitMatrix3 {
-private:
+public:
     typedef TSmallBitMatrix2                                        matrix_type;
+    typedef typename TSmallBitMatrix2::bitset_type                  bitset_type;
     typedef SmallBitMatrix3<Depths, Rows, Cols, TSmallBitMatrix2>   this_type;
 
+private:
     matrix_type matrix_[Depths];
 
 public:
@@ -799,10 +803,11 @@ using SmallBitSet3D = SmallBitMatrix3<Depths, Rows, Cols, SmallBitMatrix2<Rows, 
 
 template <size_t Rows, size_t Cols, typename TBitSet = std::bitset<Cols>>
 class BitMatrix2 {
-private:
+public:
     typedef TBitSet                             bitset_type;
     typedef BitMatrix2<Rows, Cols, TBitSet>     this_type;
 
+private:
     std::vector<bitset_type> array_;
 
 public:
@@ -893,10 +898,12 @@ public:
 template <size_t Depths, size_t Rows, size_t Cols,
           typename TBitMatrix2 = BitMatrix2<Rows, Cols>>
 class BitMatrix3 {
-private:
+public:
     typedef TBitMatrix2                                 matrix_type;
+    typedef typename TBitMatrix2::bitset_type           bitset_type;
     typedef BitMatrix3<Depths, Rows, Cols, TBitMatrix2> this_type;
 
+private:
     std::vector<matrix_type> matrix_;
 
 public:
@@ -911,7 +918,8 @@ public:
         }
     }
 
-    BitMatrix3(const SmallBitMatrix3<Depths, Rows, Cols, TBitMatrix2> & src) {
+    BitMatrix3(const SmallBitMatrix3<Depths, Rows, Cols,
+                     SmallBitMatrix2<Rows, Cols, bitset_type>> & src) {
         this->matrix_.reserve(Depths);
         for (size_t depth = 0; depth < Depths; depth++) {
             this->matrix_.push_back(src[depth]);
@@ -928,7 +936,8 @@ public:
         }
     }
 
-    BitMatrix3 & operator = (const SmallBitMatrix3<Depths, Rows, Cols, TBitMatrix2> & rhs) {
+    BitMatrix3 & operator = (const SmallBitMatrix3<Depths, Rows, Cols,
+                                   SmallBitMatrix2<Rows, Cols, bitset_type>> & rhs) {
         for (size_t depth = 0; depth < Depths; depth++) {
             this->matrix_[depth] = rhs[depth];
         }
