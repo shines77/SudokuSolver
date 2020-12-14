@@ -75,7 +75,9 @@ using namespace jstd;
 
 ************************************************/
 
-#define V1_SEARCH_MODE      SEARCH_MODE_ONE_ANSWER
+#define V1_SEARCH_MODE          SEARCH_MODE_ONE_ANSWER
+
+#define V1_LITERAL_ORDER_MODE   0
 
 namespace jmSudoku {
 namespace v1 {
@@ -85,10 +87,11 @@ static const size_t kSearchMode = V1_SEARCH_MODE;
 template <typename SudokuTy>
 class Solver {
 public:
+    typedef Solver slover_type;
     typedef typename SudokuTy::NeighborCells    NeighborCells;
-    typedef typename SudokuTy::EffectList       EffectList;
     typedef typename SudokuTy::CellInfo         CellInfo;
 
+    static const size_t kAlignment = SudokuTy::kAlignment;
     static const size_t BoxCellsX = SudokuTy::BoxCellsX;      // 3
     static const size_t BoxCellsY = SudokuTy::BoxCellsY;      // 3
     static const size_t BoxCountX = SudokuTy::BoxCountX;      // 3
@@ -106,37 +109,74 @@ public:
     static const size_t TotalSize = SudokuTy::TotalSize;
     static const size_t Neighbors = SudokuTy::Neighbors;
 
-    static const size_t TotalLiterals0 = 0;
-    static const size_t TotalLiterals1 = Rows * Cols;
-    static const size_t TotalLiterals2 = Boxes * Numbers;
-    static const size_t TotalLiterals3 = Rows * Numbers;
-    static const size_t TotalLiterals4 = Cols * Numbers;
-
-    static const size_t TotalLiterals01 = TotalLiterals0  + TotalLiterals1;
-    static const size_t TotalLiterals02 = TotalLiterals01 + TotalLiterals2;
-    static const size_t TotalLiterals03 = TotalLiterals02 + TotalLiterals3;
-    static const size_t TotalLiterals04 = TotalLiterals03 + TotalLiterals4;
+    static const size_t TotalCellLiterals = Rows * Cols;
+    static const size_t TotalRowLiterals = Rows * Numbers;
+    static const size_t TotalColLiterals = Cols * Numbers;
+    static const size_t TotalBoxLiterals = Boxes * Numbers;
 
     static const size_t TotalLiterals =
-        TotalLiterals1 + TotalLiterals2 + TotalLiterals3 + TotalLiterals4;
+        TotalCellLiterals + TotalRowLiterals + TotalColLiterals + TotalBoxLiterals;
+
+#if (V1_LITERAL_ORDER_MODE == 0)
+    static const size_t LiteralFirst     = 0;
+    static const size_t CellLiteralFirst = LiteralFirst;
+    static const size_t RowLiteralFirst  = CellLiteralFirst + TotalCellLiterals;
+    static const size_t ColLiteralFirst  = RowLiteralFirst + TotalRowLiterals;
+    static const size_t BoxLiteralFirst  = ColLiteralFirst + TotalColLiterals;
+    static const size_t LiteralLast      = BoxLiteralFirst + TotalBoxLiterals;
+#else
+    static const size_t LiteralFirst     = 0;
+    static const size_t CellLiteralFirst = LiteralFirst;
+    static const size_t BoxLiteralFirst  = CellLiteralFirst + TotalCellLiterals;
+    static const size_t RowLiteralFirst  = BoxLiteralFirst + TotalBoxLiterals;
+    static const size_t ColLiteralFirst  = RowLiteralFirst + TotalRowLiterals;
+    static const size_t LiteralLast      = ColLiteralFirst + TotalColLiterals;
+#endif // (V1_LITERAL_ORDER_MODE == 0)
 
     static const size_t kAllRowsBit = SudokuTy::kAllRowsBit;
     static const size_t kAllColsBit = SudokuTy::kAllColsBit;
     static const size_t kAllBoxesBit = SudokuTy::kAllBoxesBit;
     static const size_t kAllNumbersBit = SudokuTy::kAllNumbersBit;
 
-    typedef Solver slover_type;
+    static const int kLiteralCntThreshold = 0;
+
+    static const size_t EffectListAlignBytes =
+        ((Neighbors * sizeof(uint8_t) + kAlignment - 1) / kAlignment) * kAlignment;;
 
     static size_t num_guesses;
     static size_t num_unique_candidate;
     static size_t num_failed_return;
 
 private:
+#if (V1_LITERAL_ORDER_MODE == 0)
+    enum LiteralType {
+        CellNums,
+        RowNums,
+        ColNums,
+        BoxNums,
+        MaxLiteralType
+    };
+#else
+    enum LiteralType {
+        CellNums,
+        BoxNums,
+        RowNums,
+        ColNums,
+        MaxLiteralType
+    };
+#endif // (V1_LITERAL_ORDER_MODE == 0)
+
 #pragma pack(push, 1)
 
     struct literal_info_t {
         uint8_t count;
         uint8_t enable;
+    };
+
+    // Aligned to sizeof(size_t) for cache friendly
+    struct EffectList {
+        uint8_t cells[Neighbors];
+        uint8_t reserve[EffectListAlignBytes - Neighbors * sizeof(uint8_t)];
     };
 
 #pragma pack(pop)
@@ -300,7 +340,7 @@ private:
     }
 
     inline void dec_literal_cnt(size_t literal) {
-        //assert(this->literal_info_[literal].count > 0);
+        assert(this->literal_info_[literal].count > 0);
         this->literal_info_[literal].count--;
     }
 
@@ -336,106 +376,106 @@ private:
 
     // enable_xxxx_literal()
     inline void enable_cell_literal(size_t pos) {
-        size_t literal = TotalLiterals0 + pos;
+        size_t literal = CellLiteralFirst + pos;
         this->enable_literal(literal);
     }
 
     inline void enable_box_literal(size_t box, size_t num) {
-        size_t literal = TotalLiterals01 + box * Numbers + num;
+        size_t literal = BoxLiteralFirst + box * Numbers + num;
         this->enable_literal(literal);
     }
 
     inline void enable_row_literal(size_t row, size_t num) {
-        size_t literal = TotalLiterals02 + row * Numbers + num;
+        size_t literal = RowLiteralFirst + row * Numbers + num;
         this->enable_literal(literal);
     }
 
     inline void enable_col_literal(size_t col, size_t num) {
-        size_t literal = TotalLiterals03 + col * Numbers + num;
+        size_t literal = ColLiteralFirst + col * Numbers + num;
         this->enable_literal(literal);
     }
 
     // disable_xxxx_literal()
     inline void disable_cell_literal(size_t pos) {
-        size_t literal = TotalLiterals0 + pos;
+        size_t literal = CellLiteralFirst + pos;
         this->disable_literal(literal);
     }
 
     inline void disable_box_literal(size_t box, size_t num) {
-        size_t literal = TotalLiterals01 + box * Numbers + num;
+        size_t literal = BoxLiteralFirst + box * Numbers + num;
         this->disable_literal(literal);
     }
 
     inline void disable_row_literal(size_t row, size_t num) {
-        size_t literal = TotalLiterals02 + row * Numbers + num;
+        size_t literal = RowLiteralFirst + row * Numbers + num;
         this->disable_literal(literal);
     }
 
     inline void disable_col_literal(size_t col, size_t num) {
-        size_t literal = TotalLiterals03 + col * Numbers + num;
+        size_t literal = ColLiteralFirst + col * Numbers + num;
         this->disable_literal(literal);
     }
 
     // set_xxxx_literal_cnt()
     inline void set_cell_literal_cnt(size_t pos, uint8_t count) {
-        size_t literal = TotalLiterals0 + pos;
+        size_t literal = CellLiteralFirst + pos;
         this->set_literal_cnt(literal, count);
     }
 
     inline void set_box_literal_cnt(size_t box, size_t num, uint8_t count) {
-        size_t literal = TotalLiterals01 + box * Numbers + num;
+        size_t literal = BoxLiteralFirst + box * Numbers + num;
         this->set_literal_cnt(literal, count);
     }
 
     inline void set_row_literal_cnt(size_t row, size_t num, uint8_t count) {
-        size_t literal = TotalLiterals02 + row * Numbers + num;
+        size_t literal = RowLiteralFirst + row * Numbers + num;
         this->set_literal_cnt(literal, count);
     }
 
     inline void set_col_literal_cnt(size_t col, size_t num, uint8_t count) {
-        size_t literal = TotalLiterals03 + col * Numbers + num;
+        size_t literal = ColLiteralFirst + col * Numbers + num;
         this->set_literal_cnt(literal, count);
     }
 
     // inc_xxxx_literal_cnt()
     inline void inc_cell_literal_cnt(size_t pos) {
-        size_t literal = TotalLiterals0 + pos;
+        size_t literal = CellLiteralFirst + pos;
         this->inc_literal_cnt(literal);
     }
 
     inline void inc_box_literal_cnt(size_t box, size_t num) {
-        size_t literal = TotalLiterals01 + box * Numbers + num;
+        size_t literal = BoxLiteralFirst + box * Numbers + num;
         this->inc_literal_cnt(literal);
     }
 
     inline void inc_row_literal_cnt(size_t row, size_t num) {
-        size_t literal = TotalLiterals02 + row * Numbers + num;
+        size_t literal = RowLiteralFirst + row * Numbers + num;
         this->inc_literal_cnt(literal);
     }
 
     inline void inc_col_literal_cnt(size_t col, size_t num) {
-        size_t literal = TotalLiterals03 + col * Numbers + num;
+        size_t literal = ColLiteralFirst + col * Numbers + num;
         this->inc_literal_cnt(literal);
     }
 
     // dec_xxxx_literal_cnt()
     inline void dec_cell_literal_cnt(size_t pos) {
-        size_t literal = TotalLiterals0 + pos;
+        size_t literal = CellLiteralFirst + pos;
         this->dec_literal_cnt(literal);
     }
 
     inline void dec_box_literal_cnt(size_t box, size_t num) {
-        size_t literal = TotalLiterals01 + box * Numbers + num;
+        size_t literal = BoxLiteralFirst + box * Numbers + num;
         this->dec_literal_cnt(literal);
     }
 
     inline void dec_row_literal_cnt(size_t row, size_t num) {
-        size_t literal = TotalLiterals02 + row * Numbers + num;
+        size_t literal = RowLiteralFirst + row * Numbers + num;
         this->dec_literal_cnt(literal);
     }
 
     inline void dec_col_literal_cnt(size_t col, size_t num) {
-        size_t literal = TotalLiterals03 + col * Numbers + num;
+        size_t literal = ColLiteralFirst + col * Numbers + num;
         this->dec_literal_cnt(literal);
     }
 
@@ -448,17 +488,9 @@ private:
                 int literal_cnt = literal_info_[i].count;
                 if (literal_cnt < min_literal_cnt) {
                     assert(literal_cnt >= 0);
-                    if (literal_cnt <= 1) {
-                        if (literal_cnt == 0) {
-                            out_min_literal_cnt = 0;
-                            return i;
-                        }
-#if 0
-                        else {
-                            out_min_literal_cnt = 1;
-                            return i;
-                        }
-#endif
+                    if (literal_cnt <= kLiteralCntThreshold) {
+                        out_min_literal_cnt = literal_cnt;
+                        return i;
                     }
                     min_literal_cnt = literal_cnt;
                     min_literal_id = i;
@@ -515,16 +547,10 @@ private:
                 int min_literal_offset = (int)(min_literal_id32 & 0x000000FFUL);
                 min_literal_id = index_base + min_block_index16 * 8 + min_literal_offset;
 
-                if (min_literal_cnt == 0) {
-                    out_min_literal_cnt = 0;
+                if (min_literal_cnt <= kLiteralCntThreshold) {
+                    out_min_literal_cnt = min_literal_cnt;
                     return min_literal_id;
                 }
-#if 0
-                else if (min_literal_cnt == 1) {
-                    out_min_literal_cnt = 1;
-                    return min_literal_id;
-                }
-#endif
             }
             index_base += 32;
             pinfo += 64;
@@ -561,16 +587,10 @@ private:
                 int min_literal_offset = (int)(min_literal_id32 & 0x000000FFUL);
                 min_literal_id = index_base + min_block_index16 * 8 + min_literal_offset;
 
-                if (min_literal_cnt == 0) {
-                    out_min_literal_cnt = 0;
+                if (min_literal_cnt <= kLiteralCntThreshold) {
+                    out_min_literal_cnt = min_literal_cnt;
                     return min_literal_id;
                 }
-#if 0
-                else if (min_literal_cnt == 1) {
-                    out_min_literal_cnt = 1;
-                    return min_literal_id;
-                }
-#endif
             }
             index_base += 16;
             pinfo += 32;
@@ -588,16 +608,10 @@ private:
                 uint32_t min_literal_offset = min_literal_cnt32 >> 17U;
                 min_literal_id = index_base + min_literal_offset;
 
-                if (min_literal_cnt == 0) {
-                    out_min_literal_cnt = 0;
+                if (min_literal_cnt <= kLiteralCntThreshold) {
+                    out_min_literal_cnt = min_literal_cnt;
                     return min_literal_id;
                 }
-#if 0
-                else if (min_literal_cnt == 1) {
-                    out_min_literal_cnt = 1;
-                    return min_literal_id;
-                }
-#endif
             }
             index_base += 8;
             pinfo += 16;
@@ -609,8 +623,8 @@ private:
             if (pliteral_info->enable == 0) {
                 int literal_cnt = pliteral_info->count;
                 if (literal_cnt < min_literal_cnt) {
-                    if (literal_cnt == 0) {
-                        out_min_literal_cnt = 0;
+                    if (literal_cnt <= kLiteralCntThreshold) {
+                        out_min_literal_cnt = literal_cnt;
                         return index_base;
                     }
                     min_literal_cnt = literal_cnt;
@@ -1038,6 +1052,18 @@ private:
     inline size_t doFillNum(size_t empties, size_t pos, size_t row, size_t col,
                             size_t box, size_t cell, size_t num,
                             SmallBitSet<Numbers> & save_bits) {
+        assert(!this->cell_filled_.test(pos));
+        assert(this->cell_nums_[pos].test(num));
+        assert(this->cell_nums_[pos] == getCanFillNums(row, col, box));
+
+        assert(this->boxes_[box].test(num));
+        assert(this->rows_[row].test(num));
+        assert(this->cols_[col].test(num));
+
+        assert(this->box_nums_[box][num].test(cell));
+        assert(this->row_nums_[row][num].test(col));
+        //assert(this->col_nums_[col][num].test(row));
+
         uint32_t n_num_bit = 1u << num;
         this->boxes_[box] ^= n_num_bit;
         this->rows_[row] ^= n_num_bit;
@@ -1071,7 +1097,7 @@ private:
 
             dec_box_literal_cnt(box, _num);
             dec_row_literal_cnt(row, _num);
-            dec_row_literal_cnt(col, _num);
+            dec_col_literal_cnt(col, _num);
 
             num_bits ^= num_bit;
         }
@@ -1117,7 +1143,7 @@ private:
 
             inc_box_literal_cnt(box, _num);
             inc_row_literal_cnt(row, _num);
-            inc_row_literal_cnt(col, _num);
+            inc_col_literal_cnt(col, _num);
 
             num_bits ^= num_bit;
         }
@@ -1131,11 +1157,12 @@ private:
         const NeighborCells & cellList = SudokuTy::neighbor_cells[in_pos];
         for (size_t index = 0; index < Neighbors; index++) {
             size_t pos = cellList.cells[index];
-            if (/* (!this->cell_filled_.test(pos)) && */ this->cell_nums_[pos].test(num)) {
+            if (this->cell_nums_[pos].test(num)) {
+                assert(!this->cell_filled_.test(pos));
                 this->cell_nums_[pos].reset(num);
                 dec_cell_literal_cnt(pos);
 
-                effect_list.cells[++count] = (uint8_t)pos;
+                effect_list.cells[count++] = (uint8_t)pos;
 
                 const CellInfo & cellInfo = SudokuTy::cell_info[pos];
 
@@ -1153,15 +1180,13 @@ private:
                 dec_col_literal_cnt(col, num);
             }
         }
-        effect_list.cells[0] = (uint8_t)count;
         return count;
     }
 
     inline void restoreNeighborCellsEffect(size_t empties, size_t effect_count,
                                            size_t in_pos, size_t num) {
         const EffectList & effect_list = this->effect_list_[empties];
-        assert(effect_count == effect_list.cells[0]);
-        for (size_t index = 1; index <= effect_count; index++) {
+        for (size_t index = 0; index < effect_count; index++) {
             size_t pos = effect_list.cells[index];
             this->cell_nums_[pos].set(num);
             inc_cell_literal_cnt(pos);
@@ -1184,14 +1209,6 @@ private:
     }
 
 public:
-    enum LiteralType {
-        CellNums,
-        BoxNums,
-        RowNums,
-        ColNums,
-        MaxLiteralType
-    };
-
     bool solve(char board[BoardSize], size_t empties) {
         if (empties == 0) {
             if (kSearchMode > SearchMode::OneAnswer) {
@@ -1209,7 +1226,7 @@ public:
         }
       
         int min_literal_cnt;
-#if (defined(__SSE2__) || defined(__SSE4_1__)) && 1
+#if (defined(__SSE2__) || defined(__SSE4_1__))
         int min_literal_id = get_min_literal_simd(min_literal_cnt);
 #else
         int min_literal_id = get_min_literal(min_literal_cnt);
@@ -1230,8 +1247,8 @@ public:
             switch (literal_type) {
                 case LiteralType::CellNums:
                 {
-                    pos = (size_t)min_literal_id;
-                    assert(min_literal_id >= TotalLiterals0);
+                    pos = (size_t)min_literal_id - CellLiteralFirst;
+                    assert(min_literal_id >= CellLiteralFirst);
                     assert(pos < Rows * Cols);
 #if 0
                     row = pos / Cols;
@@ -1285,8 +1302,8 @@ public:
 
                 case LiteralType::BoxNums:
                 {
-                    size_t literal = (size_t)min_literal_id - TotalLiterals01;
-                    assert(min_literal_id >= TotalLiterals01);
+                    size_t literal = (size_t)min_literal_id - BoxLiteralFirst;
+                    assert(min_literal_id >= BoxLiteralFirst);
                     assert(literal < Boxes * Numbers);
                     box = literal / Numbers;
                     num = literal % Numbers;
@@ -1297,8 +1314,8 @@ public:
                     while (cell_bits != 0) {
                         size_t cell_bit = BitUtils::ms1b(cell_bits);
                         cell = BitUtils::bsf(cell_bits);
-                        row = (box / BoxCountX) * BoxCellsY;
-                        col = (box % BoxCountX) * BoxCellsX;
+                        row = (box / BoxCountX) * BoxCellsY + cell / BoxCellsX;
+                        col = (box % BoxCountX) * BoxCellsX + cell % BoxCellsX;
                         pos = row * Cols + col;
 
                         //this->box_nums_[box][num].reset(cell);
@@ -1330,8 +1347,8 @@ public:
 
                 case LiteralType::RowNums:
                 {
-                    size_t literal = (size_t)min_literal_id - TotalLiterals02;
-                    assert(min_literal_id >= TotalLiterals02);
+                    size_t literal = (size_t)min_literal_id - RowLiteralFirst;
+                    assert(min_literal_id >= RowLiteralFirst);
                     assert(literal < Rows * Numbers);
                     row = literal / Numbers;
                     num = literal % Numbers;
@@ -1379,8 +1396,8 @@ public:
 
                 case LiteralType::ColNums:
                 {
-                    size_t literal = (size_t)min_literal_id - TotalLiterals03;
-                    assert(min_literal_id >= TotalLiterals03);
+                    size_t literal = (size_t)min_literal_id - ColLiteralFirst;
+                    assert(min_literal_id >= ColLiteralFirst);
                     assert(literal < Cols * Numbers);
                     col = literal / Numbers;
                     num = literal % Numbers;

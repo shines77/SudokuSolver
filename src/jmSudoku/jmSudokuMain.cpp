@@ -356,6 +356,8 @@ int main(int argc, char * argv[])
             run_sudoku_test<dlx::v2::Solver>(filename, "dlx::v2");
 #endif
             run_sudoku_test<dlx::v3::Solver>(filename, "dlx::v3");
+
+            run_sudoku_test<v1::Solver<Sudoku>>(filename, "dfs::v1");
         }
     }
 

@@ -321,19 +321,20 @@ struct BasicSudoku {
 
     static const size_t TotalSize2 = Rows * Cols * Numbers;
 
-    static const size_t TotalConditions0 = 0;
-    static const size_t TotalConditions1 = Rows * Cols;
-    static const size_t TotalConditions2 = Rows * Numbers;
-    static const size_t TotalConditions3 = Cols * Numbers;
-    static const size_t TotalConditions4 = Boxes * Numbers;
+    static const size_t TotalCellLiterals = Rows * Cols;
+    static const size_t TotalRowLiterals = Rows * Numbers;
+    static const size_t TotalColLiterals = Cols * Numbers;
+    static const size_t TotalBoxLiterals = Boxes * Numbers;
 
-    static const size_t TotalConditions01 = TotalConditions0  + TotalConditions1;
-    static const size_t TotalConditions02 = TotalConditions01 + TotalConditions2;
-    static const size_t TotalConditions03 = TotalConditions02 + TotalConditions3;
-    static const size_t TotalConditions04 = TotalConditions03 + TotalConditions4;
+    static const size_t TotalLiterals =
+        TotalCellLiterals + TotalRowLiterals + TotalColLiterals + TotalBoxLiterals;
 
-    static const size_t TotalConditions =
-        TotalConditions1 + TotalConditions2 + TotalConditions3 + TotalConditions4;
+    static const size_t LiteralFirst     = 0;
+    static const size_t CellLiteralFirst = LiteralFirst;
+    static const size_t RowLiteralFirst  = CellLiteralFirst + TotalCellLiterals;
+    static const size_t ColLiteralFirst  = RowLiteralFirst + TotalRowLiterals;
+    static const size_t BoxLiteralFirst  = ColLiteralFirst + TotalColLiterals;
+    static const size_t LiteralLast      = BoxLiteralFirst + TotalBoxLiterals;
 
     static const size_t kAllRowsBit = (size_t(1) << Rows) - 1;
     static const size_t kAllColsBit = (size_t(1) << Cols) - 1;
@@ -342,19 +343,12 @@ struct BasicSudoku {
 
 #pragma pack(push, 1)
 
-    static const size_t AlignedNeighbors = ((Neighbors + kAlignment - 1) / kAlignment) * kAlignment;
-    static const size_t AlignedMaxEffectLength = ((MaxEffectLength + kAlignment - 1) / kAlignment) * kAlignment;
+    static const size_t NeighborsAlignBytes = ((Neighbors * sizeof(uint8_t) + kAlignment - 1) / kAlignment) * kAlignment;
 
     // Aligned to sizeof(size_t) for cache friendly
     struct NeighborCells {
         uint8_t cells[Neighbors];
-        uint8_t reserve[AlignedNeighbors - Neighbors];
-    };
-
-    // Aligned to sizeof(size_t) for cache friendly
-    struct EffectList {
-        uint8_t cells[Neighbors + 1];
-        uint8_t reserve[AlignedNeighbors - (Neighbors + 1)];
+        uint8_t reserve[NeighborsAlignBytes - Neighbors * sizeof(uint8_t)];
     };
 
     struct CellInfo {
