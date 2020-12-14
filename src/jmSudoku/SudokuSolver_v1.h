@@ -1063,7 +1063,7 @@ public:
         if (empties == 0) {
             if (kSearchMode > SearchMode::OneAnswer) {
                 SudokuBoard<BoardSize> answer;
-                std::memcpy((void *)&answer.board[0], (const void *)&board[0], sizeof(board));
+                std::memcpy((void *)&answer.board[0], (const void *)&board[0], BoardSize * sizeof(char));
                 this->answers_.push_back(answer);
                 if (kSearchMode == SearchMode::MoreThanOneAnswer) {
                     if (this->answers_.size() > 1)
@@ -1093,7 +1093,9 @@ public:
             switch (literal_type) {
                 case LiteralType::CellNums:
                 {
-                    size_t pos = min_literal_id;
+                    size_t pos = (size_t)min_literal_id;
+                    assert(min_literal_id >= TotalLiterals0);
+                    assert(pos < Rows * Cols);
                     size_t row = pos / Cols;
                     size_t col = pos % Cols;
                     size_t box = row / 3 * 3 + col / 3;
@@ -1133,7 +1135,9 @@ public:
 
                 case LiteralType::BoxNums:
                 {
-                    size_t literal = min_literal_id - TotalLiterals01;
+                    size_t literal = (size_t)min_literal_id - TotalLiterals01;
+                    assert(min_literal_id >= TotalLiterals01);
+                    assert(literal < Boxes * Numbers);
                     size_t box = literal / Numbers;
                     size_t num = literal % Numbers;
 
@@ -1143,7 +1147,7 @@ public:
                     while (cell_bits != 0) {
                         size_t cell_bit = BitUtils::ms1b(cell_bits);
                         size_t cell = BitUtils::bsf(cell_bits);
-                        size_t row = (box / BoxCountX) * BoxCellsY * Cols;
+                        size_t row = (box / BoxCountX) * BoxCellsY;
                         size_t col = (box % BoxCountX) * BoxCellsX;
                         size_t pos = row * Cols + col;
 
@@ -1174,7 +1178,9 @@ public:
 
                 case LiteralType::RowNums:
                 {
-                    size_t literal = min_literal_id - TotalLiterals02;
+                    size_t literal = (size_t)min_literal_id - TotalLiterals02;
+                    assert(min_literal_id >= TotalLiterals02);
+                    assert(literal < Rows * Numbers);
                     size_t row = literal / Numbers;
                     size_t num = literal % Numbers;
 
@@ -1215,7 +1221,9 @@ public:
 
                 case LiteralType::ColNums:
                 {
-                    size_t literal = min_literal_id - TotalLiterals03;
+                    size_t literal = (size_t)min_literal_id - TotalLiterals03;
+                    assert(min_literal_id >= TotalLiterals03);
+                    assert(literal < Cols * Numbers);
                     size_t col = literal / Numbers;
                     size_t num = literal % Numbers;
 
