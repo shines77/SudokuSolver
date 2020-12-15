@@ -256,6 +256,13 @@ private:
     }
 
     void init_board(char board[BoardSize]) {
+        if (kSearchMode > SEARCH_MODE_ONE_ANSWER) {
+            this->answers_.clear();
+        }
+        num_guesses = 0;
+        num_unique_candidate = 0;
+        num_failed_return = 0;
+
         this->cell_filled_.reset();
 
         this->boxes_.set();
