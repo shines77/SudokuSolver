@@ -134,6 +134,7 @@ public:
     static const size_t Boxes = Sudoku::Boxes;
     static const size_t Numbers = Sudoku::Numbers;
 
+    static const size_t BoardSize = Sudoku::BoardSize;
     static const size_t TotalSize = Sudoku::TotalSize;
     static const size_t TotalLiterals = Sudoku::TotalLiterals;
 
@@ -249,7 +250,7 @@ private:
     }
 
 public:
-    int filter_unused_cols(char board[Sudoku::BoardSize]) {
+    int filter_unused_cols(char board[BoardSize]) {
         std::memset(&this->col_index_[0], 0, sizeof(this->col_index_));
 
         size_t pos = 0;
@@ -280,7 +281,7 @@ public:
         return (int)(index - 1);
     }
 
-    void init(char board[Sudoku::BoardSize]) {
+    void init(char board[BoardSize]) {
         int cols = this->filter_unused_cols(board);
         for (int col = 0; col <= cols; col++) {
             list_.prev[col] = col - 1;
@@ -310,7 +311,7 @@ public:
         num_failed_return = 0;
     }
 
-    void build(char board[Sudoku::BoardSize]) {
+    void build(char board[BoardSize]) {
         size_t empties = 0;
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
@@ -486,7 +487,7 @@ public:
         return this->search();
     }
 
-    void display_answer(char board[Sudoku::BoardSize]) {
+    void display_answer(char board[BoardSize]) {
         for (auto idx : this->answer_) {
             if (idx > 0) {
                 board[this->rows_[idx] * Rows + this->cols_[idx]] = (char)this->numbers_[idx] + '1';
@@ -496,7 +497,7 @@ public:
         Sudoku::display_board(board);
     }
 
-    void display_answers(char board[Sudoku::BoardSize]) {
+    void display_answers(char board[BoardSize]) {
         printf("Total answers: %d\n\n", (int)this->answers_.size());
         int i = 0;
         for (auto answer : this->answers_) {
