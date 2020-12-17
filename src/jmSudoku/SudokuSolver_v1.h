@@ -137,8 +137,11 @@ public:
 
     static const int kLiteralCntThreshold = 0;
 
-    static const size_t EffectListAlignBytes =
-        ((Neighbors * sizeof(uint8_t) + kAlignment - 1) / kAlignment) * kAlignment;;
+    static const size_t kEffectListAlignBytes =
+        ((Neighbors * sizeof(uint8_t) + kAlignment - 1) / kAlignment) * kAlignment;
+
+    static const size_t kEffectListReserveBytes1 = kEffectListAlignBytes - Neighbors * sizeof(uint8_t);
+    static const size_t kEffectListReserveBytes  = (kEffectListReserveBytes1 != 0) ? kEffectListReserveBytes1 : kAlignment;
 
     static size_t num_guesses;
     static size_t num_unique_candidate;
@@ -165,15 +168,18 @@ private:
 
 #pragma pack(push, 1)
 
-    struct literal_info_t {
-        uint8_t count;
-        uint8_t enable;
+    union literal_info_t {
+        struct {
+            uint8_t count;
+            uint8_t enable;
+        };
+        uint16_t value;
     };
 
     // Aligned to sizeof(size_t) for cache friendly
     struct EffectList {
         uint8_t cells[Neighbors];
-        uint8_t reserve[EffectListAlignBytes - Neighbors * sizeof(uint8_t)];
+        uint8_t reserve[kEffectListReserveBytes];
     };
 
 #pragma pack(pop)
@@ -256,12 +262,7 @@ private:
     }
 
     void init_board(char board[BoardSize]) {
-        if (kSearchMode > SEARCH_MODE_ONE_ANSWER) {
-            this->answers_.clear();
-        }
-        num_guesses = 0;
-        num_unique_candidate = 0;
-        num_failed_return = 0;
+        init_literal_info();
 
         this->cell_filled_.reset();
 
@@ -275,27 +276,11 @@ private:
         this->row_nums_.set();
         this->col_nums_.set();
 
-#if defined(__SSE4_1__)
-        //std::memset((void *)&this->literal_info_[0], 0, sizeof(this->literal_info_));
-#else
-        //std::memset((void *)&this->literal_enable_[0], 0, sizeof(this->literal_enable_));
-#endif
-
-        for (size_t i = CellLiteralFirst; i < CellLiteralLast; i++) {
-            set_literal_cnt(i, Numbers);
-            enable_literal(i);
-        }
-        for (size_t i = RowLiteralFirst; i < RowLiteralLast; i++) {
-            set_literal_cnt(i, Cols);
-            enable_literal(i);
-        }
-        for (size_t i = ColLiteralFirst; i < ColLiteralLast; i++) {
-            set_literal_cnt(i, Rows);
-            enable_literal(i);
-        }
-        for (size_t i = BoxLiteralFirst; i < BoxLiteralLast; i++) {
-            set_literal_cnt(i, BoxSize);
-            enable_literal(i);
+        num_guesses = 0;
+        num_unique_candidate = 0;
+        num_failed_return = 0;
+        if (kSearchMode > SEARCH_MODE_ONE_ANSWER) {
+            this->answers_.clear();
         }
 
         size_t empties = calc_empties(board);
@@ -304,15 +289,15 @@ private:
 
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
-            size_t box_y_base = (row / BoxCellsY) * BoxCountX;
-            size_t cell_y_base = (row % BoxCellsY) * BoxCellsX;
+            size_t box_y = (row / BoxCellsY) * BoxCountX;
+            size_t cell_y = (row % BoxCellsY) * BoxCellsX;
             for (size_t col = 0; col < Cols; col++) {
                 unsigned char val = board[pos];
                 if (val != '.') {
                     size_t box_x = col / BoxCellsX;
-                    size_t box = box_y_base + box_x;
+                    size_t box = box_y + box_x;
                     size_t cell_x = col % BoxCellsX;
-                    size_t cell = cell_y_base + cell_x;
+                    size_t cell = cell_y + cell_x;
                     size_t num = val - '1';
                     this->fillNum(pos, row, col, box, cell, num);
                 }
@@ -324,12 +309,13 @@ private:
     void setup_state(char board[BoardSize]) {
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
-            size_t box_base = row / 3 * 3;
+            size_t box_y = (row / BoxCellsY) * BoxCountX;
             for (size_t col = 0; col < Cols; col++) {
                 char val = board[pos];
                 if (val == '.') {
                     // Get can fill numbers each cell.
-                    size_t box = box_base + col / 3;
+                    size_t box_x = col / BoxCellsX;
+                    size_t box = box_y + box_x;
                     bitset_type num_bits = getCanFillNums(row, col, box);
                     assert(this->cell_nums_[pos] == num_bits);
                     //this->cell_nums_[pos] = num_bits;
@@ -344,14 +330,15 @@ private:
     void calc_literal_count() {
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
-            size_t box_base = row / 3 * 3;
+            size_t box_y = (row / BoxCellsY) * BoxCountX;
             for (size_t col = 0; col < Cols; col++) {
                 uint8_t cell_nums = (uint8_t)this->cell_nums_[pos].count();
                 assert(get_cell_literal_cnt(pos) == cell_nums);
                 //set_cell_literal_cnt(pos, cell_nums);
                 pos++;
 
-                size_t box = box_base + col / 3;
+                size_t box_x = col / BoxCellsX;
+                size_t box = box_y + box_x;
                 for (size_t num = MinNumber - 1; num < MaxNumber; num++) {
                     uint8_t box_nums = (uint8_t)this->box_nums_[box][num].count();
                     uint8_t row_nums = (uint8_t)this->row_nums_[row][num].count();
@@ -369,7 +356,131 @@ private:
         }
     }
 
+    static const bool kAllDimIsSame = ((Numbers == BoxSize) && (Rows == Cols) && (Numbers == Rows));
+
 #if defined(__SSE4_1__)
+    static const size_t kLiteralStep = sizeof(size_t) / sizeof(literal_info_t);
+
+ #if defined(WIN64) || defined(_WIN64) || defined(_M_X64) || defined(_M_AMD64) \
+  || defined(_M_IA64) || defined(__amd64__) || defined(__x86_64__)
+    static const size_t kInitCellLiteral = Numbers | (Numbers << 16U) | (Numbers << 32U) | (Numbers << 48U);
+    static const size_t kInitRowLiteral  = Cols | (Cols << 16U) | (Cols << 32U) | (Cols << 48U);
+    static const size_t kInitColLiteral  = Rows | (Rows << 16U) | (Rows << 32U) | (Rows << 48U);
+    static const size_t kInitBoxLiteral  = BoxSize | (BoxSize << 16U) | (BoxSize << 32U) | (BoxSize << 48U);
+    static const size_t kInitLiteral     = kInitCellLiteral;
+#else
+    static const size_t kInitCellLiteral = Numbers | (Numbers << 16U);
+    static const size_t kInitRowLiteral  = Cols | (Cols << 16U);
+    static const size_t kInitColLiteral  = Rows | (Rows << 16U);
+    static const size_t kInitBoxLiteral  = BoxSize | (BoxSize << 16U);
+    static const size_t kInitLiteral     = kInitCellLiteral;
+#endif
+
+    inline void init_literal_info() {
+        if (kAllDimIsSame)
+            init_literal_info_is_same();
+        else
+            init_literal_info_not_same();
+    }
+
+    inline void init_literal_info_is_same() {
+        static const size_t kLiteralLimit = (LiteralLast / kLiteralStep) * kLiteralStep;
+
+        // Cell-Literal, Row-Literal, Col-Literal, Box-Literal
+        size_t * pinfo = (size_t *)(&this->literal_info_[0]);
+        assert((uintptr_t(pinfo) & 0x0FU) == 0);
+
+        size_t * pinfo_limit = (size_t *)(&this->literal_info_[kLiteralLimit]);
+        while (pinfo < pinfo_limit) {
+            *pinfo = kInitLiteral;
+            pinfo++;
+        }
+        for (size_t i = kLiteralLimit; i < LiteralLast; i++) {
+            init_literal_info(i, (uint16_t)Numbers);
+        }
+    }
+
+    inline void init_literal_info_not_same() {
+        size_t * pinfo_first = (size_t *)(&this->literal_info_[0]);
+        assert((uintptr_t(pinfo_first) & 0x0FU) == 0);
+
+        size_t i, literalFront, literalLast;
+
+        // Cell-Literal
+        literalLast = (CellLiteralLast / kLiteralStep) * kLiteralStep;
+        for (i = CellLiteralFirst; i < literalLast; i += kLiteralStep) {
+            size_t * pinfo = (size_t *)&this->literal_info_[i];
+            *pinfo = kInitCellLiteral;
+        }
+        for (; i < CellLiteralLast; i++) {
+            init_literal_info(i, (uint16_t)Numbers);
+        }
+
+        // Row-Literal
+        literalFront = RowLiteralFirst + (RowLiteralFirst % kLiteralStep);
+        for (i = RowLiteralFirst; i < literalFront; i++) {
+            init_literal_info(i, (uint16_t)Cols);
+        }
+        literalLast = (RowLiteralLast / kLiteralStep) * kLiteralStep;
+        for (; i < literalLast; i += kLiteralStep) {
+            size_t * pinfo = (size_t *)&this->literal_info_[i];
+            *pinfo = kInitRowLiteral;
+        }
+        for (; i < RowLiteralLast; i++) {
+            init_literal_info(i, (uint16_t)Cols);
+        }
+
+        // Col-Literal
+        literalFront = ColLiteralFirst + (ColLiteralFirst % kLiteralStep);
+        for (i = ColLiteralFirst; i < literalFront; i++) {
+            init_literal_info(i, (uint16_t)Rows);
+        }
+        literalLast = (ColLiteralLast / kLiteralStep) * kLiteralStep;
+        for (; i < literalLast; i += kLiteralStep) {
+            size_t * pinfo = (size_t *)&this->literal_info_[i * kLiteralStep];
+            *pinfo = kInitColLiteral;
+        }
+        for (; i < ColLiteralLast; i++) {
+            init_literal_info(i, (uint16_t)Rows);
+        }
+
+        // Box-Literal
+        literalFront = BoxLiteralFirst + (BoxLiteralFirst % kLiteralStep);
+        for (i = BoxLiteralFirst; i < literalFront; i++) {
+            init_literal_info(i, (uint16_t)BoxSize);
+        }
+        literalLast = (BoxLiteralLast / kLiteralStep) * kLiteralStep;
+        for (; i < literalLast; i += kLiteralStep) {
+            size_t * pinfo = (size_t *)&this->literal_info_[i];
+            *pinfo = kInitBoxLiteral;
+        }
+        for (; i < BoxLiteralLast; i++) {
+            init_literal_info(i, (uint16_t)BoxSize);
+        }
+    }
+
+    inline void init_literal_info_normal() {
+#if 0
+        std::memset((void *)&this->literal_info_[0], 0, sizeof(this->literal_info_));
+#endif
+        for (size_t i = CellLiteralFirst; i < CellLiteralLast; i++) {
+            init_literal_info(i, (uint16_t)Numbers);
+        }
+        for (size_t i = RowLiteralFirst; i < RowLiteralLast; i++) {
+            init_literal_info(i, (uint16_t)Cols);
+        }
+        for (size_t i = ColLiteralFirst; i < ColLiteralLast; i++) {
+            init_literal_info(i, (uint16_t)Rows);
+        }
+        for (size_t i = BoxLiteralFirst; i < BoxLiteralLast; i++) {
+            init_literal_info(i, (uint16_t)BoxSize);
+        }
+    }
+
+    inline void init_literal_info(size_t literal, uint16_t info) {
+        uint16_t * pinfo = (uint16_t *)&this->literal_info_[literal];
+        *pinfo = info;
+    }
 
     inline void enable_literal(size_t literal) {
         this->literal_info_[literal].enable = 0x00;
@@ -398,6 +509,39 @@ private:
     }
 
 #else // !__SSE4_1__
+
+    inline void init_literal_info() {
+        if (kAllDimIsSame)
+            init_literal_info_is_same();
+        else
+            init_literal_info_not_same();
+    }
+
+    inline void init_literal_info_is_same() {
+        std::memset((void *)&this->literal_info_[0], kInitLiteral, sizeof(this->literal_info_));
+        std::memset((void *)&this->literal_enable_[0], 0, sizeof(this->literal_enable_));
+    }
+
+    inline void init_literal_info_not_same() {
+        for (size_t i = CellLiteralFirst; i < CellLiteralLast; i++) {
+            init_literal_info(i, (uint8_t)Numbers);
+        }
+        for (size_t i = RowLiteralFirst; i < RowLiteralLast; i++) {
+            init_literal_info(i, (uint8_t)Cols);
+        }
+        for (size_t i = ColLiteralFirst; i < ColLiteralLast; i++) {
+            init_literal_info(i, (uint8_t)Rows);
+        }
+        for (size_t i = BoxLiteralFirst; i < BoxLiteralLast; i++) {
+            init_literal_info(i, (uint8_t)BoardSize);
+        }
+
+        std::memset((void *)&this->literal_enable_[0], 0, sizeof(this->literal_enable_));
+    }
+
+    inline void init_literal_info(size_t literal, uint8_t count) {
+        this->literal_count_[literal] = count;
+    }
 
     inline void enable_literal(size_t literal) {
         this->literal_enable_[literal] = 0x00;
@@ -1080,26 +1224,6 @@ private:
         return (this->rows_[row] & this->cols_[col] & this->boxes_[box]);
     }
 
-    inline void fillNum_old(size_t pos, size_t row, size_t col, size_t box, size_t cell, size_t num) {
-        uint32_t num_bit = 1u << num;
-        this->boxes_[box] ^= num_bit;
-        this->rows_[row] ^= num_bit;
-        this->cols_[col] ^= num_bit;
-
-        this->cell_filled_.set(pos);
-
-        disable_cell_literal(pos);
-        disable_box_literal(box, num);
-        disable_row_literal(row, num);
-        disable_col_literal(col, num);
-
-        for (size_t _num = MinNumber - 1; _num < MaxNumber; _num++) {
-            this->box_nums_[box][_num].reset(cell);
-            this->row_nums_[row][_num].reset(col);
-            this->col_nums_[col][_num].reset(row);
-        }
-    }
-
     inline size_t fillNum(size_t pos, size_t row, size_t col,
                           size_t box, size_t cell, size_t num) {
         assert(!this->cell_filled_.test(pos));
@@ -1194,25 +1318,13 @@ private:
     inline size_t doFillNum(size_t empties, size_t pos, size_t row, size_t col,
                             size_t box, size_t cell, size_t num,
                             bitset_type & save_bits) {
-        assert(!this->cell_filled_.test(pos));
         assert(this->cell_nums_[pos].test(num));
-        bitset_type bits = getCanFillNums(row, col, box);
-        assert(this->cell_nums_[pos] == bits);
-
-        assert(this->boxes_[box].test(num));
-        assert(this->rows_[row].test(num));
-        assert(this->cols_[col].test(num));
+        //bitset_type bits = getCanFillNums(row, col, box);
+        //assert(this->cell_nums_[pos] == bits);
 
         assert(this->box_nums_[box][num].test(cell));
         assert(this->row_nums_[row][num].test(col));
         //assert(this->col_nums_[col][num].test(row));
-
-        uint32_t n_num_bit = 1u << num;
-        this->boxes_[box] ^= n_num_bit;
-        this->rows_[row] ^= n_num_bit;
-        this->cols_[col] ^= n_num_bit;
-
-        this->cell_filled_.set(pos);
 
         disable_cell_literal(pos);
         disable_box_literal(box, num);
@@ -1233,6 +1345,7 @@ private:
 
         size_t num_bits = save_bits.to_ulong();
         // Exclude the current number, because it has been processed.
+        uint32_t n_num_bit = 1u << num;
         num_bits ^= (size_t)n_num_bit;
         while (num_bits != 0) {
             size_t num_bit = BitUtils::ms1b(num_bits);
@@ -1243,17 +1356,8 @@ private:
             assert(this->col_nums_[col][_num].test(row));
 
             this->box_nums_[box][_num].reset(cell);
-            //if (this->box_nums_[box][_num].count() == 0) {
-            //    this->boxes_[box].reset(_num);
-            //}
             this->row_nums_[row][_num].reset(col);
-            //if (this->row_nums_[row][_num].count() == 0) {
-            //    this->rows_[row].reset(_num);
-            //}
             this->col_nums_[col][_num].reset(row);
-            //if (this->col_nums_[col][_num].count() == 0) {
-            //    this->cols_[col].reset(_num);
-            //}
 
             dec_box_literal_cnt(box, _num);
             dec_row_literal_cnt(row, _num);
@@ -1270,13 +1374,6 @@ private:
                             size_t pos, size_t row, size_t col,
                             size_t box, size_t cell, size_t num,
                             bitset_type & save_bits) {
-        uint32_t num_bit = 1u << num;
-        this->boxes_[box] |= num_bit;
-        this->rows_[row] |= num_bit;
-        this->cols_[col] |= num_bit;
-
-        this->cell_filled_.reset(pos);
-
         enable_cell_literal(pos);
         enable_box_literal(box, num);
         enable_row_literal(row, num);
@@ -1322,7 +1419,6 @@ private:
         for (size_t index = 0; index < Neighbors; index++) {
             size_t pos = cellList.cells[index];
             if (this->cell_nums_[pos].test(num)) {
-                assert(!this->cell_filled_.test(pos));
                 this->cell_nums_[pos].reset(num);
                 dec_cell_literal_cnt(pos);
 
@@ -1600,7 +1696,7 @@ public:
                         size_t cell_y = row % BoxCellsY;
                         cell = cell_y * BoxCellsX + cell_x;
 
-                        this->col_nums_[col][num].reset(row);
+                        //this->col_nums_[col][num].reset(row);
                         size_t effect_count = doFillNum(empties, pos, row, col,
                                                         box, cell, num, save_bits);
 
@@ -1616,7 +1712,7 @@ public:
                             }
                         }
 
-                        this->col_nums_[col][num].set(row);
+                        //this->col_nums_[col][num].set(row);
                         undoFillNum(empties, effect_count, pos, row, col,
                                     box, cell, num, save_bits);
 
@@ -1650,7 +1746,7 @@ public:
         sw.start();
 
         this->init_board(board);
-        this->setup_state(board);
+        //this->setup_state(board);
 
         bool success = this->solve(board, this->empties_);
 

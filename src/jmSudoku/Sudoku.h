@@ -343,12 +343,14 @@ struct BasicSudoku {
 
 #pragma pack(push, 1)
 
-    static const size_t NeighborsAlignBytes = ((Neighbors * sizeof(uint8_t) + kAlignment - 1) / kAlignment) * kAlignment;
+    static const size_t kNeighborsAlignBytes    = ((Neighbors * sizeof(uint8_t) + kAlignment - 1) / kAlignment) * kAlignment;
+    static const size_t kNeighborsReserveBytes1 = kNeighborsAlignBytes - Neighbors * sizeof(uint8_t);
+    static const size_t kNeighborsReserveBytes  = (kNeighborsReserveBytes1 != 0) ? kNeighborsReserveBytes1 : kAlignment;
 
     // Aligned to sizeof(size_t) for cache friendly
     struct NeighborCells {
         uint8_t cells[Neighbors];
-        uint8_t reserve[NeighborsAlignBytes - Neighbors * sizeof(uint8_t)];
+        uint8_t reserve[kNeighborsReserveBytes];
     };
 
     struct CellInfo {
