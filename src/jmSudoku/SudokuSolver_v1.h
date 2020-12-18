@@ -426,7 +426,7 @@ private:
         }
         literalLast = (ColLiteralLast / kLiteralStep) * kLiteralStep;
         for (; i < literalLast; i += kLiteralStep) {
-            size_t * pinfo = (size_t *)&this->literal_info_[i * kLiteralStep];
+            size_t * pinfo = (size_t *)&this->literal_info_[i];
             *pinfo = kInitColLiteral;
         }
         for (; i < ColLiteralLast; i++) {
@@ -466,9 +466,8 @@ private:
         }
     }
 
-    inline void init_literal_info(size_t literal, uint16_t info) {
-        uint16_t * pinfo = (uint16_t *)&this->literal_info_[literal];
-        *pinfo = info;
+    inline void init_literal_info(size_t literal, uint16_t value) {
+        this->literal_info_[literal].value = value;
     }
 
     inline void enable_literal(size_t literal) {
@@ -1502,58 +1501,6 @@ public:
                     break;
                 }
 
-                case LiteralType::BoxNums:
-                {
-                    size_t literal = (size_t)min_literal_id - BoxLiteralFirst;
-                    assert(min_literal_id >= BoxLiteralFirst);
-                    assert(literal < Boxes * Numbers);
-                    box = literal / Numbers;
-                    num = literal % Numbers;
-
-                    assert(this->boxes_[box].test(num));
-
-                    //disable_box_literal(box, num);
-
-                    size_t cell_bits = this->box_nums_[box][num].to_ulong();
-                    assert(this->box_nums_[box][num].count() == get_literal_cnt(min_literal_id));
-                    while (cell_bits != 0) {
-                        size_t cell_bit = BitUtils::ms1b(cell_bits);
-                        cell = BitUtils::bsf(cell_bits);
-#if 0
-                        row = (box / BoxCountX) * BoxCellsY + (cell / BoxCellsX);
-                        col = (box % BoxCountX) * BoxCellsX + (cell % BoxCellsX);
-                        pos = row * Cols + col;
-#else
-                        const BoxesInfo & boxesInfo = SudokuTy::boxes_info[box * BoxSize + cell];
-                        row = boxesInfo.row;
-                        col = boxesInfo.col;
-                        pos = boxesInfo.pos;
-#endif
-                        size_t effect_count = doFillNum(empties, pos, row, col,
-                                                        box, cell, num, save_bits);
-
-                        board.cells[pos] = (char)(num + '1');
-
-                        if (this->solve(board, empties - 1)) {
-                            if (kSearchMode == SearchMode::OneAnswer) {
-                                return true;
-                            }
-                            else if (kSearchMode == SearchMode::MoreThanOneAnswer) {
-                                if (this->answers_.size() > 1)
-                                    return true;
-                            }
-                        }
-
-                        undoFillNum(empties, effect_count, pos, row, col,
-                                    box, cell, num, save_bits);
-
-                        cell_bits ^= cell_bit;
-                    }
-
-                    //enable_box_literal(box, num);
-                    break;
-                }
-
                 case LiteralType::RowNums:
                 {
                     size_t literal = (size_t)min_literal_id - RowLiteralFirst;
@@ -1561,8 +1508,6 @@ public:
                     assert(literal < Rows * Numbers);
                     row = literal / Numbers;
                     num = literal % Numbers;
-
-                    assert(this->rows_[row].test(num));
 
                     //disable_row_literal(row, num);
 
@@ -1617,8 +1562,6 @@ public:
                     col = literal / Numbers;
                     num = literal % Numbers;
 
-                    assert(this->cols_[col].test(num));
-
                     //disable_col_literal(col, num);
 
                     size_t row_bits = this->col_nums_[col][num].to_ulong();
@@ -1661,6 +1604,56 @@ public:
                     }
 
                     //enable_col_literal(col, num);
+                    break;
+                }
+
+               case LiteralType::BoxNums:
+                {
+                    size_t literal = (size_t)min_literal_id - BoxLiteralFirst;
+                    assert(min_literal_id >= BoxLiteralFirst);
+                    assert(literal < Boxes * Numbers);
+                    box = literal / Numbers;
+                    num = literal % Numbers;
+
+                    //disable_box_literal(box, num);
+
+                    size_t cell_bits = this->box_nums_[box][num].to_ulong();
+                    assert(this->box_nums_[box][num].count() == get_literal_cnt(min_literal_id));
+                    while (cell_bits != 0) {
+                        size_t cell_bit = BitUtils::ms1b(cell_bits);
+                        cell = BitUtils::bsf(cell_bits);
+#if 0
+                        row = (box / BoxCountX) * BoxCellsY + (cell / BoxCellsX);
+                        col = (box % BoxCountX) * BoxCellsX + (cell % BoxCellsX);
+                        pos = row * Cols + col;
+#else
+                        const BoxesInfo & boxesInfo = SudokuTy::boxes_info[box * BoxSize + cell];
+                        row = boxesInfo.row;
+                        col = boxesInfo.col;
+                        pos = boxesInfo.pos;
+#endif
+                        size_t effect_count = doFillNum(empties, pos, row, col,
+                                                        box, cell, num, save_bits);
+
+                        board.cells[pos] = (char)(num + '1');
+
+                        if (this->solve(board, empties - 1)) {
+                            if (kSearchMode == SearchMode::OneAnswer) {
+                                return true;
+                            }
+                            else if (kSearchMode == SearchMode::MoreThanOneAnswer) {
+                                if (this->answers_.size() > 1)
+                                    return true;
+                            }
+                        }
+
+                        undoFillNum(empties, effect_count, pos, row, col,
+                                    box, cell, num, save_bits);
+
+                        cell_bits ^= cell_bit;
+                    }
+
+                    //enable_box_literal(box, num);
                     break;
                 }
 
