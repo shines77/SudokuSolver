@@ -286,10 +286,14 @@ struct Tables {
 
 static const Tables tables {};
 
+#pragma pack(push, 1)
+
 template <size_t TotalSize>
-struct SudokuBoard {
-    char board[TotalSize];
+struct BasicBoard {
+    char cells[TotalSize];
 };
+
+#pragma pack(pop)
 
 template <size_t nBoxCellsX = 3, size_t nBoxCellsY = 3,
           size_t nBoxCountX = 3, size_t nBoxCountY = 3,
@@ -340,6 +344,8 @@ struct BasicSudoku {
     static const size_t kAllColsBit = (size_t(1) << Cols) - 1;
     static const size_t kAllBoxesBit = (size_t(1) << Boxes) - 1;
     static const size_t kAllNumbersBit = (size_t(1) << Numbers) - 1;
+
+    typedef BasicBoard<BoardSize>   board_type;
 
 #pragma pack(push, 1)
 
@@ -528,32 +534,25 @@ struct BasicSudoku {
         printf("};\n");
     }
 
-    static void clear_board(char board[BasicSudoku::BoardSize]) {
+    template <size_t BoardSize>
+    static void clear_board(BasicBoard<BoardSize> & board) {
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
             for (size_t col = 0; col < Cols; col++) {
-                board[pos++] = '.';
+                board.cells[pos++] = '.';
             }
         }
     }
 
-    static void clear_board(std::vector<std::vector<char>> & board) {
-        for (size_t row = 0; row < board.size(); row++) {
-            std::vector<char> & line = board[row];
-            for (size_t col = 0; col < line.size(); col++) {
-                line[col] = '.';
-            }
-        }
-    }
-
-    static void display_board(char board[BasicSudoku::BoardSize],
+    template <size_t BoardSize>
+    static void display_board(BasicBoard<BoardSize> & board,
                               bool is_input = false,
                               int idx = -1) {
         int filled = 0;
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
             for (size_t col = 0; col < Cols; col++) {
-                char val = board[pos++];
+                char val = board.cells[pos++];
                 if ((val != '.') && (val != ' ') && (val != '0') && (val != '-')) {
                     filled++;
                 }
@@ -580,7 +579,7 @@ struct BasicSudoku {
         for (size_t row = 0; row < Rows; row++) {
             printf(" | ");
             for (size_t col = 0; col < Cols; col++) {
-                char val = board[pos++];
+                char val = board.cells[pos++];
                 if (val == ' ' || val == '0' || val == '-')
                     printf(". ");
                 else
@@ -601,76 +600,12 @@ struct BasicSudoku {
         printf("\n");
     }
 
-    static void display_board(const std::vector<std::vector<char>> & board,
-                              bool is_input = false,
-                              int idx = -1) {
-        int filled = 0;
-        for (size_t row = 0; row < board.size(); row++) {
-            const std::vector<char> & line = board[row];
-            for (size_t col = 0; col < line.size(); col++) {
-                char val = line[col];
-                if ((val != '.') && (val != ' ') && (val != '0') && (val != '-')) {
-                    filled++;
-                }
-            }
-        }
-
-        if (is_input) {
-            printf("The input is: (filled = %d)\n", filled);
-        }
-        else {
-            if (idx == -1)
-                printf("The answer is:\n");
-            else
-                printf("The answer # %d is:\n", idx + 1);
-        }
-        printf("\n");
-        // printf("  ------- ------- -------\n");
-        printf(" ");
-        for (size_t countX = 0; countX < BoxCountX; countX++) {
-            printf(" -------");
-        }
-        printf("\n");
-        for (size_t row = 0; row < Rows; row++) {
-            assert(board.size() >= Rows);
-            printf(" | ");
-            for (size_t col = 0; col < Cols; col++) {
-                assert(board[row].size() >= Cols);
-                char val = board[row][col];
-                if (val == ' ' || val == '0' || val == '-')
-                    printf(". ");
-                else
-                    printf("%c ", val);
-                if ((col % BoxCellsX) == (BoxCellsX - 1))
-                    printf("| ");
-            }
-            printf("\n");
-            if ((row % BoxCellsY) == (BoxCellsY - 1)) {
-                // printf("  ------- ------- -------\n");
-                printf(" ");
-                for (size_t countX = 0; countX < BoxCountX; countX++) {
-                    printf(" -------");
-                }
-                printf("\n");
-            }
-        }
-        printf("\n");
-    }
-
-    static void display_boards(std::vector<SudokuBoard<BasicSudoku::BoardSize>> & boards) {
+    template <size_t BoardSize>
+    static void display_boards(std::vector<BasicBoard<BoardSize>> & boards) {
         printf("Total answers: %d\n\n", (int)boards.size());
         int i = 0;
         for (auto answer : boards) {
-            BasicSudoku::display_board(answer.board, false, i);
-            i++;
-        }
-    }
-
-    static void display_boards(std::vector<std::vector<std::vector<char>>> & boards) {
-        printf("Total answers: %d\n\n", (int)boards.size());
-        int i = 0;
-        for (auto board : boards) {
-            BasicSudoku::display_board(board, false, i);
+            BasicSudoku::display_board<BoardSize>(answer, false, i);
             i++;
         }
     }
@@ -705,6 +640,7 @@ typename BasicSudoku<nBoxCellsX, nBoxCellsY,
 
 // Standard sudoku definition
 typedef BasicSudoku<3, 3, 3, 3, 1, 9> Sudoku;
+typedef BasicBoard<Sudoku::BoardSize> Board_3x3x3;
 
 } // namespace jmSudoku
 

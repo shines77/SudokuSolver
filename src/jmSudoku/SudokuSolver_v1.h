@@ -6,26 +6,6 @@
 #pragma once
 #endif
 
-#if defined(_MSC_VER)
-#define __MMX__
-#define __SSE__
-#define __SSE2__
-#define __SSE3__
-#define __SSSE3__
-#define __SSE4A__
-#define __SSE4a__
-#define __SSE4_1__
-#define __SSE4_2__
-#define __POPCNT__
-#define __LZCNT__
-#define __AVX__
-#define __AVX2__
-#define __3dNOW__
-#else
-//#undef __SSE4_1__
-//#undef __SSE4_2__
-#endif
-
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
@@ -49,6 +29,7 @@
 
 #include "Sudoku.h"
 #include "StopWatch.h"
+#include "BitSet.h"
 #include "BitUtils.h"
 
 using namespace jstd;
@@ -74,9 +55,11 @@ static const size_t kSearchMode = V1_SEARCH_MODE;
 template <typename SudokuTy>
 class Solver {
 public:
-    typedef Solver slover_type;
+    typedef SudokuTy                            sudoku_type;
+    typedef Solver<SudokuTy>                    slover_type;
+    typedef typename SudokuTy::board_type       Board;
     typedef typename SudokuTy::NeighborCells    NeighborCells;
-    typedef typename SudokuTy::CellInfo         CellInfo;
+    typedef typename SudokuTy::CellInfo         CellInfo;    
 
     static const size_t kAlignment = SudokuTy::kAlignment;
     static const size_t BoxCellsX = SudokuTy::BoxCellsX;      // 3
@@ -221,8 +204,8 @@ private:
 
     size_t empties_;
 
-    std::vector<EffectList>             effect_list_;
-    std::vector<SudokuBoard<BoardSize>> answers_;
+    std::vector<EffectList>     effect_list_;
+    std::vector<Board>          answers_;
 
 public:
     Solver() : empties_(0) {
@@ -250,10 +233,10 @@ public:
     }
 
 private:
-    size_t calc_empties(char board[BoardSize]) {
+    size_t calc_empties(Board & board) {
         size_t empties = 0;
         for (size_t pos = 0; pos < BoardSize; pos++) {
-            unsigned char val = board[pos];
+            unsigned char val = board.cells[pos];
             if (val == '.') {
                 empties++;
             }
@@ -261,7 +244,7 @@ private:
         return empties;
     }
 
-    void init_board(char board[BoardSize]) {
+    void init_board(Board & board) {
         init_literal_info();
 
         this->cell_filled_.reset();
@@ -292,7 +275,7 @@ private:
             size_t box_y = (row / BoxCellsY) * BoxCountX;
             size_t cell_y = (row % BoxCellsY) * BoxCellsX;
             for (size_t col = 0; col < Cols; col++) {
-                unsigned char val = board[pos];
+                unsigned char val = board.cells[pos];
                 if (val != '.') {
                     size_t box_x = col / BoxCellsX;
                     size_t box = box_y + box_x;
@@ -306,12 +289,12 @@ private:
         }
     }
 
-    void setup_state(char board[BoardSize]) {
+    void setup_state(Board & board) {
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
             size_t box_y = (row / BoxCellsY) * BoxCountX;
             for (size_t col = 0; col < Cols; col++) {
-                char val = board[pos];
+                char val = board.cells[pos];
                 if (val == '.') {
                     // Get can fill numbers each cell.
                     size_t box_x = col / BoxCellsX;
@@ -358,11 +341,10 @@ private:
 
     static const bool kAllDimIsSame = ((Numbers == BoxSize) && (Rows == Cols) && (Numbers == Rows));
 
-#if defined(__SSE4_1__)
     static const size_t kLiteralStep = sizeof(size_t) / sizeof(literal_info_t);
 
- #if defined(WIN64) || defined(_WIN64) || defined(_M_X64) || defined(_M_AMD64) \
-  || defined(_M_IA64) || defined(__amd64__) || defined(__x86_64__)
+#if defined(WIN64) || defined(_WIN64) || defined(_M_X64) || defined(_M_AMD64) \
+ || defined(_M_IA64) || defined(__amd64__) || defined(__x86_64__)
     static const size_t kInitCellLiteral = Numbers | (Numbers << 16U) | (Numbers << 32U) | (Numbers << 48U);
     static const size_t kInitRowLiteral  = Cols | (Cols << 16U) | (Cols << 32U) | (Cols << 48U);
     static const size_t kInitColLiteral  = Rows | (Rows << 16U) | (Rows << 32U) | (Rows << 48U);
@@ -376,6 +358,7 @@ private:
     static const size_t kInitLiteral     = kInitCellLiteral;
 #endif
 
+#if defined(__SSE4_1__)
     inline void init_literal_info() {
         if (kAllDimIsSame)
             init_literal_info_is_same();
@@ -518,8 +501,8 @@ private:
     }
 
     inline void init_literal_info_is_same() {
-        std::memset((void *)&this->literal_info_[0], kInitLiteral, sizeof(this->literal_info_));
-        std::memset((void *)&this->literal_enable_[0], 0, sizeof(this->literal_enable_));
+        std::memset((void *)&this->literal_count_[0],  (int)kInitLiteral, sizeof(this->literal_count_));
+        std::memset((void *)&this->literal_enable_[0], 0,                 sizeof(this->literal_enable_));
     }
 
     inline void init_literal_info_not_same() {
@@ -564,7 +547,7 @@ private:
         assert(this->literal_count_[literal] <= Numbers);
     }
 
-    inline void dec_literal_cnt(int literal) {
+    inline void dec_literal_cnt(size_t literal) {
         assert(this->literal_count_[literal] > 0);
         this->literal_count_[literal]--;
     }
@@ -713,7 +696,7 @@ private:
     }
 
 #if defined(__SSE4_1__)
-    int get_min_literal(int & out_min_literal_cnt) const {
+    int get_min_literal_normal(int & out_min_literal_cnt) const {
         int min_literal_cnt = 254;
         int min_literal_id = -1;
         for (int i = 0; i < TotalLiterals; i++) {
@@ -734,7 +717,7 @@ private:
         return min_literal_id;
     }
 
-    int get_min_literal_simd(int & out_min_literal_cnt) {
+    int get_min_literal(int & out_min_literal_cnt) {
         int min_literal_cnt = 254;
         int min_literal_id = -1;
         int index_base = 0;
@@ -757,26 +740,24 @@ private:
             __m128i xmm4_5  = _mm_blend_epi16(xmm4, xmm5_, 0b00001100); // SSE 4.1
             __m128i xmm6_7  = _mm_blend_epi16(xmm6, xmm7_, 0b00001100); // SSE 4.1
             __m128i xmm6_7_ = _mm_slli_si128(xmm6_7, 8);
-            __m128i comb_0  = _mm_or_si128(xmm4_5, xmm6_7_);
-            __m128i __literal_index = comb_0;
+            __m128i result_minpos = _mm_or_si128(xmm4_5, xmm6_7_);
+            __m128i index_minpos = result_minpos;
 
-            __m128i kLiteralCntMask = _mm_set1_epi32((int)0xFFFF0000L);
-            __m128i __literal_cnt = _mm_or_si128(comb_0, kLiteralCntMask);
-            __m128i __min_literal_cnt = _mm_minpos_epu16(__literal_cnt);      // SSE 4.1
+            __m128i literal_cnt_mask = _mm_set1_epi32((int)0xFFFF0000L);
+            __m128i result_minpos_only_cnt = _mm_or_si128(result_minpos, literal_cnt_mask);
+            __m128i result_minpos_all = _mm_minpos_epu16(result_minpos_only_cnt);      // SSE 4.1
 
-            uint32_t min_literal_cnt32 = (uint32_t)_mm_cvtsi128_si32(__min_literal_cnt);
-            int min_literal_cnt16 = (int)(min_literal_cnt32 & 0x0000FFFFULL);
+            uint32_t result_minpos_all32 = (uint32_t)_mm_cvtsi128_si32(result_minpos_all);
+            int min_literal_cnt16 = (int)(result_minpos_all32 & 0x0000FFFFULL);
             if (min_literal_cnt16 < min_literal_cnt) {
                 min_literal_cnt = min_literal_cnt16;
 
-                uint32_t min_block_index16 = min_literal_cnt32 >> 17U;
-                __m128i __min_literal_id_sr15 = _mm_srli_epi64(__min_literal_cnt, 15);
+                uint32_t min_block_index16 = result_minpos_all32 >> 17U;
+                __m128i min_literal_id_sr15 = _mm_srli_epi64(result_minpos_all, 15);
+                __m128i literal_index_sr16  = _mm_srli_epi32(index_minpos, 16);
 
-                __m128i __literal_index_sr16 = _mm_srli_epi32(__literal_index, 16);
-
-                // SSSE3
-                __m128i __min_literal_id = _mm_shuffle_epi8(__literal_index_sr16, __min_literal_id_sr15);
-                uint32_t min_literal_id32 = (uint32_t)_mm_cvtsi128_si32(__min_literal_id);
+                __m128i min_literal_id128 = _mm_shuffle_epi8(literal_index_sr16, min_literal_id_sr15);  // SSSE3
+                uint32_t min_literal_id32 = (uint32_t)_mm_cvtsi128_si32(min_literal_id128);
                 int min_literal_offset = (int)(min_literal_id32 & 0x000000FFUL);
                 min_literal_id = index_base + min_block_index16 * 8 + min_literal_offset;
 
@@ -797,26 +778,24 @@ private:
             __m128i xmm3 = _mm_minpos_epu16(xmm1);      // SSE 4.1
 
             __m128i xmm3_ = _mm_slli_epi64(xmm3, 32);
-            __m128i comb_0 = _mm_blend_epi16(xmm2, xmm3_, 0b00001100);  // SSE 4.1
-            __m128i __literal_index = comb_0;
+            __m128i result_minpos = _mm_blend_epi16(xmm2, xmm3_, 0b00001100);  // SSE 4.1
+            __m128i index_minpos = result_minpos;
 
-            __m128i kLiteralCntMask = _mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFF0000L, 0xFFFF0000L);
-            __m128i __literal_cnt = _mm_or_si128(comb_0, kLiteralCntMask);
-            __m128i __min_literal_cnt = _mm_minpos_epu16(__literal_cnt);      // SSE 4.1
+            __m128i literal_cnt_mask = _mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFF0000L, 0xFFFF0000L);
+            __m128i result_minpos_only_cnt = _mm_or_si128(result_minpos, literal_cnt_mask);
+            __m128i result_minpos_all = _mm_minpos_epu16(result_minpos_only_cnt);      // SSE 4.1
 
-            uint32_t min_literal_cnt32 = (uint32_t)_mm_cvtsi128_si32(__min_literal_cnt);
-            int min_literal_cnt16 = (int)(min_literal_cnt32 & 0x0000FFFFULL);
+            uint32_t result_minpos_all32 = (uint32_t)_mm_cvtsi128_si32(result_minpos_all);
+            int min_literal_cnt16 = (int)(result_minpos_all32 & 0x0000FFFFULL);
             if (min_literal_cnt16 < min_literal_cnt) {
                 min_literal_cnt = min_literal_cnt16;
 
-                uint32_t min_block_index16 = min_literal_cnt32 >> 17U;
-                __m128i __min_literal_id_sr15 = _mm_srli_epi64(__min_literal_cnt, 15);
+                uint32_t min_block_index16 = result_minpos_all32 >> 17U;
+                __m128i min_literal_id_sr15 = _mm_srli_epi64(result_minpos_all, 15);
+                __m128i literal_index_sr16 = _mm_srli_epi32(index_minpos, 16);
 
-                __m128i __literal_index_sr16 = _mm_srli_epi32(__literal_index, 16);
-
-                // SSSE3
-                __m128i __min_literal_id = _mm_shuffle_epi8(__literal_index_sr16, __min_literal_id_sr15);
-                uint32_t min_literal_id32 = (uint32_t)_mm_cvtsi128_si32(__min_literal_id);
+                __m128i min_literal_id128 = _mm_shuffle_epi8(literal_index_sr16, min_literal_id_sr15);  // SSSE3
+                uint32_t min_literal_id32 = (uint32_t)_mm_cvtsi128_si32(min_literal_id128);
                 int min_literal_offset = (int)(min_literal_id32 & 0x000000FFUL);
                 min_literal_id = index_base + min_block_index16 * 8 + min_literal_offset;
 
@@ -831,9 +810,9 @@ private:
 
         if ((pinfo_end - pinfo) >= 16) {
             __m128i xmm0 = _mm_load_si128((const __m128i *)(pinfo + 0));
-            __m128i __min_literal_cnt = _mm_minpos_epu16(xmm0);    // SSE 4.1
+            __m128i result_minpos = _mm_minpos_epu16(xmm0);    // SSE 4.1
 
-            uint32_t min_literal_cnt32 = (uint32_t)_mm_cvtsi128_si32(__min_literal_cnt);
+            uint32_t min_literal_cnt32 = (uint32_t)_mm_cvtsi128_si32(result_minpos);
             int min_literal_cnt16 = (int)(min_literal_cnt32 & 0x0000FFFFULL);
             if (min_literal_cnt16 < min_literal_cnt) {
                 min_literal_cnt = min_literal_cnt16;
@@ -874,7 +853,7 @@ private:
 
 #elif defined(__SSE2__)
 
-    int get_min_literal(int & out_min_literal_cnt) const {
+    int get_min_literal_normal(int & out_min_literal_cnt) const {
         int min_literal_cnt = 254;
         int min_literal_id = -1;
         for (int i = 0; i < TotalLiterals; i++) {
@@ -882,15 +861,9 @@ private:
                 int literal_cnt = literal_count_[i];
                 if (literal_cnt < min_literal_cnt) {
                     assert(literal_cnt >= 0);
-                    if (literal_cnt <= 1) {
-                        if (literal_cnt == 0) {
-                            out_min_literal_cnt = 0;
-                            return i;
-                        }
-                        else {
-                            out_min_literal_cnt = 1;
-                            return i;
-                        }
+                    if (literal_cnt <= kLiteralCntThreshold) {
+                        out_min_literal_cnt = literal_cnt;
+                        return i;
                     }
                     min_literal_cnt = literal_cnt;
                     min_literal_id = i;
@@ -905,7 +878,7 @@ private:
     // Horizontal minimum and maximum using SSE
     // See: https://stackoverflow.com/questions/22256525/horizontal-minimum-and-maximum-using-sse
     //
-    int get_min_literal_simd(int & out_min_literal_cnt) {
+    int get_min_literal(int & out_min_literal_cnt) {
         int min_literal_cnt = 254;
         int min_literal_id = 0;
         int index_base = 0;
@@ -935,7 +908,7 @@ private:
             xmm0 = _mm_min_epu8(xmm0, _mm_srli_epi16(xmm0, 8));
             xmm1 = _mm_min_epu8(xmm1, _mm_srli_epi16(xmm1, 8));
 
-            xmm0 = _mm_min_epu8(xmm0, xmm1);
+            __m128i result_minpos_03 = _mm_min_epu8(xmm0, xmm1);
 
             __m128i xmm4 = _mm_load_si128((const __m128i *)(pcount + 32));
             __m128i xmm5 = _mm_load_si128((const __m128i *)(pcount + 48));
@@ -958,48 +931,48 @@ private:
             xmm4 = _mm_min_epu8(xmm4, _mm_srli_epi16(xmm4, 8));
             xmm5 = _mm_min_epu8(xmm5, _mm_srli_epi16(xmm5, 8));
 
-            xmm4 = _mm_min_epu8(xmm4, xmm5);
+            __m128i result_minpos_47 = _mm_min_epu8(xmm4, xmm5);
 
             // The minimum literal count of per 64 numbers
-            __m128i min_count_64 = _mm_min_epu8(xmm0, xmm4);
+            __m128i result_minpos_64 = _mm_min_epu8(result_minpos_03, result_minpos_47);
 
-            int min_literal_cnt16 = _mm_cvtsi128_si32(min_count_64) & 0x000000FFL;
+            int min_literal_cnt16 = _mm_cvtsi128_si32(result_minpos_64) & 0x000000FFL;
             if (min_literal_cnt16 < min_literal_cnt) {
                 min_literal_cnt = min_literal_cnt16;
 
                 __m128i xmm0 = _mm_load_si128((const __m128i *)(pcount + 0));
-                __m128i xmm2 = _mm_load_si128((const __m128i *)(penable + 0));
+                __m128i xmm1 = _mm_load_si128((const __m128i *)(penable + 0));
 
                 __m128i min_cmp = _mm_set1_epi8((char)min_literal_cnt);
 
-                xmm0 = _mm_or_si128(xmm0, xmm2);
+                xmm0 = _mm_or_si128(xmm0, xmm1);
                 xmm0 = _mm_cmpeq_epi8(xmm0, min_cmp);
 
                 int equal_mask = _mm_movemask_epi8(xmm0);
                 if (equal_mask == 0) {
-                    __m128i xmm1 = _mm_load_si128((const __m128i *)(pcount + 16));
+                    __m128i xmm2 = _mm_load_si128((const __m128i *)(pcount + 16));
                     __m128i xmm3 = _mm_load_si128((const __m128i *)(penable + 16));
                 
-                    xmm1 = _mm_or_si128(xmm1, xmm3);  
-                    xmm1 = _mm_cmpeq_epi8(xmm1, min_cmp);
+                    xmm2 = _mm_or_si128(xmm2, xmm3);  
+                    xmm2 = _mm_cmpeq_epi8(xmm2, min_cmp);
 
-                    equal_mask = _mm_movemask_epi8(xmm1);
+                    equal_mask = _mm_movemask_epi8(xmm2);
                     if (equal_mask == 0) {
                         __m128i xmm4 = _mm_load_si128((const __m128i *)(pcount + 32));
-                        __m128i xmm6 = _mm_load_si128((const __m128i *)(penable + 32));
+                        __m128i xmm5 = _mm_load_si128((const __m128i *)(penable + 32));
                 
-                        xmm4 = _mm_or_si128(xmm4, xmm6);  
+                        xmm4 = _mm_or_si128(xmm4, xmm5);  
                         xmm4 = _mm_cmpeq_epi8(xmm4, min_cmp);
 
                         equal_mask = _mm_movemask_epi8(xmm4);
                         if (equal_mask == 0) {
-                            __m128i xmm5 = _mm_load_si128((const __m128i *)(pcount + 48));
+                            __m128i xmm6 = _mm_load_si128((const __m128i *)(pcount + 48));
                             __m128i xmm7 = _mm_load_si128((const __m128i *)(penable + 48));
                 
-                            xmm5 = _mm_or_si128(xmm5, xmm7);  
-                            xmm5 = _mm_cmpeq_epi8(xmm5, min_cmp);
+                            xmm6 = _mm_or_si128(xmm6, xmm7);  
+                            xmm6 = _mm_cmpeq_epi8(xmm6, min_cmp);
 
-                            equal_mask = _mm_movemask_epi8(xmm5);
+                            equal_mask = _mm_movemask_epi8(xmm6);
                             if (equal_mask == 0) {
                                 assert(false);
                             }
@@ -1023,16 +996,10 @@ private:
                     min_literal_id = index_base + 0 * 16 + min_literal_offset;
                 }
 
-                if (min_literal_cnt == 0) {
-                    out_min_literal_cnt = 0;
+                if (min_literal_cnt <= kLiteralCntThreshold) {
+                    out_min_literal_cnt = min_literal_cnt;
                     return min_literal_id;
                 }
-#if 0
-                else if (min_literal_cnt == 1) {
-                    out_min_literal_cnt = 1;
-                    return min_literal_id;
-                }
-#endif
             }
 
             index_base += 64;
@@ -1063,29 +1030,29 @@ private:
             xmm1 = _mm_min_epu8(xmm1, _mm_srli_epi16(xmm1, 8));
 
             // The minimum literal count of per 32 numbers
-            __m128i min_count_32 = _mm_min_epu8(xmm0, xmm1);
+            __m128i result_minpos_32 = _mm_min_epu8(xmm0, xmm1);
 
-            int min_literal_cnt16 = _mm_cvtsi128_si32(min_count_32) & 0x000000FFL;
+            int min_literal_cnt16 = _mm_cvtsi128_si32(result_minpos_32) & 0x000000FFL;
             if (min_literal_cnt16 < min_literal_cnt) {
                 min_literal_cnt = min_literal_cnt16;
 
                 __m128i xmm0 = _mm_load_si128((const __m128i *)(pcount + 0));
-                __m128i xmm2 = _mm_load_si128((const __m128i *)(penable + 0));
+                __m128i xmm1 = _mm_load_si128((const __m128i *)(penable + 0));
 
                 __m128i min_cmp = _mm_set1_epi8((char)min_literal_cnt);
 
-                xmm0 = _mm_or_si128(xmm0, xmm2);
+                xmm0 = _mm_or_si128(xmm0, xmm1);
                 xmm0 = _mm_cmpeq_epi8(xmm0, min_cmp);
 
                 int equal_mask = _mm_movemask_epi8(xmm0);
                 if (equal_mask == 0) {
-                    __m128i xmm1 = _mm_load_si128((const __m128i *)(pcount + 16));
+                    __m128i xmm2 = _mm_load_si128((const __m128i *)(pcount + 16));
                     __m128i xmm3 = _mm_load_si128((const __m128i *)(penable + 16));
                 
-                    xmm1 = _mm_or_si128(xmm1, xmm3);  
-                    xmm1 = _mm_cmpeq_epi8(xmm1, min_cmp);
+                    xmm2 = _mm_or_si128(xmm2, xmm3);  
+                    xmm2 = _mm_cmpeq_epi8(xmm2, min_cmp);
 
-                    equal_mask = _mm_movemask_epi8(xmm1);
+                    equal_mask = _mm_movemask_epi8(xmm2);
                     if (equal_mask == 0) {
                         assert(false);
                     }
@@ -1099,16 +1066,10 @@ private:
                     min_literal_id = index_base + 0 * 16 + min_literal_offset;
                 }
 
-                if (min_literal_cnt == 0) {
-                    out_min_literal_cnt = 0;
+                if (min_literal_cnt <= kLiteralCntThreshold) {
+                    out_min_literal_cnt = min_literal_cnt;
                     return min_literal_id;
                 }
-#if 0
-                else if (min_literal_cnt == 1) {
-                    out_min_literal_cnt = 1;
-                    return min_literal_id;
-                }
-#endif
             }
 
             index_base += 32;
@@ -1118,26 +1079,26 @@ private:
 
         if ((pcount_end - pcount) >= 16) {
             __m128i xmm0 = _mm_load_si128((const __m128i *)(pcount + 0));
-            __m128i xmm2 = _mm_load_si128((const __m128i *)(penable + 0));
+            __m128i xmm1 = _mm_load_si128((const __m128i *)(penable + 0));
 
-            xmm0 = _mm_or_si128(xmm0, xmm2);
+            xmm0 = _mm_or_si128(xmm0, xmm1);
             xmm0 = _mm_min_epu8(xmm0, _mm_shuffle_epi32(xmm0, _MM_SHUFFLE(3, 2, 3, 2)));
             xmm0 = _mm_min_epu8(xmm0, _mm_shuffle_epi32(xmm0, _MM_SHUFFLE(1, 1, 1, 1)));
             xmm0 = _mm_min_epu8(xmm0, _mm_shufflelo_epi16(xmm0, _MM_SHUFFLE(1, 1, 1, 1)));
 
             // The minimum literal count of per 16 numbers
-            __m128i min_count_16 = _mm_min_epu8(xmm0, _mm_srli_epi16(xmm0, 8));
+            __m128i result_minpos_16 = _mm_min_epu8(xmm0, _mm_srli_epi16(xmm0, 8));
 
-            int min_literal_cnt16 = _mm_cvtsi128_si32(min_count_16) & 0x000000FFL;
+            int min_literal_cnt16 = _mm_cvtsi128_si32(result_minpos_16) & 0x000000FFL;
             if (min_literal_cnt16 < min_literal_cnt) {
                 min_literal_cnt = min_literal_cnt16;
 
                 __m128i xmm0 = _mm_load_si128((const __m128i *)(pcount + 0));
-                __m128i xmm2 = _mm_load_si128((const __m128i *)(penable + 0));
+                __m128i xmm1 = _mm_load_si128((const __m128i *)(penable + 0));
 
                 __m128i min_cmp = _mm_set1_epi8((char)min_literal_cnt);
 
-                xmm0 = _mm_or_si128(xmm0, xmm2);
+                xmm0 = _mm_or_si128(xmm0, xmm1);
                 xmm0 = _mm_cmpeq_epi8(xmm0, min_cmp);
 
                 int equal_mask = _mm_movemask_epi8(xmm0);
@@ -1149,16 +1110,10 @@ private:
                     min_literal_id = index_base + min_literal_offset;
                 }
 
-                if (min_literal_cnt == 0) {
-                    out_min_literal_cnt = 0;
+                if (min_literal_cnt <= kLiteralCntThreshold) {
+                    out_min_literal_cnt = min_literal_cnt;
                     return min_literal_id;
                 }
-#if 0
-                else if (min_literal_cnt == 1) {
-                    out_min_literal_cnt = 1;
-                    return min_literal_id;
-                }
-#endif
             }
 
             index_base += 16;
@@ -1199,15 +1154,9 @@ private:
                 int literal_cnt = literal_count_[i];
                 if (literal_cnt < min_literal_cnt) {
                     assert(literal_cnt >= 0);
-                    if (literal_cnt <= 1) {
-                        if (literal_cnt == 0) {
-                            out_min_literal_cnt = 0;
-                            return i;
-                        }
-                        else {
-                            out_min_literal_cnt = 1;
-                            return i;
-                        }
+                    if (literal_cnt <= kLiteralCntThreshold) {
+                        out_min_literal_cnt = literal_cnt;
+                        return i;
                     }
                     min_literal_cnt = literal_cnt;
                     min_literal_id = i;
@@ -1319,12 +1268,6 @@ private:
                             size_t box, size_t cell, size_t num,
                             bitset_type & save_bits) {
         assert(this->cell_nums_[pos].test(num));
-        //bitset_type bits = getCanFillNums(row, col, box);
-        //assert(this->cell_nums_[pos] == bits);
-
-        assert(this->box_nums_[box][num].test(cell));
-        assert(this->row_nums_[row][num].test(col));
-        //assert(this->col_nums_[col][num].test(row));
 
         disable_cell_literal(pos);
         disable_box_literal(box, num);
@@ -1333,7 +1276,7 @@ private:
 
         assert(this->box_nums_[box][num].test(cell));
         assert(this->row_nums_[row][num].test(col));
-        //assert(this->col_nums_[col][num].test(row));
+        assert(this->col_nums_[col][num].test(row));
 
         this->box_nums_[box][num].reset(cell);
         this->row_nums_[row][num].reset(col);
@@ -1479,12 +1422,10 @@ private:
     }
 
 public:
-    bool solve(char board[BoardSize], size_t empties) {
+    bool solve(Board & board, size_t empties) {
         if (empties == 0) {
             if (kSearchMode > SearchMode::OneAnswer) {
-                SudokuBoard<BoardSize> answer;
-                std::memcpy((void *)&answer.board[0], (const void *)&board[0], BoardSize * sizeof(char));
-                this->answers_.push_back(answer);
+                this->answers_.push_back(board);
                 if (kSearchMode == SearchMode::MoreThanOneAnswer) {
                     if (this->answers_.size() > 1)
                         return true;
@@ -1496,13 +1437,8 @@ public:
         }
       
         int min_literal_cnt;
-#if (defined(__SSE2__) || defined(__SSE4_1__))
-        int min_literal_id = get_min_literal_simd(min_literal_cnt);
-#else
         int min_literal_id = get_min_literal(min_literal_cnt);
-#endif
         assert(min_literal_id < TotalLiterals);
-
         if (min_literal_cnt > 0) {
             if (min_literal_cnt == 1)
                 num_unique_candidate++;
@@ -1544,11 +1480,10 @@ public:
                         size_t num_bit = BitUtils::ms1b(num_bits);
                         num = BitUtils::bsf(num_bit);
 
-                        //this->cell_nums_[pos].reset(num);
                         size_t effect_count = doFillNum(empties, pos, row, col,
                                                         box, cell, num, save_bits);
 
-                        board[pos] = (char)(num + '1');
+                        board.cells[pos] = (char)(num + '1');
 
                         if (this->solve(board, empties - 1)) {
                             if (kSearchMode == SearchMode::OneAnswer) {
@@ -1560,7 +1495,6 @@ public:
                             }
                         }
 
-                        //this->cell_nums_[pos].set(num);
                         undoFillNum(empties, effect_count, pos, row, col,
                                     box, cell, num, save_bits);
 
@@ -1592,11 +1526,10 @@ public:
                         col = (box % BoxCountX) * BoxCellsX + cell % BoxCellsX;
                         pos = row * Cols + col;
 
-                        //this->box_nums_[box][num].reset(cell);
                         size_t effect_count = doFillNum(empties, pos, row, col,
                                                         box, cell, num, save_bits);
 
-                        board[pos] = (char)(num + '1');
+                        board.cells[pos] = (char)(num + '1');
 
                         if (this->solve(board, empties - 1)) {
                             if (kSearchMode == SearchMode::OneAnswer) {
@@ -1608,7 +1541,6 @@ public:
                             }
                         }
 
-                        //this->box_nums_[box][num].set(cell);
                         undoFillNum(empties, effect_count, pos, row, col,
                                     box, cell, num, save_bits);
 
@@ -1644,11 +1576,10 @@ public:
                         size_t cell_y = row % BoxCellsY;
                         cell = cell_y * BoxCellsX + cell_x;
 
-                        //this->row_nums_[row][num].reset(col);
                         size_t effect_count = doFillNum(empties, pos, row, col,
                                                         box, cell, num, save_bits);
 
-                        board[pos] = (char)(num + '1');
+                        board.cells[pos] = (char)(num + '1');
 
                         if (this->solve(board, empties - 1)) {
                             if (kSearchMode == SearchMode::OneAnswer) {
@@ -1660,7 +1591,6 @@ public:
                             }
                         }
 
-                        //this->row_nums_[row][num].set(col);
                         undoFillNum(empties, effect_count, pos, row, col,
                                     box, cell, num, save_bits);
 
@@ -1696,11 +1626,10 @@ public:
                         size_t cell_y = row % BoxCellsY;
                         cell = cell_y * BoxCellsX + cell_x;
 
-                        //this->col_nums_[col][num].reset(row);
                         size_t effect_count = doFillNum(empties, pos, row, col,
                                                         box, cell, num, save_bits);
 
-                        board[pos] = (char)(num + '1');
+                        board.cells[pos] = (char)(num + '1');
 
                         if (this->solve(board, empties - 1)) {
                             if (kSearchMode == SearchMode::OneAnswer) {
@@ -1712,7 +1641,6 @@ public:
                             }
                         }
 
-                        //this->col_nums_[col][num].set(row);
                         undoFillNum(empties, effect_count, pos, row, col,
                                     box, cell, num, save_bits);
 
@@ -1735,7 +1663,7 @@ public:
         return false;
     }
 
-    bool solve(char board[BoardSize],
+    bool solve(Board & board,
                double & elapsed_time,
                bool verbose = true) {
         if (verbose) {
@@ -1746,7 +1674,6 @@ public:
         sw.start();
 
         this->init_board(board);
-        //this->setup_state(board);
 
         bool success = this->solve(board, this->empties_);
 

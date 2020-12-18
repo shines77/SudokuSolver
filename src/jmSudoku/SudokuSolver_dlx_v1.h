@@ -127,16 +127,19 @@ private:
     }
 };
 
+template <typename SudokuTy = Sudoku>
 class DancingLinks {
 public:
-    static const size_t Rows = Sudoku::Rows;
-    static const size_t Cols = Sudoku::Cols;
-    static const size_t Boxes = Sudoku::Boxes;
-    static const size_t Numbers = Sudoku::Numbers;
+    static const size_t Rows = SudokuTy::Rows;
+    static const size_t Cols = SudokuTy::Cols;
+    static const size_t Boxes = SudokuTy::Boxes;
+    static const size_t Numbers = SudokuTy::Numbers;
 
-    static const size_t BoardSize = Sudoku::BoardSize;
-    static const size_t TotalSize = Sudoku::TotalSize;
-    static const size_t TotalLiterals = Sudoku::TotalLiterals;
+    static const size_t BoardSize = SudokuTy::BoardSize;
+    static const size_t TotalSize = SudokuTy::TotalSize;
+    static const size_t TotalLiterals = SudokuTy::TotalLiterals;
+
+    typedef typename SudokuTy::board_type   Board;
 
     static size_t num_guesses;
     static size_t num_unique_candidate;
@@ -146,13 +149,12 @@ private:
 #if 0
     DlxNodeList         list_;
 #else
-    FixedDlxNodeList<Sudoku::TotalSize * 4 + 1>
-                        list_;
+    FixedDlxNodeList<TotalSize * 4 + 1> list_;
 #endif
 
-    SmallBitMatrix2<9, 9>  bit_rows;        // [row][num]
-    SmallBitMatrix2<9, 9>  bit_cols;        // [col][num]
-    SmallBitMatrix2<9, 9>  bit_boxes;       // [box][num]
+    SmallBitMatrix2<Rows, Numbers>  bit_rows;       // [row][num]
+    SmallBitMatrix2<Cols, Numbers>  bit_cols;       // [col][num]
+    SmallBitMatrix2<Boxes, Numbers> bit_boxes;      // [box][num]
 
     short               col_size_[TotalLiterals + 1];
 
@@ -250,14 +252,14 @@ private:
     }
 
 public:
-    int filter_unused_cols(char board[BoardSize]) {
+    int filter_unused_cols(Board & board) {
         std::memset(&this->col_index_[0], 0, sizeof(this->col_index_));
 
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
             size_t box_row = row / 3 * 3;
             for (size_t col = 0; col < Cols; col++) {
-                unsigned char val = board[pos];
+                unsigned char val = board.cells[pos];
                 if (val != '.') {
                     size_t num = val - '1';
                     this->col_index_[0      + pos           + 1] = 0xFFFF;
@@ -281,7 +283,7 @@ public:
         return (int)(index - 1);
     }
 
-    void init(char board[BoardSize]) {
+    void init(Board & board) {
         int cols = this->filter_unused_cols(board);
         for (int col = 0; col <= cols; col++) {
             list_.prev[col] = col - 1;
@@ -311,12 +313,12 @@ public:
         num_failed_return = 0;
     }
 
-    void build(char board[BoardSize]) {
+    void build(Board & board) {
         size_t empties = 0;
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
             for (size_t col = 0; col < Cols; col++) {
-                unsigned char val = board[pos++];
+                unsigned char val = board.cells[pos++];
                 if (val == '.') {
                     empties++;
                 }
@@ -339,7 +341,7 @@ public:
         for (size_t row = 0; row < Rows; row++) {
             size_t box_row = row / 3 * 3;
             for (size_t col = 0; col < Cols; col++) {
-                unsigned char val = board[pos];
+                unsigned char val = board.cells[pos];
                 if (val == '.') {
                     size_t box = box_row + col / 3;
                     // size_t box = tables.box[pos];
@@ -370,7 +372,7 @@ public:
                 pos++;
             }
         }
-        assert(row_idx <= (maxRows + 1));
+        assert(row_idx <= (int)(maxRows + 1));
     }
 
     void insert(int index, int row, int col) {
@@ -487,24 +489,24 @@ public:
         return this->search();
     }
 
-    void display_answer(char board[BoardSize]) {
+    void display_answer(Board & board) {
         for (auto idx : this->answer_) {
             if (idx > 0) {
-                board[this->rows_[idx] * Rows + this->cols_[idx]] = (char)this->numbers_[idx] + '1';
+                board.cells[this->rows_[idx] * Rows + this->cols_[idx]] = (char)this->numbers_[idx] + '1';
             }
         }
 
         Sudoku::display_board(board);
     }
 
-    void display_answers(char board[BoardSize]) {
+    void display_answers(Board & board) {
         printf("Total answers: %d\n\n", (int)this->answers_.size());
         int i = 0;
         for (auto answer : this->answers_) {
             Sudoku::clear_board(board);
             for (auto idx : answer) {
                 if (idx > 0) {
-                    board[this->rows_[idx] * Rows + this->cols_[idx]] = (char)this->numbers_[idx] + '1';
+                    board.cells[this->rows_[idx] * Rows + this->cols_[idx]] = (char)this->numbers_[idx] + '1';
                 }
             }
             Sudoku::display_board(board, false, i);
@@ -515,28 +517,36 @@ public:
     }
 };
 
-size_t DancingLinks::num_guesses = 0;
-size_t DancingLinks::num_unique_candidate = 0;
-size_t DancingLinks::num_failed_return = 0;
+template <typename SudokuTy>
+size_t DancingLinks<SudokuTy>::num_guesses = 0;
 
+template <typename SudokuTy>
+size_t DancingLinks<SudokuTy>::num_unique_candidate = 0;
+
+template <typename SudokuTy>
+size_t DancingLinks<SudokuTy>::num_failed_return = 0;
+
+template <typename SudokuTy = Sudoku>
 class Solver {
 public:
-    typedef DancingLinks slover_type;
+    typedef SudokuTy                        sudoku_type;
+    typedef DancingLinks<SudokuTy>          slover_type;
+    typedef typename SudokuTy::board_type   Board;
 
 private:
-    DancingLinks solver_;
+    DancingLinks<SudokuTy> solver_;
 
 public:
-    Solver() : solver_(Sudoku::TotalSize * 4 + 1) {
+    Solver() : solver_(SudokuTy::TotalSize * 4 + 1) {
     }
     ~Solver() {}
 
 public:
-    bool solve(char board[Sudoku::BoardSize],
+    bool solve(Board & board,
                double & elapsed_time,
                bool verbose = true) {
         if (verbose) {
-            Sudoku::display_board(board, true);
+            SudokuTy::display_board(board, true);
         }
 
         jtest::StopWatch sw;
@@ -557,13 +567,13 @@ public:
             printf("elapsed time: %0.3f ms, recur_counter: %" PRIuPTR "\n\n"
                    "num_guesses: %" PRIuPTR ", num_failed_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
                    "guess %% = %0.1f %%, failed_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
-                   elapsed_time, DancingLinks::get_search_counter(),
-                   DancingLinks::get_num_guesses(),
-                   DancingLinks::get_num_failed_return(),
-                   DancingLinks::get_num_unique_candidate(),
-                   DancingLinks::get_guess_percent(),
-                   DancingLinks::get_failed_return_percent(),
-                   DancingLinks::get_unique_candidate_percent());
+                   elapsed_time, DancingLinks<SudokuTy>::get_search_counter(),
+                   DancingLinks<SudokuTy>::get_num_guesses(),
+                   DancingLinks<SudokuTy>::get_num_failed_return(),
+                   DancingLinks<SudokuTy>::get_num_unique_candidate(),
+                   DancingLinks<SudokuTy>::get_guess_percent(),
+                   DancingLinks<SudokuTy>::get_failed_return_percent(),
+                   DancingLinks<SudokuTy>::get_unique_candidate_percent());
         }
 
         return success;

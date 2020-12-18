@@ -1,4 +1,24 @@
 
+#if defined(_MSC_VER)
+#define __MMX__
+#define __SSE__
+#define __SSE2__
+#define __SSE3__
+#define __SSSE3__
+#define __SSE4A__
+#define __SSE4a__
+#define __SSE4_1__
+#define __SSE4_2__
+#define __POPCNT__
+#define __LZCNT__
+#define __AVX__
+#define __AVX2__
+#define __3dNOW__
+#else
+//#undef __SSE4_1__
+//#undef __SSE4_2__
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -42,9 +62,10 @@ static const size_t kEnableV3Solution =   1;
 // Index: [0 - 4]
 #define TEST_CASE_INDEX         4
 
-void read_sudoku_board(char board[Sudoku::BoardSize], size_t index)
+template <typename SudokuTy = Sudoku>
+void read_sudoku_board(typename SudokuTy::board_type & board, size_t index)
 {
-    for (size_t row = 0; row < Sudoku::Rows; row++) {
+    for (size_t row = 0; row < SudokuTy::Rows; row++) {
         size_t row_base = row * 9;
         size_t col = 0;
         const char * prows = test_case[index].rows[row];
@@ -52,52 +73,25 @@ void read_sudoku_board(char board[Sudoku::BoardSize], size_t index)
         while ((val = *prows) != '\0') {
             if (val >= '0' && val <= '9') {
                 if (val != '0')
-                    board[row_base + col] = val;
+                    board.cells[row_base + col] = val;
                 else
-                    board[row_base + col] = '.';
+                    board.cells[row_base + col] = '.';
                 col++;
-                assert(col <= Sudoku::Cols);
+                assert(col <= SudokuTy::Cols);
             }
             else if (val == '.') {
-                board[row_base + col] = '.';
+                board.cells[row_base + col] = '.';
                 col++;
-                assert(col <= Sudoku::Cols);
+                assert(col <= SudokuTy::Cols);
             }
             prows++;  
         }
-        assert(col == Sudoku::Cols);
+        assert(col == SudokuTy::Cols);
     }
 }
 
-void read_sudoku_board(std::vector<std::vector<char>> & board, size_t index)
-{
-    for (size_t row = 0; row < Sudoku::Rows; row++) {
-        std::vector<char> line;
-        size_t col = 0;
-        const char * prows = test_case[index].rows[row];
-        char val;
-        while ((val = *prows) != '\0') {
-            if (val >= '0' && val <= '9') {
-                if (val != '0')
-                    line.push_back(val);
-                else
-                    line.push_back('.');
-                col++;
-                assert(col <= Sudoku::Cols);
-            }
-            else if (val == '.') {
-                line.push_back('.');
-                col++;
-                assert(col <= Sudoku::Cols);
-            }
-            prows++;  
-        }
-        assert(col == Sudoku::Cols);
-        board.push_back(line);
-    }
-}
-
-size_t read_sudoku_board(char board[Sudoku::BoardSize], char line[256])
+template <typename SudokuTy = Sudoku>
+size_t read_sudoku_board(typename SudokuTy::board_type & board, char line[256])
 {
     char * pline = line;
     // Skip the white spaces
@@ -114,76 +108,37 @@ size_t read_sudoku_board(char board[Sudoku::BoardSize], char line[256])
     while ((val = *pline++) != '\0') {
         if (val >= '0' && val <= '9') {
             if (val != '0')
-                board[pos] = val;
+                board.cells[pos] = val;
             else
-                board[pos] = '.';
+                board.cells[pos] = '.';
             pos++;
-            assert(pos <= Sudoku::BoardSize);
+            assert(pos <= SudokuTy::BoardSize);
         }
         else if ((val == '.') || (val == ' ') || (val == '-')) {
-            board[pos] = '.';
+            board.cells[pos] = '.';
             pos++;
-            assert(pos <= Sudoku::BoardSize);
+            assert(pos <= SudokuTy::BoardSize);
         }
     }
-    assert(pos <= Sudoku::BoardSize);
+    assert(pos <= SudokuTy::BoardSize);
     return pos;
 }
 
-size_t read_sudoku_board(std::vector<std::vector<char>> & board, char line[256])
-{
-    char * pline = line;
-    // Skip the white spaces
-    while (*pline == ' ' || *pline == '\t') {
-        pline++;
-    }
-    // Is a comment ?
-    if ((*pline == '#') || ((*pline == '/') && (pline[1] = '/'))) {
-        return 0;
-    }
-    size_t grid_nums = 0;
-    for (size_t row = 0; row < Sudoku::Rows; row++) {
-        std::vector<char> line;
-        size_t col_valid = 0;
-        for (size_t col = 0; col < Sudoku::Cols; col++) {
-            char val = *pline;
-            if (val >= '0' && val <= '9') {
-                if (val != '0')
-                    line.push_back(val);
-                else
-                    line.push_back('.');
-                col_valid++;
-                assert(col <= Sudoku::Cols);
-            }
-            else if (val == '.') {
-                line.push_back('.');
-                col_valid++;
-                assert(col <= Sudoku::Cols);
-            }
-            else if (val == '\0') {
-                break;
-            }
-            pline++;  
-        }
-        assert(col_valid == Sudoku::Cols || col_valid == 0);
-        board.push_back(line);
-        grid_nums += col_valid;
-    }
-    return grid_nums;
-}
-
+template <typename SudokuTy = Sudoku>
 void run_a_testcase(size_t index)
 {
+    typedef typename SudokuTy::board_type Board;
+
     double elapsed_time = 0.0;
     if (kEnableDlxV1Solution)
     {
         printf("------------------------------------------\n\n");
         printf("jmSudoku: dlx::v1::Solver - Dancing Links\n\n");
 
-        char board[Sudoku::BoardSize];
-        read_sudoku_board(board, index);
+        Board board;
+        read_sudoku_board<SudokuTy>(board, index);
 
-        dlx::v1::Solver solver;
+        dlx::v1::Solver<SudokuTy> solver;
         bool success = solver.solve(board, elapsed_time);
     }
 
@@ -192,10 +147,10 @@ void run_a_testcase(size_t index)
         printf("------------------------------------------\n\n");
         printf("jmSudoku: dlx::v2::Solution - Dancing Links\n\n");
 
-        char board[Sudoku::BoardSize];
-        read_sudoku_board(board, index);
+        Board board;
+        read_sudoku_board<SudokuTy>(board, index);
 
-        dlx::v2::Solver solver;
+        dlx::v2::Solver<SudokuTy> solver;
         bool success = solver.solve(board, elapsed_time);
     }
 
@@ -204,10 +159,10 @@ void run_a_testcase(size_t index)
         printf("------------------------------------------\n\n");
         printf("jmSudoku: dlx::v3::Solution - Dancing Links\n\n");
 
-        char board[Sudoku::BoardSize];
-        read_sudoku_board(board, index);
+        Board board;
+        read_sudoku_board<SudokuTy>(board, index);
 
-        dlx::v3::Solver solver;
+        dlx::v3::Solver<SudokuTy> solver;
         bool success = solver.solve(board, elapsed_time);
     }
 
@@ -216,10 +171,10 @@ void run_a_testcase(size_t index)
         printf("------------------------------------------\n\n");
         printf("jmSudoku: v1::Solution - dfs\n\n");
 
-        char board[Sudoku::BoardSize];
-        read_sudoku_board(board, index);
+        Board board;
+        read_sudoku_board<SudokuTy>(board, index);
 
-        v1::Solver<Sudoku> solver;
+        v1::Solver<SudokuTy> solver;
         bool success = solver.solve(board, elapsed_time);
     }
 
@@ -230,10 +185,10 @@ void run_a_testcase(size_t index)
         printf("------------------------------------------\n\n");
         printf("jmSudoku: v1::Solution - dfs\n\n");
 
-        char board[Sudoku::BoardSize];
-        read_sudoku_board(board, index);
+        Board board;
+        read_sudoku_board<SudokuTy>(board, index);
 
-        v1::Solver solver;
+        v1::Solver<SudokuTy> solver;
         bool success = solver.solve(board, elapsed_time);
     }
 #endif
@@ -245,7 +200,9 @@ void run_a_testcase(size_t index)
 template <typename SudokuSolver>
 void run_sudoku_test(const char * filename, const char * name)
 {
-    typedef typename SudokuSolver::slover_type Slover;
+    typedef typename SudokuSolver::slover_type  SloverTy;
+    typedef typename SudokuSolver::sudoku_type  SudokuTy;
+    typedef typename SudokuTy::board_type       Board;
 
     //printf("------------------------------------------\n\n");
     printf("jmSudoku: %s::Solver\n\n", name);
@@ -267,20 +224,20 @@ void run_sudoku_test(const char * filename, const char * name)
                 std::memset(line, 0, 16);
                 ifs.getline(line, sizeof(line) - 1);
 
-                char board[Sudoku::BoardSize];
-                size_t num_grids = read_sudoku_board(board, line);
+                Board board;
+                size_t num_grids = read_sudoku_board<SudokuTy>(board, line);
                 // Sudoku::BoardSize = 81
-                if (num_grids >= Sudoku::BoardSize) {
+                if (num_grids >= SudokuTy::BoardSize) {
                     SudokuSolver solver;
                     double elapsed_time;
                     bool success = solver.solve(board, elapsed_time, false);
                     total_time += elapsed_time;
                     if (success) {
-                        total_guesses += Slover::num_guesses;
-                        total_unique_candidate += Slover::num_unique_candidate;
-                        total_failed_return += Slover::num_failed_return;
+                        total_guesses += SloverTy::num_guesses;
+                        total_unique_candidate += SloverTy::num_unique_candidate;
+                        total_failed_return += SloverTy::num_failed_return;
 
-                        if (Slover::num_guesses == 0) {
+                        if (SloverTy::num_guesses == 0) {
                             total_no_guess++;
                         }
 
@@ -352,10 +309,10 @@ int main(int argc, char * argv[])
     {
         if (filename != nullptr) {
 #ifdef NDEBUG
-            run_sudoku_test<dlx::v1::Solver>(filename, "dlx::v1");
-            run_sudoku_test<dlx::v2::Solver>(filename, "dlx::v2");
+            run_sudoku_test<dlx::v1::Solver<Sudoku>>(filename, "dlx::v1");
+            run_sudoku_test<dlx::v2::Solver<Sudoku>>(filename, "dlx::v2");
 #endif
-            run_sudoku_test<dlx::v3::Solver>(filename, "dlx::v3");
+            run_sudoku_test<dlx::v3::Solver<Sudoku>>(filename, "dlx::v3");
 
             run_sudoku_test<v1::Solver<Sudoku>>(filename, "dfs::v1");
         }

@@ -6,11 +6,11 @@
 #pragma once
 #endif
 
-struct SudokuBoardEx {
+struct SudokuBoard {
     const char * rows[9];
 };
 
-static const SudokuBoardEx test_case[] = {
+static const SudokuBoard test_case[] = {
     //
     // 0 #
     //

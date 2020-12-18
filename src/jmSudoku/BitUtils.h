@@ -236,7 +236,7 @@ struct BitUtils {
 
     static inline
     unsigned int popcnt32(unsigned int x) {
-#if defined(__SSE4_2__)
+#if defined(__POPCNT__)
         int popcount = _mm_popcnt_u32(x);
         return (unsigned int)popcount;
 #else
@@ -248,7 +248,7 @@ struct BitUtils {
 #if (JSTD_WORD_SIZE == 64)
     static inline
     unsigned int popcnt64(unsigned __int64 x) {
-#if defined(__SSE4_2__)
+#if defined(__POPCNT__)
         __int64 popcount = _mm_popcnt_u64(x);
         return (unsigned int)popcount;
 #else
