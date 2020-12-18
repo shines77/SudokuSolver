@@ -45,7 +45,12 @@ using namespace jstd;
 #define V1_SEARCH_MODE          SEARCH_MODE_ONE_ANSWER
 
 #define V1_LITERAL_ORDER_MODE   0
+
+#ifdef _MSC_VER
 #define V1_USE_STD_BITSET       0
+#else
+#define V1_USE_STD_BITSET       1
+#endif
 
 namespace jmSudoku {
 namespace v1 {

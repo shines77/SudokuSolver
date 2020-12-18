@@ -396,6 +396,20 @@ public:
         return (*this);
     }
 
+#if 1
+    this_type & reset(size_t pos) {
+        assert(pos < Bits);
+        if (Bits <= kUnitBits) {
+            this->array_[0] ^= unit_type(size_t(1) << pos);
+        }
+        else {
+            size_t index = pos / kUnitBits;
+            size_t shift = pos % kUnitBits;
+            this->array_[index] ^= unit_type(size_t(1) << shift);
+        }
+        return (*this);
+    }
+#else
     this_type & reset(size_t pos) {
         assert(pos < Bits);
         if (Bits <= kUnitBits) {
@@ -408,6 +422,7 @@ public:
         }
         return (*this);
     }
+#endif
 
     this_type & flip() noexcept {
         if (kRestBits != 0) {
