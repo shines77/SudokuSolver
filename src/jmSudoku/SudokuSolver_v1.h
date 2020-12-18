@@ -64,7 +64,8 @@ public:
     typedef Solver<SudokuTy>                    slover_type;
     typedef typename SudokuTy::board_type       Board;
     typedef typename SudokuTy::NeighborCells    NeighborCells;
-    typedef typename SudokuTy::CellInfo         CellInfo;    
+    typedef typename SudokuTy::CellInfo         CellInfo;
+    typedef typename SudokuTy::BoxesInfo        BoxesInfo;
 
     static const size_t kAlignment = SudokuTy::kAlignment;
     static const size_t BoxCellsX = SudokuTy::BoxCellsX;      // 3
@@ -1342,10 +1343,6 @@ private:
             size_t num_bit = BitUtils::ms1b(num_bits);
             size_t _num = BitUtils::bsf(num_bit);
 
-            this->boxes_[box].set(_num);
-            this->rows_[row].set(_num);
-            this->cols_[col].set(_num);
-
             this->box_nums_[box][_num].set(cell);
             this->row_nums_[row][_num].set(col);
             this->col_nums_[col][_num].set(row);
@@ -1387,9 +1384,9 @@ private:
                 this->row_nums_[row][num].reset(col);
                 this->col_nums_[col][num].reset(row);
 
-                dec_box_literal_cnt(box, num);
                 dec_row_literal_cnt(row, num);                
                 dec_col_literal_cnt(col, num);
+                dec_box_literal_cnt(box, num);
             }
         }
         return count;
@@ -1411,18 +1408,13 @@ private:
             size_t row = cellInfo.row;
             size_t col = cellInfo.col;
 
-            this->boxes_[box].set(num);
-            this->rows_[row].set(num);
-            this->cols_[col].set(num);
-
             this->box_nums_[box][num].set(cell);
-            inc_box_literal_cnt(box, num);
-
             this->row_nums_[row][num].set(col);
-            inc_row_literal_cnt(row, num);
-
             this->col_nums_[col][num].set(row);
+
+            inc_row_literal_cnt(row, num);            
             inc_col_literal_cnt(col, num);
+            inc_box_literal_cnt(box, num);
         }
     }
 
@@ -1477,7 +1469,7 @@ public:
                     box = cellInfo.box;
                     cell = cellInfo.cell;
 #endif
-                    disable_cell_literal(pos);
+                    //disable_cell_literal(pos);
 
                     size_t num_bits = this->cell_nums_[pos].to_ulong();
                     assert(this->cell_nums_[pos].count() == get_literal_cnt(min_literal_id));
@@ -1506,7 +1498,7 @@ public:
                         num_bits ^= num_bit;
                     }
 
-                    enable_cell_literal(pos);
+                    //enable_cell_literal(pos);
                     break;
                 }
 
@@ -1520,17 +1512,23 @@ public:
 
                     assert(this->boxes_[box].test(num));
 
-                    disable_box_literal(box, num);
+                    //disable_box_literal(box, num);
 
                     size_t cell_bits = this->box_nums_[box][num].to_ulong();
                     assert(this->box_nums_[box][num].count() == get_literal_cnt(min_literal_id));
                     while (cell_bits != 0) {
                         size_t cell_bit = BitUtils::ms1b(cell_bits);
                         cell = BitUtils::bsf(cell_bits);
-                        row = (box / BoxCountX) * BoxCellsY + cell / BoxCellsX;
-                        col = (box % BoxCountX) * BoxCellsX + cell % BoxCellsX;
+#if 0
+                        row = (box / BoxCountX) * BoxCellsY + (cell / BoxCellsX);
+                        col = (box % BoxCountX) * BoxCellsX + (cell % BoxCellsX);
                         pos = row * Cols + col;
-
+#else
+                        const BoxesInfo & boxesInfo = SudokuTy::boxes_info[box * BoxSize + cell];
+                        row = boxesInfo.row;
+                        col = boxesInfo.col;
+                        pos = boxesInfo.pos;
+#endif
                         size_t effect_count = doFillNum(empties, pos, row, col,
                                                         box, cell, num, save_bits);
 
@@ -1552,7 +1550,7 @@ public:
                         cell_bits ^= cell_bit;
                     }
 
-                    enable_box_literal(box, num);
+                    //enable_box_literal(box, num);
                     break;
                 }
 
@@ -1566,7 +1564,7 @@ public:
 
                     assert(this->rows_[row].test(num));
 
-                    disable_row_literal(row, num);
+                    //disable_row_literal(row, num);
 
                     size_t col_bits = this->row_nums_[row][num].to_ulong();
                     assert(this->row_nums_[row][num].count() == get_literal_cnt(min_literal_id));
@@ -1574,13 +1572,18 @@ public:
                         size_t col_bit = BitUtils::ms1b(col_bits);
                         col = BitUtils::bsf(col_bits);
                         pos = row * Cols + col;
+#if 0
                         size_t box_x = col / BoxCellsX;
                         size_t box_y = row / BoxCellsY;
                         box = box_y * BoxCountX + box_x;
                         size_t cell_x = col % BoxCellsX;
                         size_t cell_y = row % BoxCellsY;
                         cell = cell_y * BoxCellsX + cell_x;
-
+#else
+                        const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+                        box = cellInfo.box;
+                        cell = cellInfo.cell;
+#endif
                         size_t effect_count = doFillNum(empties, pos, row, col,
                                                         box, cell, num, save_bits);
 
@@ -1602,7 +1605,7 @@ public:
                         col_bits ^= col_bit;
                     }
 
-                    enable_row_literal(row, num);
+                    //enable_row_literal(row, num);
                     break;
                 }
 
@@ -1616,7 +1619,7 @@ public:
 
                     assert(this->cols_[col].test(num));
 
-                    disable_col_literal(col, num);
+                    //disable_col_literal(col, num);
 
                     size_t row_bits = this->col_nums_[col][num].to_ulong();
                     assert(this->col_nums_[col][num].count() == get_literal_cnt(min_literal_id));
@@ -1624,13 +1627,18 @@ public:
                         size_t row_bit = BitUtils::ms1b(row_bits);
                         row = BitUtils::bsf(row_bits);
                         pos = row * Cols + col;
+#if 0
                         size_t box_x = col / BoxCellsX;
                         size_t box_y = row / BoxCellsY;
                         box = box_y * BoxCountX + box_x;
                         size_t cell_x = col % BoxCellsX;
                         size_t cell_y = row % BoxCellsY;
                         cell = cell_y * BoxCellsX + cell_x;
-
+#else
+                        const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+                        box = cellInfo.box;
+                        cell = cellInfo.cell;
+#endif
                         size_t effect_count = doFillNum(empties, pos, row, col,
                                                         box, cell, num, save_bits);
 
@@ -1652,7 +1660,7 @@ public:
                         row_bits ^= row_bit;
                     }
 
-                    enable_col_literal(col, num);
+                    //enable_col_literal(col, num);
                     break;
                 }
 
