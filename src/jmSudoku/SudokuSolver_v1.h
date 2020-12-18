@@ -49,7 +49,7 @@ using namespace jstd;
 #ifdef _MSC_VER
 #define V1_USE_STD_BITSET       0
 #else
-#define V1_USE_STD_BITSET       1
+#define V1_USE_STD_BITSET       0
 #endif
 
 namespace jmSudoku {
