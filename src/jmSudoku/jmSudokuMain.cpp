@@ -63,7 +63,7 @@ static const size_t kEnableV3Solution =   1;
 #define TEST_CASE_INDEX         4
 
 template <typename SudokuTy = Sudoku>
-void read_sudoku_board(typename SudokuTy::board_type & board, size_t index)
+void make_sudoku_board(typename SudokuTy::board_type & board, size_t index)
 {
     for (size_t row = 0; row < SudokuTy::Rows; row++) {
         size_t row_base = row * 9;
@@ -131,7 +131,7 @@ void run_solver_testcase(size_t index)
     typedef typename SudokuTy::board_type       Board;
 
     Board board;
-    read_sudoku_board<SudokuTy>(board, index);
+    make_sudoku_board<SudokuTy>(board, index);
 
     SudokuSlover solver;
     solver.display_board(board);
