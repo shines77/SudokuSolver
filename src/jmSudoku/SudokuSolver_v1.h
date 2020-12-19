@@ -175,30 +175,20 @@ private:
 
 #if V1_USE_STD_BITSET
     typedef std::bitset<Numbers>    bitset_type;
-    std::bitset<BoardSize>          cell_filled_;
 
-    SmallBitMatrix2<Boxes, Numbers>   boxes_;
-    SmallBitMatrix2<Rows, Numbers>    rows_;
-    SmallBitMatrix2<Cols, Numbers>    cols_;
+    alignas(16) SmallBitMatrix2<BoardSize, Numbers>         cell_nums_;     // [row * Cols + col][num]
 
-    alignas(16) SmallBitMatrix2<BoardSize, Numbers>       cell_nums_;     // [row * 9 + col][num]
-
-    alignas(16) SmallBitMatrix3<Boxes, Numbers, BoxSize>  box_nums_;      // [box][num][box_size]
-    alignas(16) SmallBitMatrix3<Rows,  Numbers, Cols>     row_nums_;      // [row][num][col]
-    alignas(16) SmallBitMatrix3<Cols,  Numbers, Rows>     col_nums_;      // [col][num][row]
+    alignas(16) SmallBitMatrix2<Numbers * Rows,  Cols>      row_nums_;      // [num * Rows + row][col]
+    alignas(16) SmallBitMatrix2<Numbers * Cols,  Rows>      col_nums_;      // [num * Cols + col][row]
+    alignas(16) SmallBitMatrix2<Numbers * Boxes, BoxSize>   box_nums_;      // [num * Boxes + box][cell]
 #else
     typedef SmallBitSet<Numbers>    bitset_type;
-    SmallBitSet<BoardSize>          cell_filled_;
 
-    SmallBitSet2D<Boxes, Numbers>   boxes_;
-    SmallBitSet2D<Rows, Numbers>    rows_;
-    SmallBitSet2D<Cols, Numbers>    cols_;
+    alignas(16) SmallBitSet2D<BoardSize, Numbers>           cell_nums_;     // [row * Cols + col][num]
 
-    alignas(16) SmallBitSet2D<BoardSize, Numbers>       cell_nums_;     // [row * 9 + col][num]
-
-    alignas(16) SmallBitSet3D<Boxes, Numbers, BoxSize>  box_nums_;      // [box][num][box_size]
-    alignas(16) SmallBitSet3D<Rows,  Numbers, Cols>     row_nums_;      // [row][num][col]
-    alignas(16) SmallBitSet3D<Cols,  Numbers, Rows>     col_nums_;      // [col][num][row]
+    alignas(16) SmallBitSet2D<Numbers * Rows,  Cols>        row_nums_;      // [num * Rows + row][col]
+    alignas(16) SmallBitSet2D<Numbers * Cols,  Rows>        col_nums_;      // [num * Cols + col][row]
+    alignas(16) SmallBitSet2D<Numbers * Boxes, BoxSize>     box_nums_;      // [num * Boxes + box][cell]
 #endif
 
 #if defined(__SSE4_1__)
@@ -253,17 +243,11 @@ private:
     void init_board(Board & board) {
         init_literal_info();
 
-        this->cell_filled_.reset();
-
-        this->boxes_.set();
-        this->rows_.set();
-        this->cols_.set();
-
         this->cell_nums_.set();
-
-        this->box_nums_.set();
+        
         this->row_nums_.set();
         this->col_nums_.set();
+        this->box_nums_.set();
 
         num_guesses = 0;
         num_unique_candidate = 0;
@@ -273,8 +257,8 @@ private:
         }
 
         size_t empties = calc_empties(board);
-        this->effect_list_.resize(empties + 1);
         this->empties_ = empties;
+        this->effect_list_.resize(empties + 1);
 
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
@@ -329,17 +313,17 @@ private:
                 size_t box_x = col / BoxCellsX;
                 size_t box = box_y + box_x;
                 for (size_t num = MinNumber - 1; num < MaxNumber; num++) {
-                    uint8_t box_nums = (uint8_t)this->box_nums_[box][num].count();
-                    uint8_t row_nums = (uint8_t)this->row_nums_[row][num].count();
-                    uint8_t col_nums = (uint8_t)this->col_nums_[col][num].count();
+                    uint8_t row_nums = (uint8_t)this->row_nums_[num * Rows + row].count();
+                    uint8_t col_nums = (uint8_t)this->col_nums_[num * Cols + col].count();
+                    uint8_t box_nums = (uint8_t)this->box_nums_[num * Boxes + box].count();
+                    
+                    assert(get_row_literal_cnt(num, row) == row_nums);
+                    assert(get_col_literal_cnt(num, col) == col_nums);
+                    assert(get_box_literal_cnt(num, box) == box_nums);
 
-                    assert(get_box_literal_cnt(box, num) == box_nums);
-                    assert(get_row_literal_cnt(row, num) == row_nums);
-                    assert(get_col_literal_cnt(col, num) == col_nums);
-
-                    //set_box_literal_cnt(box, num, box_nums);
-                    //set_row_literal_cnt(row, num, row_nums);
-                    //set_col_literal_cnt(col, num, col_nums);
+                    //set_row_literal_cnt(num, row, row_nums);
+                    //set_col_literal_cnt(num, col, col_nums);
+                    //set_box_literal_cnt(num, box, box_nums);
                 }
             }
         }
@@ -565,18 +549,18 @@ private:
         this->enable_literal(literal);
     }
 
-    inline void enable_box_literal(size_t box, size_t num) {
-        size_t literal = BoxLiteralFirst + box * Numbers + num;
+    inline void enable_row_literal(size_t num, size_t row) {
+        size_t literal = RowLiteralFirst + num * Rows + row;
         this->enable_literal(literal);
     }
 
-    inline void enable_row_literal(size_t row, size_t num) {
-        size_t literal = RowLiteralFirst + row * Numbers + num;
+    inline void enable_col_literal(size_t num, size_t col) {
+        size_t literal = ColLiteralFirst + num * Cols + col;
         this->enable_literal(literal);
     }
 
-    inline void enable_col_literal(size_t col, size_t num) {
-        size_t literal = ColLiteralFirst + col * Numbers + num;
+    inline void enable_box_literal(size_t num, size_t box) {
+        size_t literal = BoxLiteralFirst + num * Boxes + box;
         this->enable_literal(literal);
     }
 
@@ -586,18 +570,18 @@ private:
         this->disable_literal(literal);
     }
 
-    inline void disable_box_literal(size_t box, size_t num) {
-        size_t literal = BoxLiteralFirst + box * Numbers + num;
+    inline void disable_row_literal(size_t num, size_t row) {
+        size_t literal = RowLiteralFirst + num * Rows + row;
         this->disable_literal(literal);
     }
 
-    inline void disable_row_literal(size_t row, size_t num) {
-        size_t literal = RowLiteralFirst + row * Numbers + num;
+    inline void disable_col_literal(size_t num, size_t col) {
+        size_t literal = ColLiteralFirst + num * Cols + col;
         this->disable_literal(literal);
     }
 
-    inline void disable_col_literal(size_t col, size_t num) {
-        size_t literal = ColLiteralFirst + col * Numbers + num;
+    inline void disable_box_literal(size_t num, size_t box) {
+        size_t literal = BoxLiteralFirst + num * Boxes + box;
         this->disable_literal(literal);
     }
 
@@ -607,18 +591,18 @@ private:
         return this->get_literal_cnt(literal);
     }
 
-    inline uint8_t get_box_literal_cnt(size_t box, size_t num) {
-        size_t literal = BoxLiteralFirst + box * Numbers + num;
+    inline uint8_t get_row_literal_cnt(size_t num, size_t row) {
+        size_t literal = RowLiteralFirst + num * Rows + row;
         return this->get_literal_cnt(literal);
     }
 
-    inline uint8_t get_row_literal_cnt(size_t row, size_t num) {
-        size_t literal = RowLiteralFirst + row * Numbers + num;
+    inline uint8_t get_col_literal_cnt(size_t num, size_t col) {
+        size_t literal = ColLiteralFirst + num * Cols + col;
         return this->get_literal_cnt(literal);
     }
 
-    inline uint8_t get_col_literal_cnt(size_t col, size_t num) {
-        size_t literal = ColLiteralFirst + col * Numbers + num;
+    inline uint8_t get_box_literal_cnt(size_t num, size_t box) {
+        size_t literal = BoxLiteralFirst + num * Boxes + box;
         return this->get_literal_cnt(literal);
     }
 
@@ -628,23 +612,13 @@ private:
         this->set_literal_cnt(literal, count);
     }
 
-    inline void set_box_literal_cnt(size_t index, uint8_t count) {
-        size_t literal = BoxLiteralFirst + index;
-        this->set_literal_cnt(literal, count);
-    }
-
-    inline void set_box_literal_cnt(size_t box, size_t num, uint8_t count) {
-        size_t literal = BoxLiteralFirst + box * Numbers + num;
-        this->set_literal_cnt(literal, count);
-    }
-
     inline void set_row_literal_cnt(size_t index, uint8_t count) {
         size_t literal = RowLiteralFirst + index;
         this->set_literal_cnt(literal, count);
     }
 
-    inline void set_row_literal_cnt(size_t row, size_t num, uint8_t count) {
-        size_t literal = RowLiteralFirst + row * Numbers + num;
+    inline void set_row_literal_cnt(size_t num, size_t row, uint8_t count) {
+        size_t literal = RowLiteralFirst + num * Rows + row;
         this->set_literal_cnt(literal, count);
     }
 
@@ -653,8 +627,18 @@ private:
         this->set_literal_cnt(literal, count);
     }
 
-    inline void set_col_literal_cnt(size_t col, size_t num, uint8_t count) {
-        size_t literal = ColLiteralFirst + col * Numbers + num;
+    inline void set_col_literal_cnt(size_t num, size_t col, uint8_t count) {
+        size_t literal = ColLiteralFirst + num * Cols + col;
+        this->set_literal_cnt(literal, count);
+    }
+
+    inline void set_box_literal_cnt(size_t index, uint8_t count) {
+        size_t literal = BoxLiteralFirst + index;
+        this->set_literal_cnt(literal, count);
+    }
+
+    inline void set_box_literal_cnt(size_t num, size_t box, uint8_t count) {
+        size_t literal = BoxLiteralFirst + num * Boxes + box;
         this->set_literal_cnt(literal, count);
     }
 
@@ -664,18 +648,18 @@ private:
         this->inc_literal_cnt(literal);
     }
 
-    inline void inc_box_literal_cnt(size_t box, size_t num) {
-        size_t literal = BoxLiteralFirst + box * Numbers + num;
+    inline void inc_row_literal_cnt(size_t num, size_t row) {
+        size_t literal = RowLiteralFirst + num * Rows + row;
         this->inc_literal_cnt(literal);
     }
 
-    inline void inc_row_literal_cnt(size_t row, size_t num) {
-        size_t literal = RowLiteralFirst + row * Numbers + num;
+    inline void inc_col_literal_cnt(size_t num, size_t col) {
+        size_t literal = ColLiteralFirst + num * Cols + col;
         this->inc_literal_cnt(literal);
     }
 
-    inline void inc_col_literal_cnt(size_t col, size_t num) {
-        size_t literal = ColLiteralFirst + col * Numbers + num;
+    inline void inc_box_literal_cnt(size_t num, size_t box) {
+        size_t literal = BoxLiteralFirst + num * Boxes + box;
         this->inc_literal_cnt(literal);
     }
 
@@ -685,18 +669,18 @@ private:
         this->dec_literal_cnt(literal);
     }
 
-    inline void dec_box_literal_cnt(size_t box, size_t num) {
-        size_t literal = BoxLiteralFirst + box * Numbers + num;
+    inline void dec_row_literal_cnt(size_t num, size_t row) {
+        size_t literal = RowLiteralFirst + num * Rows + row;
         this->dec_literal_cnt(literal);
     }
 
-    inline void dec_row_literal_cnt(size_t row, size_t num) {
-        size_t literal = RowLiteralFirst + row * Numbers + num;
+    inline void dec_col_literal_cnt(size_t num, size_t col) {
+        size_t literal = ColLiteralFirst + num * Cols + col;
         this->dec_literal_cnt(literal);
     }
 
-    inline void dec_col_literal_cnt(size_t col, size_t num) {
-        size_t literal = ColLiteralFirst + col * Numbers + num;
+    inline void dec_box_literal_cnt(size_t num, size_t box) {
+        size_t literal = BoxLiteralFirst + num * Boxes + box;
         this->dec_literal_cnt(literal);
     }
 
@@ -1175,35 +1159,22 @@ private:
 #endif // __SSE4_1__
 
     inline bitset_type getCanFillNums(size_t row, size_t col, size_t box) {
-        return (this->rows_[row] & this->cols_[col] & this->boxes_[box]);
+        //return (this->rows_[row] & this->cols_[col] & this->boxes_[box]);
+        return bitset_type{};
     }
 
     inline size_t fillNum(size_t pos, size_t row, size_t col,
                           size_t box, size_t cell, size_t num) {
-        assert(!this->cell_filled_.test(pos));
         assert(this->cell_nums_[pos].test(num));
-        bitset_type bits = getCanFillNums(row, col, box);
-        assert(this->cell_nums_[pos] == bits);
 
-        assert(this->boxes_[box].test(num));
-        assert(this->rows_[row].test(num));
-        assert(this->cols_[col].test(num));
-
-        assert(this->box_nums_[box][num].test(cell));
-        assert(this->row_nums_[row][num].test(col));
-        assert(this->col_nums_[col][num].test(row));
-
-        uint32_t n_num_bit = 1u << num;
-        this->boxes_[box] ^= n_num_bit;
-        this->rows_[row] ^= n_num_bit;
-        this->cols_[col] ^= n_num_bit;
-
-        this->cell_filled_.set(pos);
+        assert(this->row_nums_[num + Rows + row].test(col));
+        assert(this->col_nums_[num + Cols + col].test(row));
+        assert(this->box_nums_[num + Boxes + box].test(cell));
 
         disable_cell_literal(pos);
-        disable_box_literal(box, num);
-        disable_row_literal(row, num);
-        disable_col_literal(col, num);
+        disable_row_literal(num, row);
+        disable_col_literal(num, col);
+        disable_box_literal(num, box);
 
         size_t num_bits = this->cell_nums_[pos].to_ulong();
         while (num_bits != 0) {
@@ -1211,19 +1182,19 @@ private:
             size_t _num = BitUtils::bsf(num_bit);
 
             assert(this->cell_nums_[pos].test(_num));
-            assert(this->box_nums_[box][_num].test(cell));
-            assert(this->row_nums_[row][_num].test(col));
-            assert(this->col_nums_[col][_num].test(row));
+            assert(this->row_nums_[_num * Rows + row].test(col));
+            assert(this->col_nums_[_num * Cols + col].test(row));
+            assert(this->box_nums_[_num * Boxes + box].test(cell));
 
             this->cell_nums_[pos].reset(_num);
-            this->box_nums_[box][_num].reset(cell);
-            this->row_nums_[row][_num].reset(col);
-            this->col_nums_[col][_num].reset(row);
+            this->row_nums_[_num * Rows + row].reset(col);
+            this->col_nums_[_num * Cols + col].reset(row);
+            this->box_nums_[_num * Boxes + box].reset(cell);
 
             dec_cell_literal_cnt(pos);
-            dec_box_literal_cnt(box, _num);
-            dec_row_literal_cnt(row, _num);
-            dec_col_literal_cnt(col, _num);
+            dec_row_literal_cnt(_num, row);
+            dec_col_literal_cnt(_num, col);
+            dec_box_literal_cnt(_num, box);
 
             num_bits ^= num_bit;
         }
@@ -1235,24 +1206,13 @@ private:
     void remove_box_other_numbers(size_t box, size_t cell) {
         size_t row = 0, col = 0;
 
-        size_t box_bits = this->boxes_[box].value_sz();
-        while (box_bits != 0) {
-            size_t num_bit = BitUtils::ms1b(box_bits);
-            size_t _num = BitUtils::bsf(num_bit);
-            if (this->box_nums_[box][_num].test(cell)) {
-                this->box_nums_[box][_num].reset(cell);
-                dec_box_literal_cnt(box, _num);
-            }
-            box_bits ^= num_bit;
-        }
-
         size_t row_bits = this->rows_[row].value_sz();
         while (row_bits != 0) {
             size_t num_bit = BitUtils::ms1b(row_bits);
             size_t _num = BitUtils::bsf(num_bit);
-            if (this->row_nums_[row][_num].test(col)) {
-                this->row_nums_[row][_num].reset(col);
-                dec_row_literal_cnt(row, _num);
+            if (this->row_nums_[_num * Rows + row].test(col)) {
+                this->row_nums_[_num * Rows + row].reset(col);
+                dec_row_literal_cnt(_num, row);
             }
             row_bits ^= num_bit;
         }
@@ -1261,11 +1221,22 @@ private:
         while (col_bits != 0) {
             size_t num_bit = BitUtils::ms1b(col_bits);
             size_t _num = BitUtils::bsf(num_bit);
-            if (this->col_nums_[col][_num].test(row)) {
-                this->col_nums_[col][_num].reset(row);
-                dec_col_literal_cnt(col, _num);
+            if (this->col_nums_[_num * Cols + col].test(row)) {
+                this->col_nums_[_num * Cols + col].reset(row);
+                dec_col_literal_cnt(_num, col);
             }
             col_bits ^= num_bit;
+        }
+
+        size_t box_bits = this->boxes_[box].value_sz();
+        while (box_bits != 0) {
+            size_t num_bit = BitUtils::ms1b(box_bits);
+            size_t _num = BitUtils::bsf(num_bit);
+            if (this->box_nums_[_num * Boxes + box].test(cell)) {
+                this->box_nums_[_num * Boxes + box].reset(cell);
+                dec_box_literal_cnt(_num, box);
+            }
+            box_bits ^= num_bit;
         }
     }
 
@@ -1275,17 +1246,17 @@ private:
         assert(this->cell_nums_[pos].test(num));
 
         disable_cell_literal(pos);
-        disable_box_literal(box, num);
-        disable_row_literal(row, num);
-        disable_col_literal(col, num);
+        disable_row_literal(num, row);
+        disable_col_literal(num, col);
+        disable_box_literal(num, box);
 
-        assert(this->box_nums_[box][num].test(cell));
-        assert(this->row_nums_[row][num].test(col));
-        assert(this->col_nums_[col][num].test(row));
+        assert(this->row_nums_[num * Rows + row].test(col));
+        assert(this->col_nums_[num * Cols + col].test(row));
+        assert(this->box_nums_[num * Boxes + box].test(cell));
 
-        this->box_nums_[box][num].reset(cell);
-        this->row_nums_[row][num].reset(col);
-        this->col_nums_[col][num].reset(row);
+        this->row_nums_[num * Rows + row].reset(col);
+        this->col_nums_[num * Cols + col].reset(row);
+        this->box_nums_[num * Boxes + box].reset(cell);
 
         // Save cell num bits
         save_bits = this->cell_nums_[pos];
@@ -1299,17 +1270,17 @@ private:
             size_t num_bit = BitUtils::ms1b(num_bits);
             size_t _num = BitUtils::bsf(num_bit);
 
-            assert(this->box_nums_[box][_num].test(cell));
-            assert(this->row_nums_[row][_num].test(col));
-            assert(this->col_nums_[col][_num].test(row));
+            assert(this->row_nums_[_num * Rows + row].test(col));
+            assert(this->col_nums_[_num * Cols + col].test(row));
+            assert(this->box_nums_[_num * Boxes + box].test(cell));
 
-            this->box_nums_[box][_num].reset(cell);
-            this->row_nums_[row][_num].reset(col);
-            this->col_nums_[col][_num].reset(row);
+            this->row_nums_[_num * Rows + row].reset(col);
+            this->col_nums_[_num * Cols + col].reset(row);
+            this->box_nums_[_num * Boxes + box].reset(cell);
 
-            dec_box_literal_cnt(box, _num);
-            dec_row_literal_cnt(row, _num);
-            dec_col_literal_cnt(col, _num);
+            dec_row_literal_cnt(_num, row);
+            dec_col_literal_cnt(_num, col);
+            dec_box_literal_cnt(_num, box);
 
             num_bits ^= num_bit;
         }
@@ -1323,16 +1294,16 @@ private:
                             size_t box, size_t cell, size_t num,
                             bitset_type & save_bits) {
         enable_cell_literal(pos);
-        enable_box_literal(box, num);
-        enable_row_literal(row, num);
-        enable_col_literal(col, num);
+        enable_row_literal(num, row);
+        enable_col_literal(num, col);
+        enable_box_literal(num, box);
 
         // Restore cell num bits
         this->cell_nums_[pos] = save_bits;
 
-        this->box_nums_[box][num].set(cell);
-        this->row_nums_[row][num].set(col);
-        this->col_nums_[col][num].set(row);
+        this->row_nums_[num * Rows + row].set(col);
+        this->col_nums_[num * Cols + col].set(row);
+        this->box_nums_[num * Boxes + box].set(cell);
 
         // Exclude the current number, because it has been processed.
         save_bits.reset(num);
@@ -1342,13 +1313,13 @@ private:
             size_t num_bit = BitUtils::ms1b(num_bits);
             size_t _num = BitUtils::bsf(num_bit);
 
-            this->box_nums_[box][_num].set(cell);
-            this->row_nums_[row][_num].set(col);
-            this->col_nums_[col][_num].set(row);
+            this->row_nums_[_num * Rows + row].set(col);
+            this->col_nums_[_num * Cols + col].set(row);
+            this->box_nums_[_num * Boxes + box].set(cell);
 
-            inc_box_literal_cnt(box, _num);
-            inc_row_literal_cnt(row, _num);
-            inc_col_literal_cnt(col, _num);
+            inc_row_literal_cnt(_num, row);
+            inc_col_literal_cnt(_num, col);
+            inc_box_literal_cnt(_num, box);
 
             num_bits ^= num_bit;
         }
@@ -1375,17 +1346,17 @@ private:
                 size_t row = cellInfo.row;
                 size_t col = cellInfo.col;
 
-                assert(this->box_nums_[box][num].test(cell));
-                assert(this->row_nums_[row][num].test(col));
-                assert(this->col_nums_[col][num].test(row));
+                assert(this->row_nums_[num * Rows + row].test(col));
+                assert(this->col_nums_[num * Cols + col].test(row));
+                assert(this->box_nums_[num * Boxes + box].test(cell));
 
-                this->box_nums_[box][num].reset(cell);
-                this->row_nums_[row][num].reset(col);
-                this->col_nums_[col][num].reset(row);
+                this->row_nums_[num * Rows + row].reset(col);
+                this->col_nums_[num * Cols + col].reset(row);
+                this->box_nums_[num * Boxes + box].reset(cell);
 
-                dec_row_literal_cnt(row, num);                
-                dec_col_literal_cnt(col, num);
-                dec_box_literal_cnt(box, num);
+                dec_row_literal_cnt(num, row);
+                dec_col_literal_cnt(num, col);
+                dec_box_literal_cnt(num, box);
             }
         }
         return count;
@@ -1407,13 +1378,17 @@ private:
             size_t row = cellInfo.row;
             size_t col = cellInfo.col;
 
-            this->box_nums_[box][num].set(cell);
-            this->row_nums_[row][num].set(col);
-            this->col_nums_[col][num].set(row);
+            assert(!this->row_nums_[num * Rows + row].test(col));
+            assert(!this->col_nums_[num * Cols + col].test(row));
+            assert(!this->box_nums_[num * Boxes + box].test(cell));
 
-            inc_row_literal_cnt(row, num);            
-            inc_col_literal_cnt(col, num);
-            inc_box_literal_cnt(box, num);
+            this->row_nums_[num * Rows + row].set(col);
+            this->col_nums_[num * Cols + col].set(row);
+            this->box_nums_[num * Boxes + box].set(cell);
+
+            inc_row_literal_cnt(num, row);
+            inc_col_literal_cnt(num, col);
+            inc_box_literal_cnt(num, box);
         }
     }
 
@@ -1505,14 +1480,14 @@ public:
                 {
                     size_t literal = (size_t)min_literal_id - RowLiteralFirst;
                     assert(min_literal_id >= RowLiteralFirst);
-                    assert(literal < Rows * Numbers);
-                    row = literal / Numbers;
-                    num = literal % Numbers;
+                    assert(literal < Numbers * Rows);
+                    num = literal / Rows;
+                    row = literal % Rows;
 
-                    //disable_row_literal(row, num);
+                    //disable_row_literal(num, row);
 
-                    size_t col_bits = this->row_nums_[row][num].to_ulong();
-                    assert(this->row_nums_[row][num].count() == get_literal_cnt(min_literal_id));
+                    size_t col_bits = this->row_nums_[num * Rows + row].to_ulong();
+                    assert(this->row_nums_[num * Rows + row].count() == get_literal_cnt(min_literal_id));
                     while (col_bits != 0) {
                         size_t col_bit = BitUtils::ms1b(col_bits);
                         col = BitUtils::bsf(col_bits);
@@ -1550,7 +1525,7 @@ public:
                         col_bits ^= col_bit;
                     }
 
-                    //enable_row_literal(row, num);
+                    //enable_row_literal(num, row);
                     break;
                 }
 
@@ -1558,14 +1533,14 @@ public:
                 {
                     size_t literal = (size_t)min_literal_id - ColLiteralFirst;
                     assert(min_literal_id >= ColLiteralFirst);
-                    assert(literal < Cols * Numbers);
-                    col = literal / Numbers;
-                    num = literal % Numbers;
+                    assert(literal < Numbers * Cols);
+                    num = literal / Cols;
+                    col = literal % Cols;
 
-                    //disable_col_literal(col, num);
+                    //disable_col_literal(num, col);
 
-                    size_t row_bits = this->col_nums_[col][num].to_ulong();
-                    assert(this->col_nums_[col][num].count() == get_literal_cnt(min_literal_id));
+                    size_t row_bits = this->col_nums_[num * Cols + col].to_ulong();
+                    assert(this->col_nums_[num * Cols + col].count() == get_literal_cnt(min_literal_id));
                     while (row_bits != 0) {
                         size_t row_bit = BitUtils::ms1b(row_bits);
                         row = BitUtils::bsf(row_bits);
@@ -1603,7 +1578,7 @@ public:
                         row_bits ^= row_bit;
                     }
 
-                    //enable_col_literal(col, num);
+                    //enable_col_literal(num, col);
                     break;
                 }
 
@@ -1611,14 +1586,14 @@ public:
                 {
                     size_t literal = (size_t)min_literal_id - BoxLiteralFirst;
                     assert(min_literal_id >= BoxLiteralFirst);
-                    assert(literal < Boxes * Numbers);
-                    box = literal / Numbers;
-                    num = literal % Numbers;
+                    assert(literal < Numbers * Boxes);
+                    num = literal / Boxes;
+                    box = literal % Boxes;
 
-                    //disable_box_literal(box, num);
+                    //disable_box_literal(num, box);
 
-                    size_t cell_bits = this->box_nums_[box][num].to_ulong();
-                    assert(this->box_nums_[box][num].count() == get_literal_cnt(min_literal_id));
+                    size_t cell_bits = this->box_nums_[num * Boxes + box].to_ulong();
+                    assert(this->box_nums_[num * Boxes + box].count() == get_literal_cnt(min_literal_id));
                     while (cell_bits != 0) {
                         size_t cell_bit = BitUtils::ms1b(cell_bits);
                         cell = BitUtils::bsf(cell_bits);
@@ -1653,7 +1628,7 @@ public:
                         cell_bits ^= cell_bit;
                     }
 
-                    //enable_box_literal(box, num);
+                    //enable_box_literal(num, box);
                     break;
                 }
 
