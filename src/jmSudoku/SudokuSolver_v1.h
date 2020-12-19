@@ -61,7 +61,7 @@ template <typename SudokuTy>
 class Solver {
 public:
     typedef SudokuTy                            sudoku_type;
-    typedef Solver<SudokuTy>                    slover_type;
+    typedef Solver<SudokuTy>                    solver_type;
     typedef typename SudokuTy::board_type       Board;
     typedef typename SudokuTy::NeighborCells    NeighborCells;
     typedef typename SudokuTy::CellInfo         CellInfo;
@@ -208,24 +208,24 @@ public:
     }
     ~Solver() {}
 
-    static size_t get_num_guesses() { return slover_type::num_guesses; }
-    static size_t get_num_unique_candidate() { return slover_type::num_unique_candidate; }
-    static size_t get_num_failed_return() { return slover_type::num_failed_return; }
+    static size_t get_num_guesses() { return solver_type::num_guesses; }
+    static size_t get_num_unique_candidate() { return solver_type::num_unique_candidate; }
+    static size_t get_num_failed_return() { return solver_type::num_failed_return; }
 
     static size_t get_search_counter() {
-        return (slover_type::num_guesses + slover_type::num_unique_candidate + slover_type::num_failed_return);
+        return (solver_type::num_guesses + solver_type::num_unique_candidate + solver_type::num_failed_return);
     }
 
     static double get_guess_percent() {
-        return calc_percent(slover_type::num_guesses, slover_type::get_search_counter());
+        return calc_percent(solver_type::num_guesses, solver_type::get_search_counter());
     }
 
     static double get_failed_return_percent() {
-        return calc_percent(slover_type::num_failed_return, slover_type::get_search_counter());
+        return calc_percent(solver_type::num_failed_return, solver_type::get_search_counter());
     }
 
     static double get_unique_candidate_percent() {
-        return calc_percent(slover_type::num_unique_candidate, slover_type::get_search_counter());
+        return calc_percent(solver_type::num_unique_candidate, solver_type::get_search_counter());
     }
 
 private:
@@ -1698,41 +1698,35 @@ public:
         return false;
     }
 
-    bool solve(Board & board,
-               double & elapsed_time,
-               bool verbose = true) {
-        if (verbose) {
-            SudokuTy::display_board(board, true);
-        }
-
-        jtest::StopWatch sw;
-        sw.start();
-
+    bool solve(Board & board) {
         this->init_board(board);
-
         bool success = this->solve(board, this->empties_);
+        return success;
+    }
 
-        sw.stop();
-        elapsed_time = sw.getElapsedMillisec();
+    void display_board(Board & board) {
+        SudokuTy::display_board(board, true);
+    }
 
-        if (verbose) {
+    void display_result(Board & board, double elapsed_time,
+                        bool print_answer = true,
+                        bool print_all_answers = true) {
+        if (print_answer) {
             if (kSearchMode > SearchMode::OneAnswer)
                 SudokuTy::display_boards(this->answers_);
             else
                 SudokuTy::display_board(board);
-            printf("elapsed time: %0.3f ms, recur_counter: %" PRIuPTR "\n\n"
-                   "num_guesses: %" PRIuPTR ", num_failed_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
-                   "guess %% = %0.1f %%, failed_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
-                   elapsed_time, slover_type::get_search_counter(),
-                   slover_type::get_num_guesses(),
-                   slover_type::get_num_failed_return(),
-                   slover_type::get_num_unique_candidate(),
-                   slover_type::get_guess_percent(),
-                   slover_type::get_failed_return_percent(),
-                   slover_type::get_unique_candidate_percent());
         }
-
-        return success;
+        printf("elapsed time: %0.3f ms, recur_counter: %" PRIuPTR "\n\n"
+                "num_guesses: %" PRIuPTR ", num_failed_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
+                "guess %% = %0.1f %%, failed_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
+                elapsed_time, solver_type::get_search_counter(),
+                solver_type::get_num_guesses(),
+                solver_type::get_num_failed_return(),
+                solver_type::get_num_unique_candidate(),
+                solver_type::get_guess_percent(),
+                solver_type::get_failed_return_percent(),
+                solver_type::get_unique_candidate_percent());
     }
 };
 

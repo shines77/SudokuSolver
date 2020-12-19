@@ -124,22 +124,36 @@ size_t read_sudoku_board(typename SudokuTy::board_type & board, char line[256])
     return pos;
 }
 
+template <typename SudokuSlover>
+void run_solver_testcase(size_t index)
+{
+    typedef typename SudokuSlover::sudoku_type  SudokuTy;
+    typedef typename SudokuTy::board_type       Board;
+
+    Board board;
+    read_sudoku_board<SudokuTy>(board, index);
+
+    SudokuSlover solver;
+    solver.display_board(board);
+
+    jtest::StopWatch sw;
+    sw.start();
+    bool success = solver.solve(board);
+    sw.stop();
+
+    double elapsed_time = sw.getElapsedMillisec();
+    solver.display_result(board, elapsed_time);
+}
+
 template <typename SudokuTy = Sudoku>
 void run_a_testcase(size_t index)
 {
-    typedef typename SudokuTy::board_type Board;
-
-    double elapsed_time = 0.0;
     if (kEnableDlxV1Solution)
     {
         printf("------------------------------------------\n\n");
         printf("jmSudoku: dlx::v1::Solver - Dancing Links\n\n");
 
-        Board board;
-        read_sudoku_board<SudokuTy>(board, index);
-
-        dlx::v1::Solver<SudokuTy> solver;
-        bool success = solver.solve(board, elapsed_time);
+        run_solver_testcase<dlx::v1::Solver<SudokuTy>>(index);
     }
 
     if (kEnableDlxV2Solution)
@@ -147,11 +161,7 @@ void run_a_testcase(size_t index)
         printf("------------------------------------------\n\n");
         printf("jmSudoku: dlx::v2::Solution - Dancing Links\n\n");
 
-        Board board;
-        read_sudoku_board<SudokuTy>(board, index);
-
-        dlx::v2::Solver<SudokuTy> solver;
-        bool success = solver.solve(board, elapsed_time);
+        run_solver_testcase<dlx::v2::Solver<SudokuTy>>(index);
     }
 
     if (kEnableDlxV3Solution)
@@ -159,11 +169,7 @@ void run_a_testcase(size_t index)
         printf("------------------------------------------\n\n");
         printf("jmSudoku: dlx::v3::Solution - Dancing Links\n\n");
 
-        Board board;
-        read_sudoku_board<SudokuTy>(board, index);
-
-        dlx::v3::Solver<SudokuTy> solver;
-        bool success = solver.solve(board, elapsed_time);
+        run_solver_testcase<dlx::v3::Solver<SudokuTy>>(index);
     }
 
     if (kEnableV1Solution)
@@ -171,28 +177,8 @@ void run_a_testcase(size_t index)
         printf("------------------------------------------\n\n");
         printf("jmSudoku: v1::Solution - dfs\n\n");
 
-        Board board;
-        read_sudoku_board<SudokuTy>(board, index);
-
-        v1::Solver<SudokuTy> solver;
-        bool success = solver.solve(board, elapsed_time);
+        run_solver_testcase<v1::Solver<SudokuTy>>(index);
     }
-
-#if 0
-#ifdef NDEBUG
-    if (kEnableV1Solution)
-    {
-        printf("------------------------------------------\n\n");
-        printf("jmSudoku: v1::Solution - dfs\n\n");
-
-        Board board;
-        read_sudoku_board<SudokuTy>(board, index);
-
-        v1::Solver<SudokuTy> solver;
-        bool success = solver.solve(board, elapsed_time);
-    }
-#endif
-#endif
 
     printf("------------------------------------------\n\n");
 }
@@ -200,7 +186,7 @@ void run_a_testcase(size_t index)
 template <typename SudokuSolver>
 void run_sudoku_test(const char * filename, const char * name)
 {
-    typedef typename SudokuSolver::slover_type  SloverTy;
+    typedef typename SudokuSolver::solver_type  SloverTy;
     typedef typename SudokuSolver::sudoku_type  SudokuTy;
     typedef typename SudokuTy::board_type       Board;
 
@@ -219,6 +205,8 @@ void run_sudoku_test(const char * filename, const char * name)
     try {
         ifs.open(filename, std::ios::in);
         if (ifs.good()) {
+            SudokuSolver solver;
+            jtest::StopWatch sw;
             while (!ifs.eof()) {
                 char line[256];
                 std::memset(line, 0, 16);
@@ -228,9 +216,11 @@ void run_sudoku_test(const char * filename, const char * name)
                 size_t num_grids = read_sudoku_board<SudokuTy>(board, line);
                 // Sudoku::BoardSize = 81
                 if (num_grids >= SudokuTy::BoardSize) {
-                    SudokuSolver solver;
-                    double elapsed_time;
-                    bool success = solver.solve(board, elapsed_time, false);
+                    sw.start();
+                    bool success = solver.solve(board);
+                    sw.stop();
+
+                    double elapsed_time = sw.getElapsedMillisec();
                     total_time += elapsed_time;
                     if (success) {
                         total_guesses += SloverTy::num_guesses;

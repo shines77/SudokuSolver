@@ -530,7 +530,7 @@ template <typename SudokuTy = Sudoku>
 class Solver {
 public:
     typedef SudokuTy                        sudoku_type;
-    typedef DancingLinks<SudokuTy>          slover_type;
+    typedef DancingLinks<SudokuTy>          solver_type;
     typedef typename SudokuTy::board_type   Board;
 
 private:
@@ -542,41 +542,36 @@ public:
     ~Solver() {}
 
 public:
-    bool solve(Board & board,
-               double & elapsed_time,
-               bool verbose = true) {
-        if (verbose) {
-            SudokuTy::display_board(board, true);
-        }
-
-        jtest::StopWatch sw;
-        sw.start();
-
+    bool solve(Board & board) {
         solver_.init(board);
         solver_.build(board);
         bool success = solver_.solve();
+        return success;
+    }
 
-        sw.stop();
-        elapsed_time = sw.getElapsedMillisec();
+    void display_board(Board & board) {
+        SudokuTy::display_board(board, true);
+    }
 
-        if (verbose) {
+    void display_result(Board & board, double elapsed_time,
+                        bool print_answer = true,
+                        bool print_all_answers = true) {
+        if (print_answer) {
             if (kSearchMode > SearchMode::OneAnswer)
                 solver_.display_answers(board);
             else
                 solver_.display_answer(board);
-            printf("elapsed time: %0.3f ms, recur_counter: %" PRIuPTR "\n\n"
-                   "num_guesses: %" PRIuPTR ", num_failed_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
-                   "guess %% = %0.1f %%, failed_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
-                   elapsed_time, DancingLinks<SudokuTy>::get_search_counter(),
-                   DancingLinks<SudokuTy>::get_num_guesses(),
-                   DancingLinks<SudokuTy>::get_num_failed_return(),
-                   DancingLinks<SudokuTy>::get_num_unique_candidate(),
-                   DancingLinks<SudokuTy>::get_guess_percent(),
-                   DancingLinks<SudokuTy>::get_failed_return_percent(),
-                   DancingLinks<SudokuTy>::get_unique_candidate_percent());
         }
-
-        return success;
+        printf("elapsed time: %0.3f ms, recur_counter: %" PRIuPTR "\n\n"
+                "num_guesses: %" PRIuPTR ", num_failed_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
+                "guess %% = %0.1f %%, failed_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
+                elapsed_time, solver_type::get_search_counter(),
+                solver_type::get_num_guesses(),
+                solver_type::get_num_failed_return(),
+                solver_type::get_num_unique_candidate(),
+                solver_type::get_guess_percent(),
+                solver_type::get_failed_return_percent(),
+                solver_type::get_unique_candidate_percent());
     }
 };
 

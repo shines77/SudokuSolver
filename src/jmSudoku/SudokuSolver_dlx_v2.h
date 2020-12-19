@@ -142,6 +142,12 @@ public:
 private:
     node list_[kCapacity];
 
+public:
+    mincol_list() {
+        this->init();
+    }
+    ~mincol_list() {}
+
     void init() {
         for (size_t i = 0; i < MaxColumn; i++) {
             this->list_[i].prev = (short)i;
@@ -150,12 +156,6 @@ private:
             this->list_[i].reserve = 0;
         }
     }
-
-public:
-    mincol_list() {
-        this->init();
-    }
-    ~mincol_list() {}
 
     short begin(size_t col_size) const {
         assert(col_size < MaxColumn);
@@ -303,15 +303,14 @@ private:
 
     unsigned short      col_index_[TotalLiterals + 1];
 
-    unsigned short rows_[TotalSize + 1];
-    unsigned short cols_[TotalSize + 1];
-    unsigned short numbers_[TotalSize + 1];
+    unsigned short      rows_[TotalSize + 1];
+    unsigned short      cols_[TotalSize + 1];
+    unsigned short      numbers_[TotalSize + 1];
 
     std::vector<std::vector<int>> answers_;
 
 public:
-    DancingLinks(size_t nodes)
-        : list_(nodes), last_idx_(0) {
+    DancingLinks(size_t nodes) : list_(nodes), last_idx_(0) {
     }
 
     ~DancingLinks() {}
@@ -474,6 +473,8 @@ public:
         for (int i = 0; i <= cols; i++) {
             col_size_[i] = 0;
         }
+
+        mincol_list_.init();
 
         this->bit_rows.reset();
         this->bit_cols.reset();
@@ -731,7 +732,7 @@ template <typename SudokuTy = Sudoku>
 class Solver {
 public:
     typedef SudokuTy                        sudoku_type;
-    typedef DancingLinks<SudokuTy>          slover_type;
+    typedef DancingLinks<SudokuTy>          solver_type;
     typedef typename SudokuTy::board_type   Board;
 
 private:
@@ -743,41 +744,36 @@ public:
     ~Solver() {}
 
 public:
-    bool solve(Board & board,
-               double & elapsed_time,
-               bool verbose = true) {
-        if (verbose) {
-            SudokuTy::display_board(board, true);
-        }
-
-        jtest::StopWatch sw;
-        sw.start();
-
+    bool solve(Board & board) {
         solver_.init(board);
         solver_.build(board);
         bool success = solver_.solve();
+        return success;
+    }
 
-        sw.stop();
-        elapsed_time = sw.getElapsedMillisec();
+    void display_board(Board & board) {
+        SudokuTy::display_board(board, true);
+    }
 
-        if (verbose) {
+    void display_result(Board & board, double elapsed_time,
+                        bool print_answer = true,
+                        bool print_all_answers = true) {
+        if (print_answer) {
             if (kSearchMode > SearchMode::OneAnswer)
                 solver_.display_answers(board);
             else
                 solver_.display_answer(board);
-            printf("elapsed time: %0.3f ms, recur_counter: %" PRIuPTR "\n\n"
-                   "num_guesses: %" PRIuPTR ", num_failed_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
-                   "guess %% = %0.1f %%, failed_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
-                   elapsed_time, DancingLinks<SudokuTy>::get_search_counter(),
-                   DancingLinks<SudokuTy>::get_num_guesses(),
-                   DancingLinks<SudokuTy>::get_num_failed_return(),
-                   DancingLinks<SudokuTy>::get_num_unique_candidate(),
-                   DancingLinks<SudokuTy>::get_guess_percent(),
-                   DancingLinks<SudokuTy>::get_failed_return_percent(),
-                   DancingLinks<SudokuTy>::get_unique_candidate_percent());
         }
-
-        return success;
+        printf("elapsed time: %0.3f ms, recur_counter: %" PRIuPTR "\n\n"
+                "num_guesses: %" PRIuPTR ", num_failed_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
+                "guess %% = %0.1f %%, failed_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
+                elapsed_time, solver_type::get_search_counter(),
+                solver_type::get_num_guesses(),
+                solver_type::get_num_failed_return(),
+                solver_type::get_num_unique_candidate(),
+                solver_type::get_guess_percent(),
+                solver_type::get_failed_return_percent(),
+                solver_type::get_unique_candidate_percent());
     }
 };
 
