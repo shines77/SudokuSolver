@@ -399,15 +399,14 @@ struct BasicSudoku {
 
     static const size_t BoxSize = BoxCellsX * BoxCellsY;
     static const size_t BoardSize = Rows * Cols;
-    static const size_t TotalSize = BoxSize * Boxes * Numbers;
+    static const size_t TotalSize = Rows * Cols * Numbers;
+    static const size_t TotalSize2 = Boxes * BoxSize * Numbers;
 
     static const size_t Neighbors = (Cols - 1) + (Rows - 1) +
                                     (BoxSize - (BoxCellsX - 1) - (BoxCellsY - 1) - 1);
 
     static const size_t MaxEffectBox = (BoxCountX - 1) + (BoxCountY -1) + 1;
     static const size_t MaxEffectLength = MaxEffectBox * BoxSize;
-
-    static const size_t TotalSize2 = Rows * Cols * Numbers;
 
     static const size_t TotalCellLiterals = Rows * Cols;
     static const size_t TotalRowLiterals = Rows * Numbers;
