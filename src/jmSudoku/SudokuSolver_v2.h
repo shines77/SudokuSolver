@@ -1187,7 +1187,7 @@ private:
         size_t col_idx = num * Cols + col;
         size_t box_idx = num * Boxes + box;
 
-        //assert(this->num_cells_[num].test(pos));
+        assert(this->num_cells_[num].test(pos));
         assert(this->cell_nums_[pos].test(num));
         assert(this->row_nums_[row_idx].test(col));
         assert(this->col_nums_[col_idx].test(row));
@@ -1207,7 +1207,7 @@ private:
             col_idx = _num * Cols + col;
             box_idx = _num * Boxes + box;
 
-            //assert(this->num_cells_[_num].test(pos));
+            assert(this->num_cells_[_num].test(pos));
             assert(this->cell_nums_[pos].test(_num));
             assert(this->row_nums_[row_idx].test(col));
             assert(this->col_nums_[col_idx].test(row));
@@ -1243,7 +1243,7 @@ private:
         disable_col_literal(col_idx);
         disable_box_literal(box_idx);
 
-        //assert(this->num_cells_[num].test(pos));
+        assert(this->num_cells_[num].test(pos));
         assert(this->cell_nums_[pos].test(num));
         assert(this->row_nums_[row_idx].test(col));
         assert(this->col_nums_[col_idx].test(row));
