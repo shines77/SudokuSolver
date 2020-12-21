@@ -23,8 +23,6 @@
 
 #include "BitSet.h"
 
-using namespace jstd;
-
 #define SEARCH_MODE_ONE_ANSWER              0
 #define SEARCH_MODE_MORE_THAN_ONE_ANSWER    1
 #define SEARCH_MODE_ALL_ANSWERS             2
@@ -428,6 +426,8 @@ struct BasicSudoku {
     static const size_t kAllBoxesBit = (size_t(1) << Boxes) - 1;
     static const size_t kAllNumbersBit = (size_t(1) << Numbers) - 1;
 
+    static const bool kAllDimIsSame = ((Numbers == BoxSize) && (Rows == Cols) && (Numbers == Rows));
+
     typedef BasicBoard<BoardSize>   board_type;
 
 #pragma pack(push, 1)
@@ -462,14 +462,19 @@ struct BasicSudoku {
 
 #pragma pack(pop)
 
+    typedef SmallBitSet<BoardSize>              BitMask;
+    typedef SmallBitSet2D<BoardSize, BoardSize> BitMaskTable;
+
     static bool is_inited;
 
-    static CellInfo * cell_info;
-    static BoxesInfo * boxes_info;
-    static NeighborCells * neighbor_cells;
+    static CellInfo *       cell_info;
+    static BoxesInfo *      boxes_info;
+    static NeighborCells *  neighbor_cells;
+    static BitMaskTable     neighbors_mask_tbl;
 
     static void initialize() {
         if (!is_inited) {
+            neighbors_mask_tbl.reset();
             make_cell_info();
             make_boxes_info();
             make_neighbor_cells();
@@ -645,6 +650,16 @@ struct BasicSudoku {
         return index;
     }
 
+    static void make_effect_mask(size_t pos) {
+        NeighborCells * list = &neighbor_cells[pos];
+        SmallBitSet<BoardSize> masks;
+        for (size_t i = 0; i < Neighbors; i++) {
+            size_t cell = list->cells[i];
+            masks.set(cell);
+        }
+        neighbors_mask_tbl[pos] = masks;
+    }
+
     static void make_neighbor_cells() {
         if (neighbor_cells == nullptr) {
             neighbor_cells = new NeighborCells[BoardSize];
@@ -657,6 +672,7 @@ struct BasicSudoku {
                     assert(neighbors == Neighbors);
                     // Sort the cells for cache friendly
                     std::sort(&neighbor_cells[pos].cells[0], &neighbor_cells[pos].cells[Neighbors]);
+                    make_effect_mask(pos);
                     pos++;
                 }
             }
@@ -796,6 +812,15 @@ typename BasicSudoku<nBoxCellsX, nBoxCellsY,
     BasicSudoku<nBoxCellsX, nBoxCellsY,
                 nBoxCountX, nBoxCountY,
                 nMinNumber, nMaxNumber>::neighbor_cells = nullptr;
+
+template <size_t nBoxCellsX, size_t nBoxCellsY,
+          size_t nBoxCountX, size_t nBoxCountY,
+          size_t nMinNumber, size_t nMaxNumber>
+    SmallBitSet2D<(nBoxCellsX * nBoxCountX) * (nBoxCellsY * nBoxCountY),
+                  (nBoxCellsX * nBoxCountX) * (nBoxCellsY * nBoxCountY)>
+    BasicSudoku<nBoxCellsX, nBoxCellsY,
+                nBoxCountX, nBoxCountY,
+                nMinNumber, nMaxNumber>::neighbors_mask_tbl;
 
 // Standard sudoku definition
 typedef BasicSudoku<3, 3, 3, 3, 1, 9> Sudoku;

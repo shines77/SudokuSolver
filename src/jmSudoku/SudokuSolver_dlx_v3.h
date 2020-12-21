@@ -27,8 +27,8 @@
 #endif // _MSC_VER
 
 #include "Sudoku.h"
+#include "BitSet.h"
 #include "StopWatch.h"
-#include "BitUtils.h"
 
 using namespace jstd;
 

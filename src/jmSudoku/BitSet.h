@@ -22,8 +22,9 @@
 #include <cassert>
 
 #include "BitUtils.h"
+#include "SudokuTables.h"
 
-namespace jstd {
+namespace jmSudoku {
 
 struct dont_init_t {};
 
@@ -114,9 +115,10 @@ public:
           char * data()        { return (char *)      this->array_; }
     const char * data() const  { return (const char *)this->array_; }
 
-    size_t total_bytes() const { return kBytes; }
-    size_t unit_size() const { return kUnits; }
-    size_t per_unit_bytes() const { return sizeof(unit_type); }
+    size_t total_bytes() const { return kBytes;     }
+    size_t unit_size() const   { return kUnits;     }
+    size_t unit_bits() const   { return kUnitBits;  }
+    size_t unit_bytes() const  { return kUnitBytes; }
 
     unit_type array(size_t index) const {
         assert(index < kUnits);
@@ -384,6 +386,27 @@ public:
         return (*this);
     }
 
+    this_type & set(size_t index, size_t pos) {
+        assert(index < kUnits);
+        assert(pos < kUnitBits);
+        this->array_[index] |= unit_type(size_t(1) << pos);
+        return (*this);
+    }
+
+    this_type & set_bit(size_t index, size_t bit) {
+        assert(index < kUnits);
+        this->array_[index] |= unit_type(bit);
+        return (*this);
+    }
+
+    this_type & set(size_t index, size_t pos, bool value) {
+        if (value)
+            this->set(index, pos);
+        else
+            this->reset(index, pos);
+        return (*this);
+    }
+
     this_type & reset() noexcept {
         if (kUnits <= 8) {
             for (size_t i = 0; i < kUnits; i++) {
@@ -409,6 +432,19 @@ public:
         }
         return (*this);
     }
+
+    this_type & reset(size_t index, size_t pos) {
+        assert(index < kUnits);
+        assert(pos < kUnitBits);
+        this->array_[index] ^= unit_type(size_t(1) << pos);
+        return (*this);
+    }
+
+    this_type & reset_bit(size_t index, size_t bit) {
+        assert(index < kUnits);
+        this->array_[index] ^= unit_type(bit);
+        return (*this);
+    }
 #else
     this_type & reset(size_t pos) {
         assert(pos < Bits);
@@ -420,6 +456,19 @@ public:
             size_t shift = pos % kUnitBits;
             this->array_[index] &= unit_type(~(size_t(1) << shift));
         }
+        return (*this);
+    }
+
+    this_type & reset(size_t index, size_t pos) {
+        assert(index < kUnits);
+        assert(pos < kUnitBits);
+        this->array_[index] &= unit_type(~(size_t(1) << pos));
+        return (*this);
+    }
+
+    this_type & reset_bit(size_t index, size_t bit) {
+        assert(index < kUnits);
+        this->array_[index] &= unit_type(~bit);
         return (*this);
     }
 #endif
@@ -453,6 +502,19 @@ public:
         return (*this);
     }
 
+    this_type & flip(size_t index, size_t pos) {
+        assert(index < kUnits);
+        assert(pos < kUnitBits);
+        this->array_[index] ^= unit_type(~(size_t(1) << pos));
+        return (*this);
+    }
+
+    this_type & flip_bit(size_t index, size_t bit) {
+        assert(index < kUnits);
+        this->array_[index] ^= unit_type(~bit);
+        return (*this);
+    }
+
     this_type & trim() noexcept {
         if (kRestBits != 0) {
 		    this->array_[kUnits - 1] &= kTrimMask;
@@ -472,20 +534,41 @@ public:
         }
     }
 
+    bool test(size_t index, size_t pos) const {
+        assert(index < kUnits);
+        assert(pos < kUnitBits);
+        return ((this->array_[index] & unit_type(size_t(1) << pos)) != 0);
+    }
+
+    bool test_bit(size_t index, size_t bit) const {
+        assert(index < kUnits);
+        return ((this->array_[index] & unit_type(bit)) != 0);
+    }
+
     size_t value(size_t pos) const {
         assert(pos < Bits);
         if (Bits <= kUnitBits) {
-            return (this->array_[0]);
+            return size_t(this->array_[0]);
         }
         else {
             size_t index = pos / kUnitBits;
-            return (this->array_[index]);
+            return size_t(this->array_[index]);
         }
+    }
+
+    unit_type get_uint(size_t index) const {
+        assert(index < kUnits);
+        return this->array_[index];
+    }
+
+    void set_uint(size_t index, unit_type value) const {
+        assert(index < kUnits);
+        return this->array_[index] = value;
     }
 
     bool any() const noexcept {
         for (size_t i = 0; i < kUnits - 1; i++) {
-            size_t unit = this->array_[i];
+            unit_type unit = this->array_[i];
             if (unit != 0) {
                 return true;
             }
@@ -498,7 +581,7 @@ public:
         return !(this->any());
 #else
         for (size_t i = 0; i < kUnits - 1; i++) {
-            size_t unit = this->array_[i];
+            unit_type unit = this->array_[i];
             if (unit != 0) {
                 return false;
             }
@@ -509,13 +592,13 @@ public:
 
     bool all() const noexcept {
         for (size_t i = 0; i < kUnits - 1; i++) {
-            size_t unit = this->array_[i];
+            unit_type unit = this->array_[i];
             if (unit != kFullMask) {
                 return false;
             }
         }
         if (kRestBits != 0) {
-            size_t unit = this->array_[kUnits - 1] & kTrimMask;
+            unit_type unit = this->array_[kUnits - 1] & kTrimMask;
             return (unit == kTrimMask);
         }
         else {
@@ -525,9 +608,13 @@ public:
 
     size_t bsf() const noexcept {
         for (size_t i = 0; i < kUnits; i++) {
-            size_t unit = this->array_[i];
+            unit_type unit = this->array_[i];
             if (unit != 0) {
-                unsigned int index = jstd::BitUtils::bsf(unit);
+                unsigned int index;
+                if (sizeof(unit_type) == sizeof(uint32_t))
+                    index = jstd::BitUtils::bsf32((uint32_t)unit);
+                else
+                    index = jstd::BitUtils::bsf64(unit);
                 return (i * kUnitBits + index);
             }
         }
@@ -536,13 +623,34 @@ public:
 
     size_t bsr() const noexcept {
         for (ptrdiff_t i = kUnits - 1; i >= 0; i--) {
-            size_t unit = this->array_[i];
+            unit_type unit = this->array_[i];
             if (unit != 0) {
-                unsigned int index = jstd::BitUtils::bsr(unit);
+                unsigned int index;
+                if (sizeof(unit_type) == sizeof(uint32_t))
+                    index = jstd::BitUtils::bsr32((uint32_t)unit);
+                else
+                    index = jstd::BitUtils::bsr64(unit);
                 return size_t(i * kUnitBits + index);
             }
         }
         return Bits;
+    }
+
+    unit_type ms1b(size_t & index) const noexcept {
+        for (size_t i = 0; i < kUnits; i++) {
+            unit_type unit = this->array_[i];
+            if (unit != 0) {
+                unit_type bit;
+                if (sizeof(unit_type) == sizeof(uint32_t))
+                    bit = (unit_type)jstd::BitUtils::ms1b32((uint32_t)unit);
+                else
+                    bit = (unit_type)jstd::BitUtils::ms1b64(unit);
+                index = i;
+                return bit;
+            }
+        }
+        index = -1;
+        return unit_type(0);
     }
 
     size_t count() const noexcept {
