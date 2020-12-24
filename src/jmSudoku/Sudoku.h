@@ -470,6 +470,7 @@ struct BasicSudoku {
     static CellInfo *       cell_info;
     static BoxesInfo *      boxes_info;
     static NeighborCells *  neighbor_cells;
+    static NeighborCells *  ordered_neighbor_cells;
     static BitMaskTable     neighbors_mask_tbl;
 
     static void initialize() {
@@ -495,6 +496,10 @@ struct BasicSudoku {
             if (neighbor_cells) {
                 delete[] neighbor_cells;
                 neighbor_cells = nullptr;
+            }
+            if (ordered_neighbor_cells) {
+                delete[] ordered_neighbor_cells;
+                ordered_neighbor_cells = nullptr;
             }
             is_inited = false;
         }
@@ -663,6 +668,7 @@ struct BasicSudoku {
     static void make_neighbor_cells() {
         if (neighbor_cells == nullptr) {
             neighbor_cells = new NeighborCells[BoardSize];
+            ordered_neighbor_cells = new NeighborCells[BoardSize];
 
             size_t pos = 0;
             for (size_t row = 0; row < Rows; row++) {
@@ -670,6 +676,10 @@ struct BasicSudoku {
                     NeighborCells * list = &neighbor_cells[pos];
                     size_t neighbors = get_neighbor_cells_list(row, col, list);
                     assert(neighbors == Neighbors);
+                    NeighborCells * ordered_list = &ordered_neighbor_cells[pos];
+                    for (size_t cell = 0; cell < Neighbors; cell++) {
+                        ordered_list->cells[cell] = list->cells[cell];
+                    }
                     // Sort the cells for cache friendly
                     std::sort(&neighbor_cells[pos].cells[0], &neighbor_cells[pos].cells[Neighbors]);
                     make_effect_mask(pos);
@@ -678,6 +688,7 @@ struct BasicSudoku {
             }
 
             // print_neighbor_cells();
+            // print_ordered_neighbor_cells();
         }
     }
 
@@ -690,6 +701,24 @@ struct BasicSudoku {
                     printf("%2u, ", (uint32_t)neighbor_cells[pos].cells[cell]);
                 else
                     printf("%2u ", (uint32_t)neighbor_cells[pos].cells[cell]);
+            }
+            if (pos < (BoardSize - 1))
+                printf("},  // %d\n", (int)pos);
+            else
+                printf("}   // %d\n", (int)pos);
+        }
+        printf("    };\n\n");
+    }
+
+    static void print_ordered_neighbor_cells() {
+        printf("    const uint8_t ordered_neighbor_cells[%d][%d] = {\n", (int)BoardSize, (int)Neighbors);
+        for (size_t pos = 0; pos < BoardSize; pos++) {
+            printf("        { ");
+            for (size_t cell = 0; cell < Neighbors; cell++) {
+                if (cell < Neighbors - 1)
+                    printf("%2u, ", (uint32_t)ordered_neighbor_cells[pos].cells[cell]);
+                else
+                    printf("%2u ", (uint32_t)ordered_neighbor_cells[pos].cells[cell]);
             }
             if (pos < (BoardSize - 1))
                 printf("},  // %d\n", (int)pos);
@@ -812,6 +841,16 @@ typename BasicSudoku<nBoxCellsX, nBoxCellsY,
     BasicSudoku<nBoxCellsX, nBoxCellsY,
                 nBoxCountX, nBoxCountY,
                 nMinNumber, nMaxNumber>::neighbor_cells = nullptr;
+
+template <size_t nBoxCellsX, size_t nBoxCellsY,
+          size_t nBoxCountX, size_t nBoxCountY,
+          size_t nMinNumber, size_t nMaxNumber>
+typename BasicSudoku<nBoxCellsX, nBoxCellsY,
+                     nBoxCountX, nBoxCountY,
+                     nMinNumber, nMaxNumber>::NeighborCells *
+    BasicSudoku<nBoxCellsX, nBoxCellsY,
+                nBoxCountX, nBoxCountY,
+                nMinNumber, nMaxNumber>::ordered_neighbor_cells = nullptr;
 
 template <size_t nBoxCellsX, size_t nBoxCellsY,
           size_t nBoxCountX, size_t nBoxCountY,

@@ -43,6 +43,15 @@
     <ClInclude Include="..\..\..\src\jmSudoku\SudokuTables.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v3.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jmSudoku\BitVec.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jmSudoku\msvc_x86intrin.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\jmSudoku\jmSudokuMain.cpp">

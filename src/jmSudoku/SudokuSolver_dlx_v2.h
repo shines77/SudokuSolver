@@ -324,20 +324,20 @@ public:
     static size_t get_num_unique_candidate() { return DancingLinks::num_unique_candidate; }
     static size_t get_num_failed_return() { return DancingLinks::num_failed_return; }
 
-    static size_t get_search_counter() {
+    static size_t get_total_search_counter() {
         return (DancingLinks::num_guesses + DancingLinks::num_unique_candidate + DancingLinks::num_failed_return);
     }
 
     static double get_guess_percent() {
-        return calc_percent(DancingLinks::num_guesses, DancingLinks::get_search_counter());
+        return calc_percent(DancingLinks::num_guesses, DancingLinks::get_total_search_counter());
     }
 
     static double get_failed_return_percent() {
-        return calc_percent(DancingLinks::num_failed_return, DancingLinks::get_search_counter());
+        return calc_percent(DancingLinks::num_failed_return, DancingLinks::get_total_search_counter());
     }
 
     static double get_unique_candidate_percent() {
-        return calc_percent(DancingLinks::num_unique_candidate, DancingLinks::get_search_counter());
+        return calc_percent(DancingLinks::num_unique_candidate, DancingLinks::get_total_search_counter());
     }
 
 private:
@@ -768,7 +768,7 @@ public:
         printf("elapsed time: %0.3f ms, recur_counter: %" PRIuPTR "\n\n"
                 "num_guesses: %" PRIuPTR ", num_failed_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
                 "guess %% = %0.1f %%, failed_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
-                elapsed_time, solver_type::get_search_counter(),
+                elapsed_time, solver_type::get_total_search_counter(),
                 solver_type::get_num_guesses(),
                 solver_type::get_num_failed_return(),
                 solver_type::get_num_unique_candidate(),

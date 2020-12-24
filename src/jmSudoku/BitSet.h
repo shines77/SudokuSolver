@@ -612,9 +612,9 @@ public:
             if (unit != 0) {
                 unsigned int index;
                 if (sizeof(unit_type) == sizeof(uint32_t))
-                    index = jstd::BitUtils::bsf32((uint32_t)unit);
+                    index = BitUtils::bsf32((uint32_t)unit);
                 else
-                    index = jstd::BitUtils::bsf64(unit);
+                    index = BitUtils::bsf64(unit);
                 return (i * kUnitBits + index);
             }
         }
@@ -627,24 +627,24 @@ public:
             if (unit != 0) {
                 unsigned int index;
                 if (sizeof(unit_type) == sizeof(uint32_t))
-                    index = jstd::BitUtils::bsr32((uint32_t)unit);
+                    index = BitUtils::bsr32((uint32_t)unit);
                 else
-                    index = jstd::BitUtils::bsr64(unit);
+                    index = BitUtils::bsr64(unit);
                 return size_t(i * kUnitBits + index);
             }
         }
         return Bits;
     }
 
-    unit_type ms1b(size_t & index) const noexcept {
+    unit_type ls1b(size_t & index) const noexcept {
         for (size_t i = 0; i < kUnits; i++) {
             unit_type unit = this->array_[i];
             if (unit != 0) {
                 unit_type bit;
                 if (sizeof(unit_type) == sizeof(uint32_t))
-                    bit = (unit_type)jstd::BitUtils::ms1b32((uint32_t)unit);
+                    bit = (unit_type)BitUtils::ls1b32((uint32_t)unit);
                 else
-                    bit = (unit_type)jstd::BitUtils::ms1b64(unit);
+                    bit = (unit_type)BitUtils::ls1b64(unit);
                 index = i;
                 return bit;
             }
@@ -657,7 +657,7 @@ public:
         size_t total_popcnt = 0;
         for (size_t i = 0; i < kUnits; i++) {
             size_t unit = this->array_[i];
-            unsigned int popcnt = jstd::BitUtils::popcnt(unit);
+            unsigned int popcnt = BitUtils::popcnt(unit);
             total_popcnt += popcnt;
         }
         return total_popcnt;

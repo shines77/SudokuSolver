@@ -32,8 +32,6 @@
 #include "BitSet.h"
 #include "BitUtils.h"
 
-using namespace jstd;
-
 /************************************************
 
 #define SEARCH_MODE_ONE_ANSWER              0
@@ -214,20 +212,20 @@ public:
     static size_t get_num_unique_candidate() { return solver_type::num_unique_candidate; }
     static size_t get_num_failed_return() { return solver_type::num_failed_return; }
 
-    static size_t get_search_counter() {
+    static size_t get_total_search_counter() {
         return (solver_type::num_guesses + solver_type::num_unique_candidate + solver_type::num_failed_return);
     }
 
     static double get_guess_percent() {
-        return calc_percent(solver_type::num_guesses, solver_type::get_search_counter());
+        return calc_percent(solver_type::num_guesses, solver_type::get_total_search_counter());
     }
 
     static double get_failed_return_percent() {
-        return calc_percent(solver_type::num_failed_return, solver_type::get_search_counter());
+        return calc_percent(solver_type::num_failed_return, solver_type::get_total_search_counter());
     }
 
     static double get_unique_candidate_percent() {
-        return calc_percent(solver_type::num_unique_candidate, solver_type::get_search_counter());
+        return calc_percent(solver_type::num_unique_candidate, solver_type::get_total_search_counter());
     }
 
 private:
@@ -1241,7 +1239,7 @@ private:
 
         size_t num_bits = this->cell_nums_[pos].to_ulong();
         while (num_bits != 0) {
-            size_t num_bit = BitUtils::ms1b(num_bits);
+            size_t num_bit = BitUtils::ls1b(num_bits);
             size_t _num = BitUtils::bsf(num_bit);
 
             row_idx = _num * Rows + row;
@@ -1301,7 +1299,7 @@ private:
         uint32_t n_num_bit = 1u << num;
         num_bits ^= (size_t)n_num_bit;
         while (num_bits != 0) {
-            size_t num_bit = BitUtils::ms1b(num_bits);
+            size_t num_bit = BitUtils::ls1b(num_bits);
             size_t _num = BitUtils::bsf(num_bit);
 
             row_idx = _num * Rows + row;
@@ -1352,7 +1350,7 @@ private:
 
         size_t num_bits = save_bits.to_ulong();
         while (num_bits != 0) {
-            size_t num_bit = BitUtils::ms1b(num_bits);
+            size_t num_bit = BitUtils::ls1b(num_bits);
             size_t _num = BitUtils::bsf(num_bit);
 
             row_idx = _num * Rows + row;
@@ -1502,7 +1500,7 @@ public:
                     size_t num_bits = this->cell_nums_[pos].to_ulong();
                     assert(this->cell_nums_[pos].count() == get_literal_cnt(min_literal_id));
                     while (num_bits != 0) {
-                        size_t num_bit = BitUtils::ms1b(num_bits);
+                        size_t num_bit = BitUtils::ls1b(num_bits);
                         num = BitUtils::bsf(num_bit);
 
                         size_t effect_count = doFillNum(empties, pos, row, col,
@@ -1543,7 +1541,7 @@ public:
                     size_t col_bits = this->row_nums_[num * Rows + row].to_ulong();
                     assert(this->row_nums_[num * Rows + row].count() == get_literal_cnt(min_literal_id));
                     while (col_bits != 0) {
-                        size_t col_bit = BitUtils::ms1b(col_bits);
+                        size_t col_bit = BitUtils::ls1b(col_bits);
                         col = BitUtils::bsf(col_bits);
                         pos = row * Cols + col;
 #if 0
@@ -1596,7 +1594,7 @@ public:
                     size_t row_bits = this->col_nums_[num * Cols + col].to_ulong();
                     assert(this->col_nums_[num * Cols + col].count() == get_literal_cnt(min_literal_id));
                     while (row_bits != 0) {
-                        size_t row_bit = BitUtils::ms1b(row_bits);
+                        size_t row_bit = BitUtils::ls1b(row_bits);
                         row = BitUtils::bsf(row_bits);
                         pos = row * Cols + col;
 #if 0
@@ -1649,7 +1647,7 @@ public:
                     size_t cell_bits = this->box_nums_[num * Boxes + box].to_ulong();
                     assert(this->box_nums_[num * Boxes + box].count() == get_literal_cnt(min_literal_id));
                     while (cell_bits != 0) {
-                        size_t cell_bit = BitUtils::ms1b(cell_bits);
+                        size_t cell_bit = BitUtils::ls1b(cell_bits);
                         cell = BitUtils::bsf(cell_bits);
 #if 0
                         row = (box / BoxCountX) * BoxCellsY + (cell / BoxCellsX);
@@ -1720,7 +1718,7 @@ public:
         printf("elapsed time: %0.3f ms, recur_counter: %" PRIuPTR "\n\n"
                 "num_guesses: %" PRIuPTR ", num_failed_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
                 "guess %% = %0.1f %%, failed_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
-                elapsed_time, solver_type::get_search_counter(),
+                elapsed_time, solver_type::get_total_search_counter(),
                 solver_type::get_num_guesses(),
                 solver_type::get_num_failed_return(),
                 solver_type::get_num_unique_candidate(),

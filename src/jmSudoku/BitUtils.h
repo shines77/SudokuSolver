@@ -49,7 +49,7 @@
     #endif
 #endif // (_MSC_VER && _MSC_VER >= 1500)
 
-namespace jstd {
+namespace jmSudoku {
 
 #if (USE_STD_INT == 0)
 #if (defined(_MSC_VER) && (_MSC_VER >= 1500)) || defined(__MINGW32__) || defined(__CYGWIN__)
@@ -178,19 +178,23 @@ struct BitUtils {
 #endif
 
     //
-    // The most significant bit
+    // The least significant bit (LSB)
     //
-    static inline uint32_t ms1b32(uint32_t x) {
+    static inline uint32_t ls1b32(uint32_t x) {
         return (x & (uint32_t)-x);
     }
 
-    static inline uint64_t ms1b64(uint64_t x) {
+    static inline uint64_t ls1b64(uint64_t x) {
         return (x & (uint64_t)-x);
     }
 
-    static inline size_t ms1b(size_t x) {
+    static inline size_t ls1b(size_t x) {
         return (x & (size_t)-x);
     }
+
+    //
+    // The most significant bit (MSB)
+    //
 
 #ifdef _MSC_VER
 #pragma warning (pop)
@@ -371,7 +375,7 @@ struct BitUtils {
     }
 };
 
-} // namespace jstd
+} // namespace jmSudoku
 
 #undef JSTD_IS_X86
 #undef JSTD_IS_X86_32

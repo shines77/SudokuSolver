@@ -160,6 +160,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\..\src\jmSudoku\BitSet.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\BitUtils.h" />
+    <ClInclude Include="..\..\..\src\jmSudoku\BitVec.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\CPUWarmUp.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\StopWatch.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\Sudoku.h" />
@@ -168,8 +169,10 @@
     <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_dlx_v3.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v1.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v2.h" />
+    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v3.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\SudokuTables.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\TestCase.h" />
+    <ClInclude Include="..\..\..\src\jmSudoku\msvc_x86intrin.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\jmSudoku\jmSudokuMain.cpp" />
