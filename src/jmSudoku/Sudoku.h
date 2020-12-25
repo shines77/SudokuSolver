@@ -866,8 +866,9 @@ typename BasicSudoku<nBoxCellsX, nBoxCellsY,
 template <size_t nBoxCellsX, size_t nBoxCellsY,
           size_t nBoxCountX, size_t nBoxCountY,
           size_t nMinNumber, size_t nMaxNumber>
-    SmallBitSet2D<(nBoxCellsX * nBoxCountX) * (nBoxCellsY * nBoxCountY),
-                  (nBoxCellsX * nBoxCountX) * (nBoxCellsY * nBoxCountY)>
+typename BasicSudoku<nBoxCellsX, nBoxCellsY,
+                     nBoxCountX, nBoxCountY,
+                     nMinNumber, nMaxNumber>::BitMaskTable
     BasicSudoku<nBoxCellsX, nBoxCellsY,
                 nBoxCountX, nBoxCountY,
                 nMinNumber, nMaxNumber>::neighbors_mask_tbl;
