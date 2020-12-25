@@ -29,8 +29,9 @@
 
 #include "Sudoku.h"
 #include "StopWatch.h"
-#include "BitSet.h"
 #include "BitUtils.h"
+#include "BitSet.h"
+#include "BitMatrix.h"
 
 /************************************************
 

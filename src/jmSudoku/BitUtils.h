@@ -1,6 +1,6 @@
 
-#ifndef JSTD_SUPPORT_BITSCAN_H
-#define JSTD_SUPPORT_BITSCAN_H
+#ifndef JSTD_BITSCAN_H
+#define JSTD_BITSCAN_H
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1020)
 #pragma once
@@ -178,7 +178,7 @@ struct BitUtils {
 #endif
 
     //
-    // The least significant bit (LSB)
+    // The least significant bit 1 (LSB)
     //
     static inline uint32_t ls1b32(uint32_t x) {
         return (x & (uint32_t)-x);
@@ -193,7 +193,7 @@ struct BitUtils {
     }
 
     //
-    // The most significant bit (MSB)
+    // The most significant bit 1 (MSB)
     //
 
 #ifdef _MSC_VER
@@ -382,4 +382,4 @@ struct BitUtils {
 #undef JSTD_IS_X86_64
 #undef JSTD_WORD_SIZE
 
-#endif // JSTD_SUPPORT_BITSCAN_H
+#endif // JSTD_BITSCAN_H

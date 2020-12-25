@@ -1,6 +1,6 @@
 
-#ifndef JM_SUDOKU_SOLVER_V2_H
-#define JM_SUDOKU_SOLVER_V2_H
+#ifndef JM_SUDOKU_SOLVER_V2A_H
+#define JM_SUDOKU_SOLVER_V2A_H
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1020)
 #pragma once
@@ -41,20 +41,20 @@
 
 ************************************************/
 
-#define V2_SEARCH_MODE          SEARCH_MODE_ONE_ANSWER
+#define V2A_SEARCH_MODE         SEARCH_MODE_ONE_ANSWER
 
-#define V2_LITERAL_ORDER_MODE   0
+#define V2A_LITERAL_ORDER_MODE  0
 
 #ifdef _MSC_VER
-#define V2_USE_STD_BITSET       0
+#define V2A_USE_STD_BITSET      0
 #else
-#define V2_USE_STD_BITSET       0
+#define V2A_USE_STD_BITSET      0
 #endif
 
 namespace jmSudoku {
-namespace v2 {
+namespace v2a {
 
-static const size_t kSearchMode = V2_SEARCH_MODE;
+static const size_t kSearchMode = V2A_SEARCH_MODE;
 
 template <typename SudokuTy>
 class Solver {
@@ -95,7 +95,7 @@ public:
     static const size_t TotalLiterals =
         TotalCellLiterals + TotalRowLiterals + TotalColLiterals + TotalBoxLiterals;
 
-#if (V2_LITERAL_ORDER_MODE == 0)
+#if (V2A_LITERAL_ORDER_MODE == 0)
     static const size_t LiteralFirst     = 0;
     static const size_t CellLiteralFirst = LiteralFirst;
     static const size_t RowLiteralFirst  = CellLiteralFirst + TotalCellLiterals;
@@ -119,7 +119,7 @@ public:
     static const size_t BoxLiteralLast   = RowLiteralFirst;
     static const size_t RowLiteralLast   = ColLiteralFirst;
     static const size_t ColLiteralLast   = LiteralLast;
-#endif // (V2_LITERAL_ORDER_MODE == 0)
+#endif // (V2A_LITERAL_ORDER_MODE == 0)
 
     static const size_t kAllRowsBit = SudokuTy::kAllRowsBit;
     static const size_t kAllColsBit = SudokuTy::kAllColsBit;
@@ -141,7 +141,7 @@ public:
     static size_t num_failed_return;
 
 private:
-#if (V2_LITERAL_ORDER_MODE == 0)
+#if (V2A_LITERAL_ORDER_MODE == 0)
     enum LiteralType {
         CellNums,
         RowNums,
@@ -157,7 +157,7 @@ private:
         ColNums,
         MaxLiteralType
     };
-#endif // (V2_LITERAL_ORDER_MODE == 0)
+#endif // (V2A_LITERAL_ORDER_MODE == 0)
 
 #pragma pack(push, 1)
 
@@ -171,7 +171,7 @@ private:
 
 #pragma pack(pop)
 
-#if V2_USE_STD_BITSET
+#if V2A_USE_STD_BITSET
     typedef std::bitset<Numbers>    bitset_type;
 
     alignas(16) SmallBitMatrix2<BoardSize, Numbers>         cell_nums_;     // [row * Cols + col][num]
@@ -191,6 +191,10 @@ private:
     alignas(16) SmallBitSet2D<Numbers * Boxes, BoxSize>     box_nums_;      // [num * Boxes + box][cell]
 #endif
 
+    alignas(16) SmallBitSet2D<Rows, BoardSize>      row_mask_;
+    alignas(16) SmallBitSet2D<Cols, BoardSize>      col_mask_;
+    alignas(16) SmallBitSet2D<BoardSize, BoardSize> cell_mask_;
+
 #if defined(__SSE4_1__)
     alignas(16) literal_info_t literal_info_[TotalLiterals];
 #else
@@ -204,6 +208,7 @@ private:
 
 public:
     Solver() : empties_(0) {
+        this->init_mask();
     }
     ~Solver() {}
 
@@ -237,6 +242,23 @@ private:
             }
         }
         return empties;
+    }
+
+    void init_mask() {
+        for (size_t row = 0; row < Rows; row++) {
+            size_t pos = row * Cols;
+            for (size_t col = 0; col < Cols; col++) {
+                this->row_mask_[row].set(pos + col);
+                this->col_mask_[row].set(col * Cols + row);
+            }
+        }
+
+        for (size_t row = 0; row < Rows; row++) {
+            size_t pos = row * Cols;
+            for (size_t col = 0; col < Cols; col++) {
+                this->cell_mask_[pos + col] = !(this->row_mask_[row] | this->col_mask_[col]);
+            }
+        }
     }
 
     void init_board(Board & board) {
@@ -1366,8 +1388,8 @@ private:
         }
     }
 
-    inline size_t updateNeighborCellsEffect(BitMask & save_effect_cells,
-                                            size_t in_pos, size_t num) {
+    inline size_t updateNeighborCellsEffect(BitMask & save_effect_cells, size_t in_pos,
+                                            size_t in_row, size_t in_col, size_t num) {
         const BitMask & neighborsMask = SudokuTy::neighbors_mask_tbl[in_pos];
         BitMask & digitCells = this->num_cells_[num];
 
@@ -1376,11 +1398,86 @@ private:
         save_effect_cells = effect_cells;
 
         size_t count = 0;
-        size_t cell_bit, index;
-        while ((cell_bit = effect_cells.ls1b(index)) != 0) {
-            size_t bit_pos = BitUtils::bsf(cell_bit);
-            effect_cells.reset_bit(index, cell_bit);
-            size_t pos = index * effect_cells.unit_bits() + bit_pos;
+        size_t index;
+
+        size_t row_bit;
+        BitMask row_bits = effect_cells & this->row_mask_[in_row];
+        while ((row_bit = row_bits.ls1b(index)) != 0) {
+            size_t bit_pos = BitUtils::bsf(row_bit);
+            row_bits.reset_bit(index, row_bit);
+            size_t pos = index * row_bits.unit_bits() + bit_pos;
+            if (this->cell_nums_[pos].test(num)) {
+                this->cell_nums_[pos].reset(num);
+                dec_cell_literal_cnt(pos);
+
+                const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+
+                size_t box = cellInfo.box;
+                size_t cell = cellInfo.cell;
+                size_t row = cellInfo.row;
+                size_t col = cellInfo.col;
+
+                size_t row_idx = num * Rows + row;
+                size_t col_idx = num * Cols + col;
+                size_t box_idx = num * Boxes + box;
+
+                assert(this->row_nums_[row_idx].test(col));
+                assert(this->col_nums_[col_idx].test(row));
+                assert(this->box_nums_[box_idx].test(cell));
+
+                this->row_nums_[row_idx].reset(col);
+                this->col_nums_[col_idx].reset(row);
+                this->box_nums_[box_idx].reset(cell);
+
+                dec_col_literal_cnt(col_idx);
+                dec_box_literal_cnt(box_idx);
+
+                count++;
+            }
+        }
+
+        size_t col_bit;
+        BitMask col_bits = effect_cells & this->col_mask_[in_col];
+        while ((col_bit = col_bits.ls1b(index)) != 0) {
+            size_t bit_pos = BitUtils::bsf(col_bit);
+            col_bits.reset_bit(index, col_bit);
+            size_t pos = index * col_bits.unit_bits() + bit_pos;
+            if (this->cell_nums_[pos].test(num)) {
+                this->cell_nums_[pos].reset(num);
+                dec_cell_literal_cnt(pos);
+
+                const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+
+                size_t box = cellInfo.box;
+                size_t cell = cellInfo.cell;
+                size_t row = cellInfo.row;
+                size_t col = cellInfo.col;
+
+                size_t row_idx = num * Rows + row;
+                size_t col_idx = num * Cols + col;
+                size_t box_idx = num * Boxes + box;
+
+                assert(this->row_nums_[row_idx].test(col));
+                assert(this->col_nums_[col_idx].test(row));
+                assert(this->box_nums_[box_idx].test(cell));
+
+                this->row_nums_[row_idx].reset(col);
+                this->col_nums_[col_idx].reset(row);
+                this->box_nums_[box_idx].reset(cell);
+
+                dec_row_literal_cnt(row_idx);
+                dec_box_literal_cnt(box_idx);
+
+                count++;
+            }
+        }
+
+        size_t box_bit;
+        BitMask box_bits = effect_cells & this->cell_mask_[in_pos];
+        while ((box_bit = box_bits.ls1b(index)) != 0) {
+            size_t bit_pos = BitUtils::bsf(box_bit);
+            box_bits.reset_bit(index, box_bit);
+            size_t pos = index * box_bits.unit_bits() + bit_pos;
             if (this->cell_nums_[pos].test(num)) {
                 this->cell_nums_[pos].reset(num);
                 dec_cell_literal_cnt(pos);
@@ -1406,7 +1503,6 @@ private:
 
                 dec_row_literal_cnt(row_idx);
                 dec_col_literal_cnt(col_idx);
-                dec_box_literal_cnt(box_idx);
 
                 count++;
             }
@@ -1416,13 +1512,87 @@ private:
     }
 
     inline void restoreNeighborCellsEffect(BitMask & effect_cells, size_t effect_count,
-                                           size_t in_pos, size_t num) {
+                                           size_t in_pos, size_t in_row, size_t in_col, size_t num) {
         size_t count = 0;
-        size_t cell_bit, index;
-        while ((cell_bit = effect_cells.ls1b(index)) != 0) {
-            size_t bit_pos = BitUtils::bsf(cell_bit);
-            effect_cells.reset_bit(index, cell_bit);
-            size_t pos = index * effect_cells.unit_bits() + bit_pos;
+        size_t index;
+
+        size_t row_bit;
+        BitMask row_bits = effect_cells & this->row_mask_[in_row];
+        while ((row_bit = row_bits.ls1b(index)) != 0) {
+            size_t bit_pos = BitUtils::bsf(row_bit);
+            row_bits.reset_bit(index, row_bit);
+            size_t pos = index * row_bits.unit_bits() + bit_pos;
+
+            this->cell_nums_[pos].set(num);
+            inc_cell_literal_cnt(pos);
+
+            const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+
+            size_t box = cellInfo.box;
+            size_t cell = cellInfo.cell;
+            size_t row = cellInfo.row;
+            size_t col = cellInfo.col;
+
+            size_t row_idx = num * Rows + row;
+            size_t col_idx = num * Cols + col;
+            size_t box_idx = num * Boxes + box;
+
+            assert(!this->row_nums_[row_idx].test(col));
+            assert(!this->col_nums_[col_idx].test(row));
+            assert(!this->box_nums_[box_idx].test(cell));
+
+            this->row_nums_[row_idx].set(col);
+            this->col_nums_[col_idx].set(row);
+            this->box_nums_[box_idx].set(cell);
+
+            inc_col_literal_cnt(col_idx);
+            inc_box_literal_cnt(box_idx);
+
+            count++;
+        }
+
+        size_t col_bit;
+        BitMask col_bits = effect_cells & this->col_mask_[in_col];
+        while ((col_bit = col_bits.ls1b(index)) != 0) {
+            size_t bit_pos = BitUtils::bsf(col_bit);
+            col_bits.reset_bit(index, col_bit);
+            size_t pos = index * col_bits.unit_bits() + bit_pos;
+
+            this->cell_nums_[pos].set(num);
+            inc_cell_literal_cnt(pos);
+
+            const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+
+            size_t box = cellInfo.box;
+            size_t cell = cellInfo.cell;
+            size_t row = cellInfo.row;
+            size_t col = cellInfo.col;
+
+            size_t row_idx = num * Rows + row;
+            size_t col_idx = num * Cols + col;
+            size_t box_idx = num * Boxes + box;
+
+            assert(!this->row_nums_[row_idx].test(col));
+            assert(!this->col_nums_[col_idx].test(row));
+            assert(!this->box_nums_[box_idx].test(cell));
+
+            this->row_nums_[row_idx].set(col);
+            this->col_nums_[col_idx].set(row);
+            this->box_nums_[box_idx].set(cell);
+
+            inc_row_literal_cnt(row_idx);
+            inc_box_literal_cnt(box_idx);
+
+            count++;
+        }
+
+        size_t box_bit;
+        BitMask box_bits = effect_cells & this->cell_mask_[in_pos];
+        while ((box_bit = box_bits.ls1b(index)) != 0) {
+            size_t bit_pos = BitUtils::bsf(box_bit);
+            box_bits.reset_bit(index, box_bit);
+            size_t pos = index * box_bits.unit_bits() + bit_pos;
+
             this->cell_nums_[pos].set(num);
             inc_cell_literal_cnt(pos);
 
@@ -1447,7 +1617,6 @@ private:
 
             inc_row_literal_cnt(row_idx);
             inc_col_literal_cnt(col_idx);
-            inc_box_literal_cnt(box_idx);
 
             count++;
         }
@@ -1516,7 +1685,7 @@ public:
                         num = BitUtils::bsf(num_bit);
 
                         doFillNum(pos, row, col, box, cell, num, save_bits);
-                        size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, num);
+                        size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, row, col, num);
 
                         board.cells[pos] = (char)(num + '1');
 
@@ -1532,7 +1701,7 @@ public:
 
                         undoFillNum(pos, row, col, box, cell, num, save_bits);
                         this->num_cells_[num] |= save_effect_cells;
-                        restoreNeighborCellsEffect(save_effect_cells, effect_count, pos, num);
+                        restoreNeighborCellsEffect(save_effect_cells, effect_count, pos, row, col, num);
 
                         num_bits ^= num_bit;
                     }
@@ -1570,7 +1739,7 @@ public:
                         cell = cellInfo.cell;
 #endif
                         doFillNum(pos, row, col, box, cell, num, save_bits);
-                        size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, num);
+                        size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, row, col, num);
 
                         board.cells[pos] = (char)(num + '1');
 
@@ -1586,7 +1755,7 @@ public:
 
                         undoFillNum(pos, row, col, box, cell, num, save_bits);
                         this->num_cells_[num] |= save_effect_cells;
-                        restoreNeighborCellsEffect(save_effect_cells, effect_count, pos, num);
+                        restoreNeighborCellsEffect(save_effect_cells, effect_count, pos, row, col, num);
 
                         col_bits ^= col_bit;
                     }
@@ -1624,7 +1793,7 @@ public:
                         cell = cellInfo.cell;
 #endif
                         doFillNum(pos, row, col, box, cell, num, save_bits);
-                        size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, num);
+                        size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, row, col, num);
 
                         board.cells[pos] = (char)(num + '1');
 
@@ -1640,7 +1809,7 @@ public:
 
                         undoFillNum(pos, row, col, box, cell, num, save_bits);
                         this->num_cells_[num] |= save_effect_cells;
-                        restoreNeighborCellsEffect(save_effect_cells, effect_count, pos, num);
+                        restoreNeighborCellsEffect(save_effect_cells, effect_count, pos, row, col, num);
 
                         row_bits ^= row_bit;
                     }
@@ -1675,7 +1844,7 @@ public:
                         pos = boxesInfo.pos;
 #endif
                         doFillNum(pos, row, col, box, cell, num, save_bits);
-                        size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, num);
+                        size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, row, col, num);
 
                         board.cells[pos] = (char)(num + '1');
 
@@ -1691,7 +1860,7 @@ public:
 
                         undoFillNum(pos, row, col, box, cell, num, save_bits);
                         this->num_cells_[num] |= save_effect_cells;
-                        restoreNeighborCellsEffect(save_effect_cells, effect_count, pos, num);
+                        restoreNeighborCellsEffect(save_effect_cells, effect_count, pos, row, col, num);
 
                         cell_bits ^= cell_bit;
                     }
@@ -1753,7 +1922,7 @@ size_t Solver<SudokuTy>::num_unique_candidate = 0;
 template <typename SudokuTy>
 size_t Solver<SudokuTy>::num_failed_return = 0;
 
-} // namespace v2
+} // namespace v2a
 } // namespace jmSudoku
 
-#endif // JM_SUDOKU_SOLVER_V2_H
+#endif // JM_SUDOKU_SOLVER_V2A_H

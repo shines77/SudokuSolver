@@ -27,8 +27,9 @@
 #endif // _MSC_VER
 
 #include "Sudoku.h"
+#include "BitUtils.h"
 #include "BitSet.h"
-#include "StopWatch.h"
+#include "BitMatrix.h"
 
 /************************************************
 

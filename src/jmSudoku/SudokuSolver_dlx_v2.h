@@ -20,7 +20,7 @@
 
 #include "Sudoku.h"
 #include "BitSet.h"
-#include "StopWatch.h"
+#include "BitMatrix.h"
 
 /************************************************
 

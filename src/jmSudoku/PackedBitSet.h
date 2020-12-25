@@ -1,6 +1,6 @@
 
-#ifndef JSTD_BITSET_H
-#define JSTD_BITSET_H
+#ifndef JSTD_PACKED_BITSET_H
+#define JSTD_PACKED_BITSET_H
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1020)
 #pragma once
@@ -21,28 +21,55 @@
 #include <cassert>
 
 #include "BitUtils.h"
+#include "BitSet.h"
 
 namespace jmSudoku {
 
-struct dont_init_t {};
+template <size_t Bytes>
+struct IntegerType {
+    typedef uint32_t type;
+};
 
-template <size_t Size, size_t Alignment>
-struct AlignedTo {
-    static const size_t alignment = Alignment;
-    static const size_t size = Size;
-    static const size_t value = (size + alignment - 1) / alignment * alignment;
+template <>
+struct IntegerType<0U> {
+    typedef uint8_t type;
+};
+
+template <>
+struct IntegerType<1U> {
+    typedef uint8_t type;
+};
+
+template <>
+struct IntegerType<2U> {
+    typedef uint16_t type;
+};
+
+template <>
+struct IntegerType<4U> {
+    typedef uint32_t type;
+};
+
+template <>
+struct IntegerType<8U> {
+    typedef uint64_t type;
 };
 
 template <size_t Bits>
-class SmallBitSet {
+class PackedBitSet {
 public:
-    typedef typename std::conditional<
-                (Bits <= sizeof(uint32_t) * 8), uint32_t, size_t
-            >::type  unit_type;
-    typedef SmallBitSet<Bits> this_type;
+    static const size_t kBitsPerByte = 8;
+    static const size_t kAlignment = sizeof(uint8_t) * kBitsPerByte;
+    static const size_t kMaxBitsAlignment = sizeof(size_t) * kBitsPerByte;
+    static const size_t kBitsAlignment = (Bits < kMaxBitsAlignment) ?
+                                         AlignedTo<Bits, kAlignment>::value :
+                                         kMaxBitsAlignment;
 
-    static const size_t kUnitBytes = sizeof(unit_type);
-    static const size_t kUnitBits  = 8 * kUnitBytes;
+    static const size_t kUnitBits  = kBitsAlignment;
+    static const size_t kUnitBytes = kBitsAlignment / kBitsPerByte;
+
+    typedef typename IntegerType<kUnitBytes>::type  unit_type;
+    typedef PackedBitSet<Bits>                      this_type;
 
     static const size_t kUnits = (Bits + kUnitBits - 1) / kUnitBits;
     static const size_t kBits  = kUnits * kUnitBits;
@@ -55,17 +82,17 @@ private:
     unit_type array_[kUnits];
 
 public:
-    SmallBitSet() noexcept {
-        static_assert((Bits != 0), "SmallBitSet<Bits>: Bits can not be 0 size.");
+    PackedBitSet() noexcept {
+        static_assert((Bits != 0), "PackedBitSet<Bits>: Bits can not be 0 size.");
         this->reset();
     }
 
-    SmallBitSet(dont_init_t & dont_init) noexcept {
-        static_assert((Bits != 0), "SmallBitSet<Bits>: Bits can not be 0 size.");
+    PackedBitSet(dont_init_t & dont_init) noexcept {
+        static_assert((Bits != 0), "PackedBitSet<Bits>: Bits can not be 0 size.");
         /* Here we don't need initialize for optimize sometimes. */
     }
 
-    SmallBitSet(const this_type & src) noexcept {
+    PackedBitSet(const this_type & src) noexcept {
         static_assert((Bits != 0), "PackedBitSet<Bits>: Bits can not be 0 size.");
         for (size_t i = 0; i < kUnits; i++) {
             this->array_[i] = src.array(i);
@@ -73,9 +100,9 @@ public:
     }
 
     template <size_t UBits>
-    SmallBitSet(const SmallBitSet<UBits> & src) noexcept {
+    PackedBitSet(const PackedBitSet<UBits> & src) noexcept {
         static_assert((Bits != 0), "PackedBitSet<Bits>: Bits can not be 0 size.");
-        typedef SmallBitSet<UBits> SourceBitMap;
+        typedef PackedBitSet<UBits> SourceBitMap;
         static const size_t copyUnits = std::min(kUnits, SourceBitMap::kUnits);
         for (size_t i = 0; i < copyUnits; i++) {
             this->array_[i] = src.array(i);
@@ -85,7 +112,7 @@ public:
         }
     }
 
-    SmallBitSet(unit_type value) noexcept {
+    PackedBitSet(unit_type value) noexcept {
         static_assert((Bits != 0), "PackedBitSet<Bits>: Bits can not be 0 size.");
         if (kRestBits == 0)
             this->array_[0] = value;
@@ -93,7 +120,7 @@ public:
             this->array_[0] = value & kTrimMask;
     }
 
-    SmallBitSet(std::initializer_list<unit_type> init_list) noexcept {
+    PackedBitSet(std::initializer_list<unit_type> init_list) noexcept {
         static_assert((Bits != 0), "PackedBitSet<Bits>: Bits can not be 0 size.");
         if (init_list.size() <= kUnits) {
             size_t i = 0;
@@ -118,7 +145,7 @@ public:
         }
     }
 
-    ~SmallBitSet() = default;
+    ~PackedBitSet() = default;
 
     size_t size() const        { return Bits; }
 
@@ -166,7 +193,7 @@ public:
         size_t pos_;            // position of element in bitset
 
         // proxy for an element
-        friend class SmallBitSet<Bits>;
+        friend class PackedBitSet<Bits>;
 
     public:
         ~reference() noexcept {
@@ -707,31 +734,31 @@ public:
 
 template <size_t Bits>
 inline
-SmallBitSet<Bits> operator & (const SmallBitSet<Bits> & left,
-                              const SmallBitSet<Bits> & right) noexcept {
+PackedBitSet<Bits> operator & (const PackedBitSet<Bits> & left,
+                              const PackedBitSet<Bits> & right) noexcept {
     // left And right
-    SmallBitSet<Bits> answer = left;
+    PackedBitSet<Bits> answer = left;
     return (answer &= right);
 }
 
 template <size_t Bits>
 inline
-SmallBitSet<Bits> operator | (const SmallBitSet<Bits> & left,
-                              const SmallBitSet<Bits> & right) noexcept {
+PackedBitSet<Bits> operator | (const PackedBitSet<Bits> & left,
+                              const PackedBitSet<Bits> & right) noexcept {
     // left Or right
-    SmallBitSet<Bits> answer = left;
+    PackedBitSet<Bits> answer = left;
     return (answer |= right);
 }
 
 template <size_t Bits>
 inline
-SmallBitSet<Bits> operator ^ (const SmallBitSet<Bits> & left,
-                              const SmallBitSet<Bits> & right) noexcept {
+PackedBitSet<Bits> operator ^ (const PackedBitSet<Bits> & left,
+                              const PackedBitSet<Bits> & right) noexcept {
     // left Xor right
-    SmallBitSet<Bits> answer = left;
+    PackedBitSet<Bits> answer = left;
     return (answer ^= right);
 }
 
 } // namespace jmSudoku
 
-#endif // JSTD_BITSET_H
+#endif // JSTD_PACKED_BITSET_H

@@ -22,6 +22,7 @@
 #include <algorithm>    // For std::sort()
 
 #include "BitSet.h"
+#include "BitMatrix.h"
 
 #define SEARCH_MODE_ONE_ANSWER              0
 #define SEARCH_MODE_MORE_THAN_ONE_ANSWER    1
