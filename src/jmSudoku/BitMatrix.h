@@ -216,12 +216,25 @@ public:
     }
 };
 
+//
+// Matrix of SmallBitSet
+//
 template <size_t Rows, size_t Cols>
 using SmallBitSet2D = SmallBitMatrix2<Rows, Cols, SmallBitSet<Cols>>;
 
 template <size_t Depths, size_t Rows, size_t Cols>
 using SmallBitSet3D = SmallBitMatrix3<Depths, Rows, Cols, SmallBitMatrix2<Rows, Cols, SmallBitSet<Cols>>>;
 
+//
+// Matrix of PackedBitSet
+//
+template <size_t Rows, size_t Cols>
+using PackedBitSet2D = SmallBitMatrix2<Rows, Cols, PackedBitSet<Cols>>;
+
+template <size_t Depths, size_t Rows, size_t Cols>
+using PackedBitSet3D = SmallBitMatrix3<Depths, Rows, Cols, SmallBitMatrix2<Rows, Cols, PackedBitSet<Cols>>>;
+
+// BitMatrix2
 template <size_t Rows, size_t Cols, typename TBitSet = std::bitset<Cols>>
 class BitMatrix2 {
 public:

@@ -77,7 +77,9 @@
 #endif
 
 #ifdef __3dNOW__
+#if defined(_M_IX86)
 #include <mm3dnow.h>
+#endif
 #endif
 
 #ifdef __FMA4__

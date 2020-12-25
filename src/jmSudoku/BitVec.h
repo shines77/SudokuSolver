@@ -205,7 +205,7 @@ struct BitVec16x08 {
 
     bool isAllOnes() const {
 #ifdef __SSE4_1__
-        return (_mm_test_all_ones(this->xmm0, this->xmm0) != 0);
+        return (_mm_test_all_ones(this->xmm0) != 0);
 #else
         BitVec16x08 ones;
         ones.setAllOnes;

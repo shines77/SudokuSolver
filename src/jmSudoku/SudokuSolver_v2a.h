@@ -294,7 +294,7 @@ private:
                     size_t cell = cell_y + cell_x;
                     size_t num = val - '1';
                     this->fillNum(pos, row, col, box, cell, num);
-                    this->updateNeighborCellsEffectFull(pos, num);
+                    this->updateNeighborCellsEffect(pos, num);
                 }
                 pos++;
             }
@@ -1346,7 +1346,7 @@ private:
         }
     }
 
-    inline void updateNeighborCellsEffectFull(size_t in_pos, size_t num) {
+    inline void updateNeighborCellsEffect(size_t in_pos, size_t num) {
         const BitMask & neighborsMask = SudokuTy::neighbors_mask_tbl[in_pos];
         BitMask & digitCells = this->num_cells_[num];
 

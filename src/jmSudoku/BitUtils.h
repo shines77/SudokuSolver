@@ -178,7 +178,7 @@ struct BitUtils {
 #endif
 
     //
-    // The least significant bit 1 (LSB)
+    // The least significant 1 bit (LSB)
     //
     static inline uint32_t ls1b32(uint32_t x) {
         return (x & (uint32_t)-x);
@@ -193,7 +193,7 @@ struct BitUtils {
     }
 
     //
-    // The most significant bit 1 (MSB)
+    // The most significant 1 bit (MSB)
     //
 
 #ifdef _MSC_VER

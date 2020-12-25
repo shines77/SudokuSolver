@@ -338,7 +338,7 @@ public:
             for (; i < kUnits - 1; i++) {
                 this->array_[i] = (unit_type)value;
             }
-            this->array_[i] = value & kTrimMask;
+            this->array_[i] = (unit_type)value & kTrimMask;
         }
         else {
             for (size_t i = 0; i < kUnits; i++) {

@@ -1,6 +1,6 @@
 
-#ifndef JM_SUDOKU_SOLVER_V2_H
-#define JM_SUDOKU_SOLVER_V2_H
+#ifndef JM_SUDOKU_SOLVER_V3_H
+#define JM_SUDOKU_SOLVER_V3_H
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1020)
 #pragma once
@@ -31,7 +31,9 @@
 #include "StopWatch.h"
 #include "BitUtils.h"
 #include "BitSet.h"
+#include "PackedBitSet.h"
 #include "BitMatrix.h"
+#include "BitVec.h"
 
 /************************************************
 
@@ -41,20 +43,20 @@
 
 ************************************************/
 
-#define V2_SEARCH_MODE          SEARCH_MODE_ONE_ANSWER
+#define V3_SEARCH_MODE          SEARCH_MODE_ONE_ANSWER
 
-#define V2_LITERAL_ORDER_MODE   0
+#define V3_LITERAL_ORDER_MODE   0
 
 #ifdef _MSC_VER
-#define V2_USE_STD_BITSET       0
+#define V3_USE_STD_BITSET       0
 #else
-#define V2_USE_STD_BITSET       0
+#define V3_USE_STD_BITSET       0
 #endif
 
 namespace jmSudoku {
-namespace v2 {
+namespace v3 {
 
-static const size_t kSearchMode = V2_SEARCH_MODE;
+static const size_t kSearchMode = V3_SEARCH_MODE;
 
 template <typename SudokuTy>
 class Solver {
@@ -95,7 +97,7 @@ public:
     static const size_t TotalLiterals =
         TotalCellLiterals + TotalRowLiterals + TotalColLiterals + TotalBoxLiterals;
 
-#if (V2_LITERAL_ORDER_MODE == 0)
+#if (V3_LITERAL_ORDER_MODE == 0)
     static const size_t LiteralFirst     = 0;
     static const size_t CellLiteralFirst = LiteralFirst;
     static const size_t RowLiteralFirst  = CellLiteralFirst + TotalCellLiterals;
@@ -119,11 +121,12 @@ public:
     static const size_t BoxLiteralLast   = RowLiteralFirst;
     static const size_t RowLiteralLast   = ColLiteralFirst;
     static const size_t ColLiteralLast   = LiteralLast;
-#endif // (V2_LITERAL_ORDER_MODE == 0)
+#endif // (V3_LITERAL_ORDER_MODE == 0)
 
     static const size_t kAllRowsBit = SudokuTy::kAllRowsBit;
     static const size_t kAllColsBit = SudokuTy::kAllColsBit;
     static const size_t kAllBoxesBit = SudokuTy::kAllBoxesBit;
+    static const size_t kAllBoxSizeBit = SudokuTy::kAllBoxSizeBit;
     static const size_t kAllNumbersBit = SudokuTy::kAllNumbersBit;
 
     static const bool kAllDimIsSame = SudokuTy::kAllDimIsSame;
@@ -141,7 +144,7 @@ public:
     static size_t num_failed_return;
 
 private:
-#if (V2_LITERAL_ORDER_MODE == 0)
+#if (V3_LITERAL_ORDER_MODE == 0)
     enum LiteralType {
         CellNums,
         RowNums,
@@ -157,7 +160,7 @@ private:
         ColNums,
         MaxLiteralType
     };
-#endif // (V2_LITERAL_ORDER_MODE == 0)
+#endif // (V3_LITERAL_ORDER_MODE == 0)
 
 #pragma pack(push, 1)
 
@@ -171,25 +174,25 @@ private:
 
 #pragma pack(pop)
 
-#if V2_USE_STD_BITSET
-    typedef std::bitset<Numbers>    bitset_type;
+    static const size_t Rows16 = AlignedTo<Rows, 16>::value;
+    static const size_t Cols16 = AlignedTo<Cols, 16>::value;
+    static const size_t Numbers16 = AlignedTo<Numbers, 16>::value;
+    static const size_t Boxes16 = AlignedTo<Boxes, 16>::value;
+    static const size_t BoxSize16 = AlignedTo<BoxSize, 16>::value;
 
-    alignas(16) SmallBitMatrix2<BoardSize, Numbers>         cell_nums_;     // [row * Cols + col][num]
-    alignas(16) SmallBitMatrix2<Numbers, BoardSize>         num_cells_;     // [num][row * Cols + col]
+    typedef PackedBitSet<Numbers16>     bitset_type;
 
-    alignas(16) SmallBitMatrix2<Numbers * Rows,  Cols>      row_nums_;      // [num * Rows + row][col]
-    alignas(16) SmallBitMatrix2<Numbers * Cols,  Rows>      col_nums_;      // [num * Cols + col][row]
-    alignas(16) SmallBitMatrix2<Numbers * Boxes, BoxSize>   box_nums_;      // [num * Boxes + box][cell]
-#else
-    typedef SmallBitSet<Numbers>    bitset_type;
-
-    alignas(16) SmallBitSet2D<BoardSize, Numbers>           cell_nums_;     // [row * Cols + col][num]
     alignas(16) SmallBitSet2D<Numbers, BoardSize>           num_cells_;     // [num][row * Cols + col]
 
-    alignas(16) SmallBitSet2D<Numbers * Rows,  Cols>        row_nums_;      // [num * Rows + row][col]
-    alignas(16) SmallBitSet2D<Numbers * Cols,  Rows>        col_nums_;      // [num * Cols + col][row]
-    alignas(16) SmallBitSet2D<Numbers * Boxes, BoxSize>     box_nums_;      // [num * Boxes + box][cell]
-#endif
+    alignas(16) PackedBitSet2D<Boxes * BoxSize, Numbers16>  box_cell_nums_; // [box * BoxSize + cell][num]
+    alignas(16) PackedBitSet2D<Numbers * Rows,  Cols16>     row_nums_;      // [num * Rows + row][col]
+    alignas(16) PackedBitSet2D<Numbers * Cols,  Rows16>     col_nums_;      // [num * Cols + col][row]
+    alignas(16) PackedBitSet2D<Boxes * Numbers, BoxSize>    box_nums_;      // [box * Numbers + num][cell]
+
+    alignas(16) uint8_t box_cells_size_[Boxes * BoxSize16];
+    alignas(16) uint8_t box_digits_size_[Boxes * Numbers16];
+    alignas(16) uint8_t row_size_[Rows * Numbers16];
+    alignas(16) uint8_t col_size_[Cols * Numbers16];
 
 #if defined(__SSE4_1__)
     alignas(16) literal_info_t literal_info_[TotalLiterals];
@@ -243,11 +246,11 @@ private:
         init_literal_info();
 
         this->num_cells_.set();
-        this->cell_nums_.set();
-        
-        this->row_nums_.set();
-        this->col_nums_.set();
-        this->box_nums_.set();
+
+        this->box_cell_nums_.fill(kAllNumbersBit);
+        this->row_nums_.fill(kAllColsBit);
+        this->col_nums_.fill(kAllRowsBit);
+        this->box_nums_.fill(kAllBoxSizeBit);
 
         num_guesses = 0;
         num_unique_candidate = 0;
@@ -259,6 +262,7 @@ private:
         size_t empties = calc_empties(board);
         this->empties_ = empties;
 
+        BitMask save_effect_cells;
         size_t pos = 0;
         for (size_t row = 0; row < Rows; row++) {
             size_t box_y = (row / BoxCellsY) * BoxCountX;
@@ -1172,45 +1176,48 @@ private:
     }
 
     inline void fillNum(size_t pos, size_t row, size_t col,
-                          size_t box, size_t cell, size_t num) {
+                        size_t box, size_t cell, size_t num) {
+        size_t box_pos = box * BoxSize + cell;
         size_t row_idx = num * Rows + row;
         size_t col_idx = num * Cols + col;
-        size_t box_idx = num * Boxes + box;
+        size_t box_idx = box * Numbers + num;
 
         assert(this->num_cells_[num].test(pos));
-        assert(this->cell_nums_[pos].test(num));
+
+        assert(this->box_cell_nums_[box_pos].test(num));
         assert(this->row_nums_[row_idx].test(col));
         assert(this->col_nums_[col_idx].test(row));
         assert(this->box_nums_[box_idx].test(cell));
 
-        disable_cell_literal(pos);
+        disable_cell_literal(box_pos);
         disable_row_literal(row_idx);
         disable_col_literal(col_idx);
         disable_box_literal(box_idx);
 
-        size_t num_bits = this->cell_nums_[pos].to_ulong();
+        size_t num_bits = this->box_cell_nums_[box_pos].to_ulong();
         while (num_bits != 0) {
             size_t num_bit = BitUtils::ls1b(num_bits);
             size_t _num = BitUtils::bsf(num_bit);
 
             row_idx = _num * Rows + row;
             col_idx = _num * Cols + col;
-            box_idx = _num * Boxes + box;
+            box_idx = box * Numbers + _num;
 
             assert(this->num_cells_[_num].test(pos));
-            assert(this->cell_nums_[pos].test(_num));
+
+            assert(this->box_cell_nums_[box_pos].test(_num));
             assert(this->row_nums_[row_idx].test(col));
             assert(this->col_nums_[col_idx].test(row));
             assert(this->box_nums_[box_idx].test(cell));
 
             this->num_cells_[_num].reset(pos);
-            this->cell_nums_[pos].reset(_num);
 
+            this->box_cell_nums_[box_pos].reset(_num);
             this->row_nums_[row_idx].reset(col);
             this->col_nums_[col_idx].reset(row);
             this->box_nums_[box_idx].reset(cell);
 
-            dec_cell_literal_cnt(pos);
+            dec_cell_literal_cnt(box_pos);
             dec_row_literal_cnt(row_idx);
             dec_col_literal_cnt(col_idx);
             dec_box_literal_cnt(box_idx);
@@ -1231,20 +1238,21 @@ private:
             size_t bit_pos = BitUtils::bsf(cell_bit);
             effect_cells.reset_bit(index, cell_bit);
             size_t pos = index * effect_cells.unit_bits() + bit_pos;
-            if (this->cell_nums_[pos].test(num)) {
-                this->cell_nums_[pos].reset(num);
-                dec_cell_literal_cnt(pos);
-
-                const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+            const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+            size_t box_pos = cellInfo.box_pos;
+            if (this->box_cell_nums_[box_pos].test(num)) {
+                this->box_cell_nums_[box_pos].reset(num);
+                dec_cell_literal_cnt(box_pos);
 
                 size_t box = cellInfo.box;
                 size_t cell = cellInfo.cell;
                 size_t row = cellInfo.row;
                 size_t col = cellInfo.col;
 
+                //size_t box_pos = box * BoxSize + cell;
                 size_t row_idx = num * Rows + row;
                 size_t col_idx = num * Cols + col;
-                size_t box_idx = num * Boxes + box;
+                size_t box_idx = box * Numbers + num;
 
                 assert(this->row_nums_[row_idx].test(col));
                 assert(this->col_nums_[col_idx].test(row));
@@ -1264,28 +1272,28 @@ private:
     inline void doFillNum(size_t pos, size_t row, size_t col,
                           size_t box, size_t cell, size_t num,
                           bitset_type & save_bits) {
-        assert(this->cell_nums_[pos].test(num));
-
+        size_t box_pos = box * BoxSize + cell;
         size_t row_idx = num * Rows + row;
         size_t col_idx = num * Cols + col;
-        size_t box_idx = num * Boxes + box;
+        size_t box_idx = box * Numbers + num;
 
-        disable_cell_literal(pos);
+        disable_cell_literal(box_pos);
         disable_row_literal(row_idx);
         disable_col_literal(col_idx);
         disable_box_literal(box_idx);
 
         assert(this->num_cells_[num].test(pos));
-        assert(this->cell_nums_[pos].test(num));
+
+        assert(this->box_cell_nums_[box_pos].test(num));
         assert(this->row_nums_[row_idx].test(col));
         assert(this->col_nums_[col_idx].test(row));
         assert(this->box_nums_[box_idx].test(cell));
 
         this->num_cells_[num].reset(pos);
-        // Save cell num bits
-        save_bits = this->cell_nums_[pos];
-        this->cell_nums_[pos].reset();
 
+        // Save cell num bits
+        save_bits = this->box_cell_nums_[box_pos];
+        this->box_cell_nums_[box_pos].reset();
         this->row_nums_[row_idx].reset(col);
         this->col_nums_[col_idx].reset(row);
         this->box_nums_[box_idx].reset(cell);
@@ -1300,9 +1308,10 @@ private:
 
             row_idx = _num * Rows + row;
             col_idx = _num * Cols + col;
-            box_idx = _num * Boxes + box;
+            box_idx = box * Numbers + _num;
 
             assert(this->num_cells_[_num].test(pos));
+
             assert(this->row_nums_[row_idx].test(col));
             assert(this->col_nums_[col_idx].test(row));
             assert(this->box_nums_[box_idx].test(cell));
@@ -1324,19 +1333,20 @@ private:
     inline void undoFillNum(size_t pos, size_t row, size_t col,
                             size_t box, size_t cell, size_t num,
                             bitset_type & save_bits) {
+        size_t box_pos = box * BoxSize + cell;
         size_t row_idx = num * Rows + row;
         size_t col_idx = num * Cols + col;
-        size_t box_idx = num * Boxes + box;
+        size_t box_idx = box * Numbers + num;
 
-        enable_cell_literal(pos);
+        enable_cell_literal(box_pos);
         enable_row_literal(row_idx);
         enable_col_literal(col_idx);
         enable_box_literal(box_idx);
 
         this->num_cells_[num].set(pos);
-        // Restore cell num bits
-        this->cell_nums_[pos] = save_bits;
 
+        // Restore cell num bits
+        this->box_cell_nums_[box_pos] = save_bits;
         this->row_nums_[row_idx].set(col);
         this->col_nums_[col_idx].set(row);
         this->box_nums_[box_idx].set(cell);
@@ -1351,9 +1361,10 @@ private:
 
             row_idx = _num * Rows + row;
             col_idx = _num * Cols + col;
-            box_idx = _num * Boxes + box;
+            box_idx = box * Numbers + _num;
 
             this->num_cells_[_num].set(pos);
+
             this->row_nums_[row_idx].set(col);
             this->col_nums_[col_idx].set(row);
             this->box_nums_[box_idx].set(cell);
@@ -1371,7 +1382,7 @@ private:
         const BitMask & neighborsMask = SudokuTy::neighbors_mask_tbl[in_pos];
         BitMask & digitCells = this->num_cells_[num];
 
-        BitMask effect_cells = digitCells & neighborsMask;
+        register BitMask effect_cells = digitCells & neighborsMask;
         digitCells ^= effect_cells;
         save_effect_cells = effect_cells;
 
@@ -1381,32 +1392,32 @@ private:
             size_t bit_pos = BitUtils::bsf(cell_bit);
             effect_cells.reset_bit(index, cell_bit);
             size_t pos = index * effect_cells.unit_bits() + bit_pos;
-            if (this->cell_nums_[pos].test(num)) {
-                this->cell_nums_[pos].reset(num);
-                dec_cell_literal_cnt(pos);
-
-                const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+            const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+            size_t box_pos = cellInfo.box_pos;
+            if (this->box_cell_nums_[box_pos].test(num)) {
+                this->box_cell_nums_[box_pos].reset(num);
+                dec_cell_literal_cnt(box_pos);
 
                 size_t box = cellInfo.box;
                 size_t cell = cellInfo.cell;
                 size_t row = cellInfo.row;
                 size_t col = cellInfo.col;
 
+                size_t box_idx = box * Numbers + num;
                 size_t row_idx = num * Rows + row;
                 size_t col_idx = num * Cols + col;
-                size_t box_idx = num * Boxes + box;
 
+                assert(this->box_nums_[box_idx].test(cell));
                 assert(this->row_nums_[row_idx].test(col));
                 assert(this->col_nums_[col_idx].test(row));
-                assert(this->box_nums_[box_idx].test(cell));
-
+                
+                this->box_nums_[box_idx].reset(cell);
                 this->row_nums_[row_idx].reset(col);
                 this->col_nums_[col_idx].reset(row);
-                this->box_nums_[box_idx].reset(cell);
-
+                
+                dec_box_literal_cnt(box_idx);
                 dec_row_literal_cnt(row_idx);
                 dec_col_literal_cnt(col_idx);
-                dec_box_literal_cnt(box_idx);
 
                 count++;
             }
@@ -1422,10 +1433,12 @@ private:
             size_t bit_pos = BitUtils::bsf(cell_bit);
             effect_cells.reset_bit(index, cell_bit);
             size_t pos = index * effect_cells.unit_bits() + bit_pos;
-            this->cell_nums_[pos].set(num);
-            inc_cell_literal_cnt(pos);
 
             const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+            size_t box_pos = cellInfo.box_pos;
+
+            this->box_cell_nums_[box_pos].set(num);
+            inc_cell_literal_cnt(box_pos);
 
             size_t box = cellInfo.box;
             size_t cell = cellInfo.cell;
@@ -1434,7 +1447,7 @@ private:
 
             size_t row_idx = num * Rows + row;
             size_t col_idx = num * Cols + col;
-            size_t box_idx = num * Boxes + box;
+            size_t box_idx = box * Numbers + num;
 
             assert(!this->row_nums_[row_idx].test(col));
             assert(!this->col_nums_[col_idx].test(row));
@@ -1487,9 +1500,9 @@ public:
             switch (literal_type) {
                 case LiteralType::CellNums:
                 {
-                    pos = (size_t)min_literal_id - CellLiteralFirst;
+                    size_t box_pos = (size_t)min_literal_id - CellLiteralFirst;
                     assert(min_literal_id >= CellLiteralFirst);
-                    assert(pos < Rows * Cols);
+                    assert(box_pos < Rows * Cols);
 #if 0
                     row = pos / Cols;
                     col = pos % Cols;
@@ -1500,16 +1513,15 @@ public:
                     size_t cell_y = row % BoxCellsY;
                     cell = cell_y * BoxCellsX + cell_x;
 #else
-                    const CellInfo & cellInfo = SudokuTy::cell_info[pos];
-                    row = cellInfo.row;
-                    col = cellInfo.col;
-                    box = cellInfo.box;
-                    cell = cellInfo.cell;
+                    const BoxesInfo & boxesInfo = SudokuTy::boxes_info[box_pos];
+                    row = boxesInfo.row;
+                    col = boxesInfo.col;
+                    box = boxesInfo.box;
+                    cell = boxesInfo.cell;                    
+                    pos = boxesInfo.pos;
 #endif
-                    //disable_cell_literal(pos);
-
-                    size_t num_bits = this->cell_nums_[pos].to_ulong();
-                    assert(this->cell_nums_[pos].count() == get_literal_cnt(min_literal_id));
+                    size_t num_bits = this->box_cell_nums_[box_pos].to_ulong();
+                    assert(this->box_cell_nums_[box_pos].count() == get_literal_cnt(min_literal_id));
                     while (num_bits != 0) {
                         size_t num_bit = BitUtils::ls1b(num_bits);
                         num = BitUtils::bsf(num_bit);
@@ -1537,7 +1549,6 @@ public:
                         num_bits ^= num_bit;
                     }
 
-                    //enable_cell_literal(pos);
                     break;
                 }
 
@@ -1548,8 +1559,6 @@ public:
                     assert(literal < Numbers * Rows);
                     num = literal / Rows;
                     row = literal % Rows;
-
-                    //disable_row_literal(num, row);
 
                     size_t col_bits = this->row_nums_[num * Rows + row].to_ulong();
                     assert(this->row_nums_[num * Rows + row].count() == get_literal_cnt(min_literal_id));
@@ -1592,7 +1601,6 @@ public:
                         col_bits ^= col_bit;
                     }
 
-                    //enable_row_literal(num, row);
                     break;
                 }
 
@@ -1603,8 +1611,6 @@ public:
                     assert(literal < Numbers * Cols);
                     num = literal / Cols;
                     col = literal % Cols;
-
-                    //disable_col_literal(num, col);
 
                     size_t row_bits = this->col_nums_[num * Cols + col].to_ulong();
                     assert(this->col_nums_[num * Cols + col].count() == get_literal_cnt(min_literal_id));
@@ -1647,7 +1653,6 @@ public:
                         row_bits ^= row_bit;
                     }
 
-                    //enable_col_literal(num, col);
                     break;
                 }
 
@@ -1656,13 +1661,11 @@ public:
                     size_t literal = (size_t)min_literal_id - BoxLiteralFirst;
                     assert(min_literal_id >= BoxLiteralFirst);
                     assert(literal < Numbers * Boxes);
-                    num = literal / Boxes;
-                    box = literal % Boxes;
+                    box = literal / Numbers;
+                    num = literal % Numbers;
 
-                    //disable_box_literal(num, box);
-
-                    size_t cell_bits = this->box_nums_[num * Boxes + box].to_ulong();
-                    assert(this->box_nums_[num * Boxes + box].count() == get_literal_cnt(min_literal_id));
+                    size_t cell_bits = this->box_nums_[box * Numbers + num].to_ulong();
+                    assert(this->box_nums_[box * Numbers + num].count() == get_literal_cnt(min_literal_id));
                     while (cell_bits != 0) {
                         size_t cell_bit = BitUtils::ls1b(cell_bits);
                         cell = BitUtils::bsf(cell_bits);
@@ -1699,7 +1702,6 @@ public:
                         cell_bits ^= cell_bit;
                     }
 
-                    //enable_box_literal(num, box);
                     break;
                 }
 
@@ -1756,7 +1758,7 @@ size_t Solver<SudokuTy>::num_unique_candidate = 0;
 template <typename SudokuTy>
 size_t Solver<SudokuTy>::num_failed_return = 0;
 
-} // namespace v2
+} // namespace v3
 } // namespace jmSudoku
 
-#endif // JM_SUDOKU_SOLVER_V2_H
+#endif // JM_SUDOKU_SOLVER_V3_H
