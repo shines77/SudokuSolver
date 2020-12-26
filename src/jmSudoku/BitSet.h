@@ -675,7 +675,7 @@ public:
 
     unsigned long to_ulong() const {
         if (Bits <= sizeof(uint32_t) * 8) {
-            return this->array_[0];
+            return static_cast<unsigned long>(this->array_[0]);
         }
         else {
             return static_cast<unsigned long>(this->array_[0]);

@@ -99,19 +99,6 @@ public:
         }
     }
 
-    template <size_t UBits>
-    PackedBitSet(const PackedBitSet<UBits> & src) noexcept {
-        static_assert((Bits != 0), "PackedBitSet<Bits>: Bits can not be 0 size.");
-        typedef PackedBitSet<UBits> SourceBitMap;
-        static const size_t copyUnits = std::min(kUnits, SourceBitMap::kUnits);
-        for (size_t i = 0; i < copyUnits; i++) {
-            this->array_[i] = src.array(i);
-        }
-        if (kRestBits != 0) {
-            this->trim();
-        }
-    }
-
     PackedBitSet(unit_type value) noexcept {
         static_assert((Bits != 0), "PackedBitSet<Bits>: Bits can not be 0 size.");
         if (kRestBits == 0)
@@ -701,8 +688,8 @@ public:
     }
 
     unsigned long to_ulong() const {
-        if (Bits <= sizeof(uint32_t) * 8) {
-            return this->array_[0];
+        if (Bits <= sizeof(unit_type) * 8) {
+            return static_cast<unsigned long>(this->array_[0]);
         }
         else {
             return static_cast<unsigned long>(this->array_[0]);
@@ -710,7 +697,7 @@ public:
     }
 
     uint64_t to_ullong() const {
-        if (Bits <= sizeof(uint32_t) * 8) {
+        if (Bits <= sizeof(unit_type) * 8) {
             return static_cast<uint64_t>(this->array_[0]);
         }
         else {
