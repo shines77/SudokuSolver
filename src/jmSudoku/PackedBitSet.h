@@ -650,7 +650,7 @@ public:
             unit_type unit = this->array_[i];
             if (unit != 0) {
                 unsigned int index;
-                if (sizeof(unit_type) == sizeof(uint32_t))
+                if (sizeof(unit_type) <= sizeof(uint32_t))
                     index = BitUtils::bsr32((uint32_t)unit);
                 else
                     index = BitUtils::bsr64(unit);
@@ -665,7 +665,7 @@ public:
             unit_type unit = this->array_[i];
             if (unit != 0) {
                 unit_type bit;
-                if (sizeof(unit_type) == sizeof(uint32_t))
+                if (sizeof(unit_type) <= sizeof(uint32_t))
                     bit = (unit_type)BitUtils::ls1b32((uint32_t)unit);
                 else
                     bit = (unit_type)BitUtils::ls1b64(unit);

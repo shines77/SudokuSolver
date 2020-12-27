@@ -97,6 +97,11 @@ private:
 
 public:
     SmallBitMatrix2() = default;
+    SmallBitMatrix2(const this_type & src) {
+        for (size_t row = 0; row < Rows; row++) {
+            this->array_[row] = src[row];
+        }
+    }
     ~SmallBitMatrix2() = default;
 
     size_t rows() const { return Rows; }
@@ -162,6 +167,11 @@ private:
 
 public:
     SmallBitMatrix3() = default;
+    SmallBitMatrix3(const this_type & src) {
+        for (size_t depth = 0; depth < Depths; depth++) {
+            this->matrix_[depth] = src[depth];
+        }
+    }
     ~SmallBitMatrix3() = default;
 
     size_t depths() const { return Depths; }

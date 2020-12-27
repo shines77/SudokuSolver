@@ -404,6 +404,13 @@ struct BasicSudoku {
     static const size_t Neighbors = (Cols - 1) + (Rows - 1) +
                                     (BoxSize - (BoxCellsX - 1) - (BoxCellsY - 1) - 1);
 
+    static const size_t Rows16 = AlignedTo<Rows, 16>::value;
+    static const size_t Cols16 = AlignedTo<Cols, 16>::value;
+    static const size_t Numbers16 = AlignedTo<Numbers, 16>::value;
+    static const size_t Boxes16 = AlignedTo<Boxes, 16>::value;
+    static const size_t BoxSize16 = AlignedTo<BoxSize, 16>::value;
+    static const size_t BoardSize16 = Boxes16 * BoxSize16;
+
     static const size_t MaxEffectBox = (BoxCountX - 1) + (BoxCountY -1) + 1;
     static const size_t MaxEffectLength = MaxEffectBox * BoxSize;
 
@@ -474,7 +481,9 @@ struct BasicSudoku {
     static bool is_inited;
 
     static CellInfo *       cell_info;
+    static CellInfo *       cell_info16;
     static BoxesInfo *      boxes_info;
+    static BoxesInfo *      boxes_info16;
     static NeighborCells *  neighbor_cells;
     static NeighborCells *  ordered_neighbor_cells;
     static BitMaskTable     neighbors_mask_tbl;
@@ -495,9 +504,17 @@ struct BasicSudoku {
                 delete[] cell_info;
                 cell_info = nullptr;
             }
+            if (cell_info16) {
+                delete[] cell_info16;
+                cell_info16 = nullptr;
+            }
             if (boxes_info) {
                 delete[] boxes_info;
                 boxes_info = nullptr;
+            }
+            if (boxes_info16) {
+                delete[] boxes_info16;
+                boxes_info16 = nullptr;
             }
             if (neighbor_cells) {
                 delete[] neighbor_cells;
@@ -514,11 +531,14 @@ struct BasicSudoku {
     static void make_cell_info() {
         if (cell_info == nullptr) {
             cell_info = new CellInfo[BoardSize];
+            cell_info16 = new CellInfo[Rows * Cols16];
 
             size_t pos = 0;
             for (size_t row = 0; row < Rows; row++) {
                 for (size_t col = 0; col < Cols; col++) {
                     CellInfo * cellInfo = &cell_info[pos];
+                    CellInfo * cellInfo16 = &cell_info16[row * Cols16 + col];
+
                     size_t box_x = col / BoxCellsX;
                     size_t box_y = row / BoxCellsY;
                     size_t box = box_y * BoxCountX + box_x;
@@ -538,6 +558,17 @@ struct BasicSudoku {
                     cellInfo->box_y = (uint8_t)box_x;
                     cellInfo->cell_x = (uint8_t)cell_x;
                     cellInfo->cell_y = (uint8_t)cell_y;
+
+                    cellInfo16->row = (uint8_t)row;
+                    cellInfo16->col = (uint8_t)col;
+                    cellInfo16->box = (uint8_t)box;
+                    cellInfo16->cell = (uint8_t)cell;
+                    cellInfo16->box_pos = (uint8_t)box_pos;
+                    cellInfo16->box_base = (uint8_t)box_base;
+                    cellInfo16->box_x = (uint8_t)box_x;
+                    cellInfo16->box_y = (uint8_t)box_x;
+                    cellInfo16->cell_x = (uint8_t)cell_x;
+                    cellInfo16->cell_y = (uint8_t)cell_y;
 
                     pos++;
                 }
@@ -569,11 +600,14 @@ struct BasicSudoku {
     static void make_boxes_info() {
         if (boxes_info == nullptr) {
             boxes_info = new BoxesInfo[Boxes * BoxSize];
+            boxes_info16 = new BoxesInfo[Boxes * BoxSize16];
 
             size_t index = 0;
             for (size_t box = 0; box < Boxes; box++) {
                 for (size_t cell = 0; cell < BoxSize; cell++) {
                     BoxesInfo * boxesInfo = &boxes_info[index];
+                    BoxesInfo * boxesInfo16 = &boxes_info16[box * BoxSize16 + cell];
+
                     size_t row = (box / BoxCountX) * BoxCellsY + (cell / BoxCellsX);
                     size_t col = (box % BoxCountX) * BoxCellsX + (cell % BoxCellsX);
                     size_t pos = row * Cols + col;
@@ -593,6 +627,17 @@ struct BasicSudoku {
                     boxesInfo->box_y = (uint8_t)box_x;
                     boxesInfo->cell_x = (uint8_t)cell_x;
                     boxesInfo->cell_y = (uint8_t)cell_y;
+
+                    boxesInfo16->row = (uint8_t)row;
+                    boxesInfo16->col = (uint8_t)col;
+                    boxesInfo16->box = (uint8_t)box;
+                    boxesInfo16->cell = (uint8_t)cell;
+                    boxesInfo16->pos = (uint8_t)pos;
+                    boxesInfo16->box_base = (uint8_t)box_base;
+                    boxesInfo16->box_x = (uint8_t)box_x;
+                    boxesInfo16->box_y = (uint8_t)box_x;
+                    boxesInfo16->cell_x = (uint8_t)cell_x;
+                    boxesInfo16->cell_y = (uint8_t)cell_y;
 
                     index++;
                 }
@@ -838,10 +883,30 @@ template <size_t nBoxCellsX, size_t nBoxCellsY,
           size_t nMinNumber, size_t nMaxNumber>
 typename BasicSudoku<nBoxCellsX, nBoxCellsY,
                      nBoxCountX, nBoxCountY,
+                     nMinNumber, nMaxNumber>::CellInfo *
+    BasicSudoku<nBoxCellsX, nBoxCellsY,
+                nBoxCountX, nBoxCountY,
+                nMinNumber, nMaxNumber>::cell_info16 = nullptr;
+
+template <size_t nBoxCellsX, size_t nBoxCellsY,
+          size_t nBoxCountX, size_t nBoxCountY,
+          size_t nMinNumber, size_t nMaxNumber>
+typename BasicSudoku<nBoxCellsX, nBoxCellsY,
+                     nBoxCountX, nBoxCountY,
                      nMinNumber, nMaxNumber>::BoxesInfo *
     BasicSudoku<nBoxCellsX, nBoxCellsY,
                 nBoxCountX, nBoxCountY,
                 nMinNumber, nMaxNumber>::boxes_info = nullptr;
+
+template <size_t nBoxCellsX, size_t nBoxCellsY,
+          size_t nBoxCountX, size_t nBoxCountY,
+          size_t nMinNumber, size_t nMaxNumber>
+typename BasicSudoku<nBoxCellsX, nBoxCellsY,
+                     nBoxCountX, nBoxCountY,
+                     nMinNumber, nMaxNumber>::BoxesInfo *
+    BasicSudoku<nBoxCellsX, nBoxCellsY,
+                nBoxCountX, nBoxCountY,
+                nMinNumber, nMaxNumber>::boxes_info16 = nullptr;
 
 template <size_t nBoxCellsX, size_t nBoxCellsY,
           size_t nBoxCountX, size_t nBoxCountY,
