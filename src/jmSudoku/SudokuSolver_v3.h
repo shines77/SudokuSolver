@@ -119,6 +119,13 @@ public:
     static const size_t BoxSize16 = AlignedTo<BoxSize, 16>::value;
     static const size_t BoardSize16 = Boxes16 * BoxSize16;
 
+    static const size_t Rows32 = Rows16 * 2;
+    static const size_t Cols32 = Cols16 * 2;
+    static const size_t Numbers32 = Numbers16 * 2;
+    static const size_t Boxes32 = Boxes16 * 2;
+    static const size_t BoxSize32 = BoxSize16 * 2;
+    static const size_t BoardSize32 = Boxes32 * BoxSize32;
+
     static const size_t TotalCellLiterals = Boxes16 * BoxSize16;
     static const size_t TotalRowLiterals = Rows16 * Numbers16;
     static const size_t TotalColLiterals = Cols16 * Numbers16;
@@ -227,10 +234,10 @@ private:
 
     alignas(32) PackedBitSet2D<Numbers, Boxes16 * BoxSize16>  num_cells_;       // [num][box * BoxSize16 + cell]
 
-    alignas(32) PackedBitSet3D<Boxes, BoxSize16, Numbers16>   box_cell_nums_;   // [box * BoxSize16][cell][num]
-    alignas(32) PackedBitSet3D<Numbers, Rows16, Cols16>       row_num_cols_;    // [num * Rows16][row][col]
-    alignas(32) PackedBitSet3D<Numbers, Cols16, Rows16>       col_num_rows_;    // [num * Cols16][col][row]
-    alignas(32) PackedBitSet3D<Numbers, Boxes16, BoxSize16>   box_num_cells_;   // [num * Boxes16][box][cell]
+    alignas(32) PackedBitSet3D<Boxes, BoxSize16, Numbers16>   box_cell_nums_;   // [box][cell][num]
+    alignas(32) PackedBitSet3D<Numbers, Rows16, Cols16>       row_num_cols_;    // [num][row][col]
+    alignas(32) PackedBitSet3D<Numbers, Cols16, Rows16>       col_num_rows_;    // [num][col][row]
+    alignas(32) PackedBitSet3D<Numbers, Boxes16, BoxSize16>   box_num_cells_;   // [num][box][cell]
 
     State state_;
 
@@ -241,10 +248,10 @@ private:
     alignas(16) uint8_t literal_enable_[TotalLiterals];
 #endif
 
-    alignas(32) uint8_t box_cells_size_[Boxes16 * BoxSize16];
-    alignas(32) uint8_t row_nums_size_[Numbers16 * Rows16];
-    alignas(32) uint8_t col_nums_size_[Numbers16 * Cols16];
-    alignas(32) uint8_t box_nums_size_[Numbers16 * Boxes16];
+    alignas(32) uint16_t box_cells_size_[Boxes16 * BoxSize16];
+    alignas(32) uint16_t row_nums_size_[Numbers16 * Rows16];
+    alignas(32) uint16_t col_nums_size_[Numbers16 * Cols16];
+    alignas(32) uint16_t box_nums_size_[Numbers16 * Boxes16];
 
     size_t empties_;
 
@@ -473,6 +480,16 @@ private:
 
         init_neighbor_boxes();
         init_neighbor_cells_mask();
+
+        // Flip all mask bits
+        for (size_t pos = 0; pos < BoardSize; pos++) {
+            for (size_t num = MinNumber - 1; num < MaxNumber; num++) {
+                box_cell_neighbors_mask[pos][num].flip();
+            }
+        }
+        row_neighbors_mask.flip();
+        col_neighbors_mask.flip();
+        box_num_neighbors_mask.flip();
     }
 
     void init_board(Board & board) {
@@ -522,8 +539,13 @@ private:
             }
         }
 
-        bool is_correct = verify_bitboard_correctness();
-        assert(is_correct); 
+        this->count_all_literal_size();
+
+        bool is_correct = verify_bitboard_state();
+        assert(is_correct);
+
+        bool size_is_correct = verify_literal_size();
+        assert(size_is_correct);
     }
 
     static const size_t kLiteralStep = sizeof(size_t) / sizeof(literal_info_t);
@@ -661,8 +683,16 @@ private:
         return this->literal_info_[literal].count;
     }
 
+    inline uint8_t get_literal_enable(size_t literal) {
+        return this->literal_info_[literal].enable;
+    }
+
     inline void set_literal_cnt(size_t literal, uint8_t count) {
         this->literal_info_[literal].count = count;
+    }
+
+    inline void set_literal_enable(size_t literal, uint8_t enable) {
+        this->literal_info_[literal].enable = enable;
     }
 
     inline void inc_literal_cnt(size_t literal) {
@@ -722,8 +752,16 @@ private:
         return this->literal_count_[literal];
     }
 
+    inline uint8_t get_literal_enable(size_t literal) {
+        return this->literal_enable_[literal];
+    }
+
     inline void set_literal_cnt(size_t literal, uint8_t count) {
         this->literal_count_[literal] = count;
+    }
+
+    inline void set_literal_enable(size_t literal, uint8_t enable) {
+        this->literal_enable_[literal] = enable;
     }
 
     inline void inc_literal_cnt(size_t literal) {
@@ -808,6 +846,27 @@ private:
     inline void disable_box_literal(size_t num, size_t box) {
         size_t literal = BoxLiteralFirst + num * Boxes16 + box;
         this->disable_literal(literal);
+    }
+
+    // get_xxxx_literal_enable()
+    inline uint8_t get_cell_literal_enable(size_t pos) {
+        size_t literal = CellLiteralFirst + pos;
+        return this->get_literal_enable(literal);
+    }
+
+    inline uint8_t get_row_literal_enable(size_t num, size_t row) {
+        size_t literal = RowLiteralFirst + num * Rows16 + row;
+        return this->get_literal_enable(literal);
+    }
+
+    inline uint8_t get_col_literal_enable(size_t num, size_t col) {
+        size_t literal = ColLiteralFirst + num * Cols16 + col;
+        return this->get_literal_enable(literal);
+    }
+
+    inline uint8_t get_box_literal_enable(size_t num, size_t box) {
+        size_t literal = BoxLiteralFirst + num * Boxes16 + box;
+        return this->get_literal_enable(literal);
     }
 
     // get_xxxx_literal_cnt()
@@ -1751,13 +1810,13 @@ private:
             = box_cell_neighbors_mask[fill_pos][num];
         for (size_t i = 0; i < neighborBoxes.boxes_count(); i++) {
             size_t box_idx = neighborBoxes.boxes[i];
-            this->state_.box_cell_nums[box_idx] &= ~neighbors_mask[box_idx];
+            this->state_.box_cell_nums[box_idx] &= neighbors_mask[box_idx];
         }
-        this->state_.box_cell_nums[box] &= ~neighbors_mask[box];
+        this->state_.box_cell_nums[box] &= neighbors_mask[box];
 
-        this->state_.row_num_cols[num] &= ~row_neighbors_mask[fill_pos];
-        this->state_.col_num_rows[num] &= ~col_neighbors_mask[fill_pos];
-        this->state_.box_num_cells[num] &= ~box_num_neighbors_mask[fill_pos];
+        this->state_.row_num_cols[num] &= row_neighbors_mask[fill_pos];
+        this->state_.col_num_rows[num] &= col_neighbors_mask[fill_pos];
+        this->state_.box_num_cells[num] &= box_num_neighbors_mask[fill_pos];
     }
 
     inline void _doFillNum(size_t pos, size_t row, size_t col,
@@ -1839,22 +1898,22 @@ private:
         for (size_t i = 0; i < boxesCount; i++) {
             size_t box_idx = neighborBoxes.boxes[i];
             recover_state.boxes[i] = this->state_.box_cell_nums[box_idx];
-            this->state_.box_cell_nums[box_idx] &= ~neighbors_mask[box_idx];
+            this->state_.box_cell_nums[box_idx] &= neighbors_mask[box_idx];
         }
         recover_state.boxes[boxesCount] = this->state_.box_cell_nums[box];
-        this->state_.box_cell_nums[box] &= ~neighbors_mask[box];
+        this->state_.box_cell_nums[box] &= neighbors_mask[box];
 
         // Row literal
         recover_state.row_cols = this->state_.row_num_cols[num];
-        this->state_.row_num_cols[num] &= ~row_neighbors_mask[fill_pos];
+        this->state_.row_num_cols[num] &= row_neighbors_mask[fill_pos];
 
         // Col literal
         recover_state.col_rows = this->state_.col_num_rows[num];
-        this->state_.col_num_rows[num] &= ~col_neighbors_mask[fill_pos];
+        this->state_.col_num_rows[num] &= col_neighbors_mask[fill_pos];
 
         // Box-cell literal
         recover_state.box_cells = this->state_.box_num_cells[num];
-        this->state_.box_num_cells[num] &= ~box_num_neighbors_mask[fill_pos];
+        this->state_.box_num_cells[num] &= box_num_neighbors_mask[fill_pos];
     }
 
     inline void _restoreNeighborCellsEffect(const RecoverState & recover_state,
@@ -1878,12 +1937,146 @@ private:
         this->state_.box_num_cells[num] = recover_state.box_cells;
     }
 
-    bool verify_bitboard_correctness() {
+    bool verify_bitboard_state() {
         bool is_correct1 = (this->state_.box_cell_nums == this->box_cell_nums_);
         bool is_correct2 = (this->state_.row_num_cols == this->row_num_cols_);
         bool is_correct3 = (this->state_.col_num_rows == this->col_num_rows_);
         bool is_correct4 = (this->state_.box_num_cells == this->box_num_cells_);
         return (is_correct1 && is_correct2 && is_correct3 && is_correct4);
+    }
+
+    inline void count_all_literal_size() {
+        BitVec16x16 bitboard;
+
+        // Position (Box-Cell) literal
+        for (size_t box = 0; box < Boxes; box++) {
+            const PackedBitSet2D<BoxSize16, Numbers16> * bitset;
+            bitset = &this->state_.box_cell_nums[box];
+            bitboard.loadAligned(bitset);
+
+            void * count_size = (void *)&box_cells_size_[box * BoxSize16];
+            bitboard.popcount16(count_size);
+        }
+
+        // Row literal
+        for (size_t num = 0; num < Numbers; num++) {
+            const PackedBitSet2D<Rows16, Cols16> * bitset;
+            bitset = &this->state_.row_num_cols[num];
+            bitboard.loadAligned(bitset);
+
+            void * count_size = (void *)&row_nums_size_[num * Rows16];
+            bitboard.popcount16(count_size);
+        }
+
+        // Col literal
+        for (size_t num = 0; num < Numbers; num++) {
+            const PackedBitSet2D<Cols16, Rows16> * bitset;
+            bitset = &this->state_.col_num_rows[num];
+            bitboard.loadAligned(bitset);
+
+            void * count_size = (void *)&col_nums_size_[num * Cols16];
+            bitboard.popcount16(count_size);
+        }
+
+        // Box-Cell literal
+        for (size_t num = 0; num < Numbers; num++) {
+            const PackedBitSet2D<Boxes16, BoxSize16> * bitset;
+            bitset = &this->state_.box_num_cells[num];
+            bitboard.loadAligned(bitset);
+
+            void * count_size = (void *)&box_nums_size_[num * Boxes16];
+            bitboard.popcount16(count_size);
+        }
+    }
+
+    bool verify_literal_size() {
+        bool is_correct = true;
+
+        // Cell (Box-Cell) literal
+        for (size_t box = 0; box < Boxes; box++) {
+            uint16_t * count_size = (uint16_t *)&box_cells_size_[box * BoxSize16];
+            for (size_t cell = 0; cell < BoxSize; cell++) {
+                uint8_t enable = get_cell_literal_enable(box * BoxSize16 + cell);
+                if (enable != 0xFF) {
+                    uint16_t size1 = get_cell_literal_cnt(box * BoxSize16 + cell);
+                    uint16_t size2 = count_size[cell];
+                    if (size1 != size2) {
+                        return false;
+                    }
+                }
+                else {
+                    uint16_t size2 = count_size[cell];
+                    if (size2 != 0) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        // Row literal
+        for (size_t num = 0; num < Numbers; num++) {
+            uint16_t * count_size = (uint16_t *)&row_nums_size_[num * Rows16];
+            for (size_t row = 0; row < Rows; row++) {
+                uint8_t enable = get_row_literal_enable(num, row);
+                if (enable != 0xFF) {
+                    uint16_t size1 = get_row_literal_cnt(num, row);
+                    uint16_t size2 = count_size[row];
+                    if (size1 != size2) {
+                        return false;
+                    }
+                }
+                else {
+                    uint16_t size2 = count_size[row];
+                    if (size2 != 0) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        // Col literal
+        for (size_t num = 0; num < Numbers; num++) {
+            uint16_t * count_size = (uint16_t *)&col_nums_size_[num * Cols16];
+            for (size_t col = 0; col < Cols; col++) {
+                uint8_t enable = get_col_literal_enable(num, col);
+                if (enable != 0xFF) {
+                    uint16_t size1 = get_col_literal_cnt(num, col);
+                    uint16_t size2 = count_size[col];
+                    if (size1 != size2) {
+                        return false;
+                    }
+                }
+                else {
+                    uint16_t size2 = count_size[col];
+                    if (size2 != 0) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        // Box-Cell literal
+        for (size_t num = 0; num < Numbers; num++) {
+            uint16_t * count_size = (uint16_t *)&box_nums_size_[num * Boxes16];
+            for (size_t box = 0; box < Boxes; box++) {
+                uint8_t enable = get_box_literal_enable(num, box);
+                if (enable != 0xFF) {
+                    uint16_t size1 = get_box_literal_cnt(num, box);
+                    uint16_t size2 = count_size[box];
+                    if (size1 != size2) {
+                        return false;
+                    }
+                }
+                else {
+                    uint16_t size2 = count_size[box];
+                    if (size2 != 0) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return is_correct;
     }
 
 public:
@@ -1953,7 +2146,7 @@ public:
                         _doFillNum(pos, row, col, box, cell, num, save_num_bits);
                         _updateNeighborCellsEffect(recover_state, pos, box, num);
 
-                        bool is_correct = verify_bitboard_correctness();
+                        bool is_correct = verify_bitboard_state();
                         assert(is_correct); 
 
                         board.cells[pos] = (char)(num + '1');
@@ -1976,7 +2169,7 @@ public:
                         _restoreNeighborCellsEffect(recover_state, box, num);
                         _undoFillNum(pos, row, col, box, cell, num, save_num_bits);
 
-                        is_correct = verify_bitboard_correctness();
+                        is_correct = verify_bitboard_state();
                         assert(is_correct); 
 
                         num_bits ^= num_bit;
@@ -2017,7 +2210,7 @@ public:
                         _doFillNum(pos, row, col, box, cell, num, save_num_bits);
                         _updateNeighborCellsEffect(recover_state, pos, box, num);
 
-                        bool is_correct = verify_bitboard_correctness();
+                        bool is_correct = verify_bitboard_state();
                         assert(is_correct); 
 
                         board.cells[pos] = (char)(num + '1');
@@ -2040,7 +2233,7 @@ public:
                         _restoreNeighborCellsEffect(recover_state, box, num);
                         _undoFillNum(pos, row, col, box, cell, num, save_num_bits);
 
-                        is_correct = verify_bitboard_correctness();
+                        is_correct = verify_bitboard_state();
                         assert(is_correct); 
 
                         col_bits ^= col_bit;
@@ -2081,7 +2274,7 @@ public:
                         _doFillNum(pos, row, col, box, cell, num, save_num_bits);
                         _updateNeighborCellsEffect(recover_state, pos, box, num);
 
-                        bool is_correct = verify_bitboard_correctness();
+                        bool is_correct = verify_bitboard_state();
                         assert(is_correct); 
 
                         board.cells[pos] = (char)(num + '1');
@@ -2104,7 +2297,7 @@ public:
                         _restoreNeighborCellsEffect(recover_state, box, num);
                         _undoFillNum(pos, row, col, box, cell, num, save_num_bits);
 
-                        is_correct = verify_bitboard_correctness();
+                        is_correct = verify_bitboard_state();
                         assert(is_correct); 
 
                         row_bits ^= row_bit;
@@ -2142,7 +2335,7 @@ public:
                         _doFillNum(pos, row, col, box, cell, num, save_num_bits);
                         _updateNeighborCellsEffect(recover_state, pos, box, num);
 
-                        bool is_correct = verify_bitboard_correctness();
+                        bool is_correct = verify_bitboard_state();
                         assert(is_correct); 
 
                         board.cells[pos] = (char)(num + '1');
@@ -2165,7 +2358,7 @@ public:
                         _restoreNeighborCellsEffect(recover_state, box, num);
                         _undoFillNum(pos, row, col, box, cell, num, save_num_bits);
 
-                        is_correct = verify_bitboard_correctness();
+                        is_correct = verify_bitboard_state();
                         assert(is_correct); 
 
                         cell_bits ^= cell_bit;
