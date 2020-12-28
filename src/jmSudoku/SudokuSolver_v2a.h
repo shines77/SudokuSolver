@@ -1346,8 +1346,8 @@ private:
         }
     }
 
-    inline void updateNeighborCellsEffect(size_t in_pos, size_t num) {
-        const BitMask & neighborsMask = SudokuTy::neighbors_mask_tbl[in_pos];
+    inline void updateNeighborCellsEffect(size_t fill_pos, size_t num) {
+        const BitMask & neighborsMask = SudokuTy::neighbors_mask_tbl[fill_pos];
         BitMask & digitCells = this->num_cells_[num];
 
         register BitMask effect_cells = digitCells & neighborsMask;
@@ -1388,9 +1388,9 @@ private:
         }
     }
 
-    inline size_t updateNeighborCellsEffect(BitMask & save_effect_cells, size_t in_pos,
+    inline size_t updateNeighborCellsEffect(BitMask & save_effect_cells, size_t fill_pos,
                                             size_t in_row, size_t in_col, size_t num) {
-        const BitMask & neighborsMask = SudokuTy::neighbors_mask_tbl[in_pos];
+        const BitMask & neighborsMask = SudokuTy::neighbors_mask_tbl[fill_pos];
         BitMask & digitCells = this->num_cells_[num];
 
         BitMask effect_cells = digitCells & neighborsMask;
@@ -1473,7 +1473,7 @@ private:
         }
 
         size_t box_bit;
-        BitMask box_bits = effect_cells & this->cell_mask_[in_pos];
+        BitMask box_bits = effect_cells & this->cell_mask_[fill_pos];
         while ((box_bit = box_bits.ls1b(index)) != 0) {
             size_t bit_pos = BitUtils::bsf(box_bit);
             box_bits.reset_bit(index, box_bit);
@@ -1512,7 +1512,7 @@ private:
     }
 
     inline void restoreNeighborCellsEffect(BitMask & effect_cells, size_t effect_count,
-                                           size_t in_pos, size_t in_row, size_t in_col, size_t num) {
+                                           size_t fill_pos, size_t in_row, size_t in_col, size_t num) {
         size_t count = 0;
         size_t index;
 
@@ -1587,7 +1587,7 @@ private:
         }
 
         size_t box_bit;
-        BitMask box_bits = effect_cells & this->cell_mask_[in_pos];
+        BitMask box_bits = effect_cells & this->cell_mask_[fill_pos];
         while ((box_bit = box_bits.ls1b(index)) != 0) {
             size_t bit_pos = BitUtils::bsf(box_bit);
             box_bits.reset_bit(index, box_bit);

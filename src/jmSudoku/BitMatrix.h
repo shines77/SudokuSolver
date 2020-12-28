@@ -104,6 +104,13 @@ public:
     }
     ~SmallBitMatrix2() = default;
 
+    this_type & operator = (const this_type & right) noexcept {
+        for (size_t row = 0; row < Rows; row++) {
+            this->array_[row] = right[row];
+        }
+        return (*this);
+    }
+
     size_t rows() const { return Rows; }
     size_t cols() const { return Cols; }
 
@@ -152,6 +159,76 @@ public:
         assert(pos < Rows);
         return this->array_[pos];
     }
+
+    this_type & operator & (const this_type & right) noexcept {
+        for (size_t row = 0; row < Rows; row++) {
+            this->array_[row] &= right[row];
+        }
+        return (*this);
+    }
+
+    this_type & operator | (const this_type & right) noexcept {
+        for (size_t row = 0; row < Rows; row++) {
+            this->array_[row] |= right[row];
+        }
+        return (*this);
+    }
+
+    this_type & operator ^ (const this_type & right) noexcept {
+        for (size_t row = 0; row < Rows; row++) {
+            this->array_[row] ^= right[row];
+        }
+        return (*this);
+    }
+
+    this_type & operator &= (const this_type & right) noexcept {
+        for (size_t row = 0; row < Rows; row++) {
+            this->array_[row] &= right[row];
+        }
+        return (*this);
+    }
+
+    this_type & operator |= (const this_type & right) noexcept {
+        for (size_t row = 0; row < Rows; row++) {
+            this->array_[row] |= right[row];
+        }
+        return (*this);
+    }
+
+    this_type & operator ^= (const this_type & right) noexcept {
+        for (size_t row = 0; row < Rows; row++) {
+            this->array_[row] ^= right[row];
+        }
+        return (*this);
+    }
+
+	this_type operator ~ () const noexcept {
+        // Flip all bits
+		return (this_type(*this).flip());
+    }
+
+	this_type operator ! () const noexcept {
+        // Flip all bits
+		return (this_type(*this).flip());
+    }
+
+    bool operator == (const this_type & right) noexcept {
+        for (size_t row = 0; row < Rows; row++) {
+            if (this->array_[row] != right[row]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool operator != (const this_type & right) noexcept {
+        for (size_t row = 0; row < Rows; row++) {
+            if (this->array_[row] == right[row]) {
+                return false;
+            }
+        }
+        return true;
+    }
 };
 
 template <size_t Depths, size_t Rows, size_t Cols,
@@ -173,6 +250,13 @@ public:
         }
     }
     ~SmallBitMatrix3() = default;
+
+    this_type & operator = (const this_type & right) noexcept {
+        for (size_t depth = 0; depth < Depths; depth++) {
+            this->matrix_[depth] = right[depth];
+        }
+        return (*this);
+    }
 
     size_t depths() const { return Depths; }
     size_t rows() const { return Rows; }
@@ -223,6 +307,76 @@ public:
     const matrix_type & operator [] (size_t pos) const {
         assert(pos < Depths);
         return this->matrix_[pos];
+    }
+
+    this_type & operator & (const this_type & right) noexcept {
+        for (size_t depth = 0; depth < Depths; depth++) {
+            this->matrix_[depth] &= right[depth];
+        }
+        return (*this);
+    }
+
+    this_type & operator | (const this_type & right) noexcept {
+        for (size_t depth = 0; depth < Depths; depth++) {
+            this->matrix_[depth] |= right[depth];
+        }
+        return (*this);
+    }
+
+    this_type & operator ^ (const this_type & right) noexcept {
+        for (size_t depth = 0; depth < Depths; depth++) {
+            this->matrix_[depth] ^= right[depth];
+        }
+        return (*this);
+    }
+
+    this_type & operator &= (const this_type & right) noexcept {
+        for (size_t depth = 0; depth < Depths; depth++) {
+            this->matrix_[depth] &= right[depth];
+        }
+        return (*this);
+    }
+
+    this_type & operator |= (const this_type & right) noexcept {
+        for (size_t depth = 0; depth < Depths; depth++) {
+            this->matrix_[depth] |= right[depth];
+        }
+        return (*this);
+    }
+
+    this_type & operator ^= (const this_type & right) noexcept {
+        for (size_t depth = 0; depth < Depths; depth++) {
+            this->matrix_[depth] ^= right[depth];
+        }
+        return (*this);
+    }
+
+	this_type operator ~ () const noexcept {
+        // Flip all bits
+		return (this_type(*this).flip());
+    }
+
+	this_type operator ! () const noexcept {
+        // Flip all bits
+		return (this_type(*this).flip());
+    }
+
+    bool operator == (const this_type & right) noexcept {
+        for (size_t depth = 0; depth < Depths; depth++) {
+            if (this->matrix_[depth] != right[depth]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool operator != (const this_type & right) noexcept {
+        for (size_t depth = 0; depth < Depths; depth++) {
+            if (this->matrix_[depth] == right[depth]) {
+                return false;
+            }
+        }
+        return true;
     }
 };
 

@@ -58,11 +58,6 @@ namespace v3 {
 
 static const size_t kSearchMode = V3_SEARCH_MODE;
 
-template <size_t BoxCountX, size_t BoxCountY>
-struct NeighborBoxes {
-    size_t boxes[(BoxCountX - 1) + (BoxCountY - 1)];
-};
-
 #if 0
 static const NeighborBoxes<3, 3> neighbor_boxes[9] = {
     // Box # 0
@@ -201,6 +196,31 @@ private:
         uint16_t value;
     };
 
+    template <size_t nBoxCountX, size_t nBoxCountY>
+    struct NeighborBoxes {
+        static const size_t kBoxesCount = (nBoxCountX - 1) + (nBoxCountY - 1);
+        size_t boxes_count() const { return kBoxesCount; }
+
+        size_t boxes[kBoxesCount];
+    };
+
+    typedef NeighborBoxes<BoxCountX, BoxCountY> neighbor_boxes_t;
+
+    struct State {
+        alignas(32) PackedBitSet3D<Boxes, BoxSize16, Numbers16>   box_cell_nums;    // [box][cell][num]
+        alignas(32) PackedBitSet3D<Numbers, Rows16, Cols16>       row_num_cols;     // [num][row][col]
+        alignas(32) PackedBitSet3D<Numbers, Cols16, Rows16>       col_num_rows;     // [num][col][row]
+        alignas(32) PackedBitSet3D<Numbers, Boxes16, BoxSize16>   box_num_cells;    // [num][box][cell]
+    };
+
+    struct RecoverState {
+        static const size_t kBoxesTotal = neighbor_boxes_t::kBoxesCount + 1;
+        alignas(32) PackedBitSet2D<BoxSize16, Numbers16>          boxes[kBoxesTotal];   // [cell][num]
+        alignas(32) PackedBitSet2D<Rows16, Cols16>                row_cols;             // [row][col]
+        alignas(32) PackedBitSet2D<Cols16, Rows16>                col_rows;             // [col][row]
+        alignas(32) PackedBitSet2D<Boxes16, BoxSize16>            box_cells;            // [box][cell]
+    };
+
 #pragma pack(pop)
 
     typedef PackedBitSet<Numbers16>     bitset_type;
@@ -212,10 +232,7 @@ private:
     alignas(32) PackedBitSet3D<Numbers, Cols16, Rows16>       col_num_rows_;    // [num * Cols16][col][row]
     alignas(32) PackedBitSet3D<Numbers, Boxes16, BoxSize16>   box_num_cells_;   // [num * Boxes16][box][cell]
 
-    alignas(32) uint8_t box_cells_size_[Boxes16 * BoxSize16];
-    alignas(32) uint8_t row_nums_size_[Numbers16 * Rows16];
-    alignas(32) uint8_t col_nums_size_[Numbers16 * Cols16];
-    alignas(32) uint8_t box_nums_size_[Numbers16 * Boxes16];
+    State state_;
 
 #if defined(__SSE4_1__)
     alignas(16) literal_info_t literal_info_[TotalLiterals];
@@ -224,22 +241,26 @@ private:
     alignas(16) uint8_t literal_enable_[TotalLiterals];
 #endif
 
+    alignas(32) uint8_t box_cells_size_[Boxes16 * BoxSize16];
+    alignas(32) uint8_t row_nums_size_[Numbers16 * Rows16];
+    alignas(32) uint8_t col_nums_size_[Numbers16 * Cols16];
+    alignas(32) uint8_t box_nums_size_[Numbers16 * Boxes16];
+
     size_t empties_;
 
     std::vector<Board>  answers_;
 
     static bool is_mask_inited;
 
-    typedef NeighborBoxes<BoxCountX, BoxCountY>     neighbor_boxes_t;
-    static std::vector<neighbor_boxes_t>            neighbor_boxes;
+    static std::vector<neighbor_boxes_t> neighbor_boxes;
 
     static alignas(32) PackedBitSet2D<BoardSize, Rows16 * Cols16>     neighbor_cells_mask;
     static alignas(32) PackedBitSet2D<BoardSize, Boxes16 * BoxSize16> neighbor_boxes_mask;
 
-    static alignas(32) PackedBitSet3D<Boxes, BoxSize16, Numbers16>    neighbors_box_cell_mask[BoardSize][Numbers];
-    static alignas(32) PackedBitSet3D<BoardSize, Rows16, Cols16>      neighbors_row_mask;
-    static alignas(32) PackedBitSet3D<BoardSize, Cols16, Rows16>      neighbors_col_mask;
-    static alignas(32) PackedBitSet3D<BoardSize, Boxes16, BoxSize16>  neighbors_box_num_mask;
+    static alignas(32) PackedBitSet3D<Boxes, BoxSize16, Numbers16>    box_cell_neighbors_mask[BoardSize][Numbers];
+    static alignas(32) PackedBitSet3D<BoardSize, Rows16, Cols16>      row_neighbors_mask;
+    static alignas(32) PackedBitSet3D<BoardSize, Cols16, Rows16>      col_neighbors_mask;
+    static alignas(32) PackedBitSet3D<BoardSize, Boxes16, BoxSize16>  box_num_neighbors_mask;
 
 public:
     Solver() : empties_(0) {
@@ -287,12 +308,20 @@ private:
         PackedBitSet<BoardSize16> & cells_mask = neighbor_cells_mask[fill_pos];
         PackedBitSet<BoardSize16> & boxes_mask = neighbor_boxes_mask[fill_pos];
         
-        PackedBitSet2D<Rows16, Cols16> & rows_mask        = neighbors_row_mask[fill_pos];
-        PackedBitSet2D<Cols16, Rows16> & cols_mask        = neighbors_col_mask[fill_pos];
-        PackedBitSet2D<Boxes16, BoxSize16> & box_num_mask = neighbors_box_num_mask[fill_pos];
+        PackedBitSet2D<Rows16, Cols16> & rows_mask        = row_neighbors_mask[fill_pos];
+        PackedBitSet2D<Cols16, Rows16> & cols_mask        = col_neighbors_mask[fill_pos];
+        PackedBitSet2D<Boxes16, BoxSize16> & box_num_mask = box_num_neighbors_mask[fill_pos];
 
         const CellInfo * pCellInfo = SudokuTy::cell_info;
         size_t box, cell;
+
+        rows_mask[row].set(col);
+        cols_mask[col].set(row);
+
+        const CellInfo & cellInfo2 = pCellInfo[fill_pos];
+        box = cellInfo2.box;
+        cell = cellInfo2.cell;
+        box_num_mask[box].set(cell);
 
         size_t index = 0;
         size_t pos_y = row * Cols;
@@ -314,7 +343,7 @@ private:
                 box_num_mask[box].set(cell);
 
                 for (size_t num = MinNumber - 1; num < MaxNumber; num++) {
-                    PackedBitSet3D<Boxes, BoxSize16, Numbers16> & box_cell_mask = neighbors_box_cell_mask[fill_pos][num];
+                    PackedBitSet3D<Boxes, BoxSize16, Numbers16> & box_cell_mask = box_cell_neighbors_mask[fill_pos][num];
                     box_cell_mask[box][cell].set(num);
                 }
 
@@ -341,7 +370,7 @@ private:
                 box_num_mask[box].set(cell);
 
                 for (size_t num = MinNumber - 1; num < MaxNumber; num++) {
-                    PackedBitSet3D<Boxes, BoxSize16, Numbers16> & box_cell_mask = neighbors_box_cell_mask[fill_pos][num];
+                    PackedBitSet3D<Boxes, BoxSize16, Numbers16> & box_cell_mask = box_cell_neighbors_mask[fill_pos][num];
                     box_cell_mask[box][cell].set(num);
                 }
 
@@ -380,7 +409,7 @@ private:
                         box_num_mask[box].set(cell);
 
                         for (size_t num = MinNumber - 1; num < MaxNumber; num++) {
-                            PackedBitSet3D<Boxes, BoxSize16, Numbers16> & box_cell_mask = neighbors_box_cell_mask[fill_pos][num];
+                            PackedBitSet3D<Boxes, BoxSize16, Numbers16> & box_cell_mask = box_cell_neighbors_mask[fill_pos][num];
                             box_cell_mask[box][cell].set(num);
                         }
 
@@ -407,7 +436,7 @@ private:
     }
 
     static void init_neighbor_boxes() {
-        neighbor_boxes.resize(Boxes);
+        neighbor_boxes.reserve(Boxes);
         for (size_t box_y = 0; box_y < BoxCellsY; box_y++) {
             size_t box_y_base = box_y * BoxCellsX;
             for (size_t box_x = 0; box_x < BoxCellsX; box_x++) {
@@ -435,12 +464,12 @@ private:
 
         for (size_t pos = 0; pos < BoardSize; pos++) {
             for (size_t num = MinNumber - 1; num < MaxNumber; num++) {
-                neighbors_box_cell_mask[pos][num].reset();
+                box_cell_neighbors_mask[pos][num].reset();
             }
         }
-        neighbors_row_mask.reset();
-        neighbors_col_mask.reset();
-        neighbors_box_num_mask.reset();
+        row_neighbors_mask.reset();
+        col_neighbors_mask.reset();
+        box_num_neighbors_mask.reset();
 
         init_neighbor_boxes();
         init_neighbor_cells_mask();
@@ -456,6 +485,11 @@ private:
         this->row_num_cols_.fill(kAllColsBit);
         this->col_num_rows_.fill(kAllRowsBit);
         this->box_num_cells_.fill(kAllBoxSizeBit);
+
+        this->state_.box_cell_nums.fill(kAllNumbersBit);
+        this->state_.row_num_cols.fill(kAllColsBit);
+        this->state_.col_num_rows.fill(kAllRowsBit);
+        this->state_.box_num_cells.fill(kAllBoxSizeBit);
 
         num_guesses = 0;
         num_unique_candidate = 0;
@@ -480,7 +514,9 @@ private:
                     size_t cell = cell_y + cell_x;
                     size_t num = val - '1';
                     this->doFillNum(pos, row, col, box, cell, num);
+                    this->_doFillNum(pos, row, col, box, cell, num);
                     this->updateNeighborCellsEffect(pos, num);
+                    this->_updateNeighborCellsEffect(pos, box, num);
                 }
                 pos++;
             }
@@ -1425,8 +1461,8 @@ private:
         }
     }
 
-    inline void updateNeighborCellsEffect(size_t in_pos, size_t num) {
-        const PackedBitSet<BoardSize16> & neighborsMask = neighbor_boxes_mask[in_pos];
+    inline void updateNeighborCellsEffect(size_t fill_pos, size_t num) {
+        const PackedBitSet<BoardSize16> & neighborsMask = neighbor_boxes_mask[fill_pos];
         PackedBitSet<BoardSize16> & digitCells = this->num_cells_[num];
 
         PackedBitSet<BoardSize16> effect_cells = digitCells & neighborsMask;
@@ -1535,6 +1571,13 @@ private:
         size_t col_idx = num * Cols16 + col;
         size_t box_idx = num * Boxes16 + box;
 
+        assert(!this->num_cells_[num].test(box_pos));
+
+        assert(!this->box_cell_nums_[box][cell].test(num));
+        assert(!this->row_num_cols_[num][row].test(col));
+        assert(!this->col_num_rows_[num][col].test(row));
+        assert(!this->box_num_cells_[num][box].test(cell));
+
         enable_cell_literal(box_pos);
         enable_row_literal(row_idx);
         enable_col_literal(col_idx);
@@ -1560,6 +1603,12 @@ private:
             col_idx = _num * Cols16 + col;
             box_idx = _num * Boxes16 + box;
 
+            assert(!this->num_cells_[_num].test(box_pos));
+
+            assert(!this->row_num_cols_[_num][row].test(col));
+            assert(!this->col_num_rows_[_num][col].test(row));
+            assert(!this->box_num_cells_[_num][box].test(cell));
+
             this->num_cells_[_num].set(box_pos);
 
             this->row_num_cols_[_num][row].set(col);
@@ -1575,8 +1624,8 @@ private:
     }
 
     inline size_t updateNeighborCellsEffect(PackedBitSet<BoardSize16> & save_effect_cells,
-                                            size_t in_pos, size_t num) {
-        const PackedBitSet<BoardSize16> & neighborsMask = neighbor_boxes_mask[in_pos];
+                                            size_t fill_pos, size_t num) {
+        const PackedBitSet<BoardSize16> & neighborsMask = neighbor_boxes_mask[fill_pos];
         PackedBitSet<BoardSize16> & digitCells = this->num_cells_[num];
 
         PackedBitSet<BoardSize16> effect_cells = digitCells & neighborsMask;
@@ -1661,6 +1710,177 @@ private:
         return count;
     }
 
+    inline void _doFillNum(size_t pos, size_t row, size_t col,
+                           size_t box, size_t cell, size_t num) {
+        assert(this->state_.box_cell_nums[box][cell].test(num));
+        assert(this->state_.row_num_cols[num][row].test(col));
+        assert(this->state_.col_num_rows[num][col].test(row));
+        assert(this->state_.box_num_cells[num][box].test(cell));
+
+        PackedBitSet<Numbers16> cell_num_bits = this->state_.box_cell_nums[box][cell];
+        this->state_.box_cell_nums[box][cell].reset();
+
+        //this->state_.row_num_cols[num][row].reset(col);
+        //this->state_.col_num_rows[num][col].reset(row);
+        //this->state_.box_num_cells[num][box].reset(cell);
+
+        size_t num_bits = cell_num_bits.to_ulong();
+        // Exclude the current number, because it will be process later.
+        num_bits ^= (size_t(1) << num);
+        while (num_bits != 0) {
+            size_t num_bit = BitUtils::ls1b(num_bits);
+            size_t _num = BitUtils::bsf(num_bit);
+            num_bits ^= num_bit;
+
+            assert(this->state_.row_num_cols[_num][row].test(col));
+            assert(this->state_.col_num_rows[_num][col].test(row));
+            assert(this->state_.box_num_cells[_num][box].test(cell));
+
+            this->state_.row_num_cols[_num][row].reset(col);
+            this->state_.col_num_rows[_num][col].reset(row);
+            this->state_.box_num_cells[_num][box].reset(cell);
+        }
+    }
+
+    inline void _updateNeighborCellsEffect(size_t fill_pos, size_t box, size_t num) {
+        this->state_.box_cell_nums[box] ^= box_cell_neighbors_mask[fill_pos][num][box];
+        const neighbor_boxes_t & neighborBoxes = neighbor_boxes[box];
+        for (size_t i = 0; i < neighborBoxes.boxes_count(); i++) {
+            size_t box_idx = neighborBoxes.boxes[i];
+            this->state_.box_cell_nums[box_idx] ^= box_cell_neighbors_mask[fill_pos][num][box_idx];
+        }
+
+        this->state_.row_num_cols[num] ^= row_neighbors_mask[fill_pos];
+        this->state_.col_num_rows[num] ^= col_neighbors_mask[fill_pos];
+        this->state_.box_num_cells[num] ^= box_num_neighbors_mask[fill_pos];
+    }
+
+    inline void _doFillNum(size_t pos, size_t row, size_t col,
+                           size_t box, size_t cell, size_t num,
+                           PackedBitSet<Numbers16> & save_num_bits) {
+        assert(this->state_.box_cell_nums[box][cell].test(num));
+        assert(this->state_.row_num_cols[num][row].test(col));
+        assert(this->state_.col_num_rows[num][col].test(row));
+        assert(this->state_.box_num_cells[num][box].test(cell));
+
+        PackedBitSet<Numbers16> cell_num_bits = this->state_.box_cell_nums[box][cell];
+        // Save cell num bits
+        save_num_bits = cell_num_bits;
+        this->state_.box_cell_nums[box][cell].reset();
+
+        //this->state_.row_num_cols[num][row].reset(col);
+        //this->state_.col_num_rows[num][col].reset(row);
+        //this->state_.box_num_cells[num][box].reset(cell);
+
+        size_t num_bits = cell_num_bits.to_ulong();
+        // Exclude the current number, because it will be process later.
+        num_bits ^= (size_t(1) << num);
+        while (num_bits != 0) {
+            size_t num_bit = BitUtils::ls1b(num_bits);
+            size_t _num = BitUtils::bsf(num_bit);
+            num_bits ^= num_bit;
+
+            assert(this->state_.row_num_cols[_num][row].test(col));
+            assert(this->state_.col_num_rows[_num][col].test(row));
+            assert(this->state_.box_num_cells[_num][box].test(cell));
+
+            this->state_.row_num_cols[_num][row].reset(col);
+            this->state_.col_num_rows[_num][col].reset(row);
+            this->state_.box_num_cells[_num][box].reset(cell);
+        }
+    }
+
+    inline void _undoFillNum(size_t pos, size_t row, size_t col,
+                             size_t box, size_t cell, size_t num,
+                             PackedBitSet<Numbers16> & save_num_bits) {
+        assert(!this->state_.box_cell_nums[box][cell].test(num));
+        //assert(!this->state_.row_num_cols[num][row].test(col));
+        //assert(!this->state_.col_num_rows[num][col].test(row));
+        //assert(!this->state_.box_num_cells[num][box].test(cell));
+
+        // Restore cell num bits
+        this->state_.box_cell_nums[box][cell] = save_num_bits;
+
+        //this->state_.row_num_cols[num][row].set(col);
+        //this->state_.col_num_rows[num][col].set(row);
+        //this->state_.box_num_cells[num][box].set(cell);
+
+        size_t num_bits = save_num_bits.to_ulong();
+        // Exclude the current number, because it has been processed.
+        num_bits ^= (size_t(1) << num);
+        while (num_bits != 0) {
+            size_t num_bit = BitUtils::ls1b(num_bits);
+            size_t _num = BitUtils::bsf(num_bit);
+            num_bits ^= num_bit;
+
+            assert(!this->state_.row_num_cols[_num][row].test(col));
+            assert(!this->state_.col_num_rows[_num][col].test(row));
+            assert(!this->state_.box_num_cells[_num][box].test(cell));
+
+            this->state_.row_num_cols[_num][row].set(col);
+            this->state_.col_num_rows[_num][col].set(row);
+            this->state_.box_num_cells[_num][box].set(cell);
+        }
+    }
+
+    inline void _updateNeighborCellsEffect(RecoverState & recover_state,
+                                           size_t fill_pos,
+                                           size_t box, size_t num) {
+        // Position (Box-Cell) literal
+        static const size_t boxesCount = neighbor_boxes_t::kBoxesCount;
+        const neighbor_boxes_t & neighborBoxes = neighbor_boxes[box];
+        const PackedBitSet3D<Boxes, BoxSize16, Numbers16> & neighbors_mask
+            = box_cell_neighbors_mask[fill_pos][num];
+        for (size_t i = 0; i < boxesCount; i++) {
+            size_t box_idx = neighborBoxes.boxes[i];
+            recover_state.boxes[i] = this->state_.box_cell_nums[box_idx];
+            this->state_.box_cell_nums[box_idx] ^= neighbors_mask[box_idx];
+        }
+        recover_state.boxes[boxesCount] = this->state_.box_cell_nums[box];
+        this->state_.box_cell_nums[box] ^= box_cell_neighbors_mask[fill_pos][num][box];
+
+        // Row literal
+        recover_state.row_cols = this->state_.row_num_cols[num];
+        this->state_.row_num_cols[num] ^= row_neighbors_mask[fill_pos];
+
+        // Col literal
+        recover_state.col_rows = this->state_.col_num_rows[num];
+        this->state_.col_num_rows[num] ^= col_neighbors_mask[fill_pos];
+
+        // Box-cell literal
+        recover_state.box_cells = this->state_.box_num_cells[num];
+        this->state_.box_num_cells[num] ^= box_num_neighbors_mask[fill_pos];
+    }
+
+    inline void _restoreNeighborCellsEffect(const RecoverState & recover_state,
+                                            size_t box, size_t num) {
+        // Position (Box-Cell) literal
+        static const size_t boxesCount = neighbor_boxes_t::kBoxesCount;
+        const neighbor_boxes_t & neighborBoxes = neighbor_boxes[box];
+        for (size_t i = 0; i < boxesCount; i++) {
+            size_t box_idx = neighborBoxes.boxes[i];
+            this->state_.box_cell_nums[box_idx] = recover_state.boxes[i];
+        }
+        this->state_.box_cell_nums[box] = recover_state.boxes[boxesCount];
+
+        // Row literal
+        this->state_.row_num_cols[num] = recover_state.row_cols;
+
+        // Col literal
+        this->state_.col_num_rows[num] = recover_state.col_rows;
+
+        // Box-cell literal
+        this->state_.box_num_cells[num] = recover_state.box_cells;
+    }
+
+    bool verify_bitboard_correctness() {
+        bool correctly1 = (this->state_.box_cell_nums == this->box_cell_nums_);
+        bool correctly2 = (this->state_.row_num_cols == this->row_num_cols_);
+        bool correctly3 = (this->state_.col_num_rows == this->col_num_rows_);
+        bool correctly4 = (this->state_.box_num_cells == this->box_num_cells_);
+        return (correctly1 && correctly2 && correctly3 && correctly4);
+    }
+
 public:
     bool solve(Board & board, size_t empties) {
         if (empties == 0) {
@@ -1686,7 +1906,9 @@ public:
                 num_guesses++;
 
             PackedBitSet<Numbers16> save_bits;
+            PackedBitSet<Numbers16> save_num_bits;
             PackedBitSet<BoardSize16> save_effect_cells;
+            RecoverState recover_state;
             size_t pos, row, col, box, cell, num;
 
             int literal_type = min_literal_id / BoardSize16;
@@ -1723,6 +1945,12 @@ public:
                         doFillNum(pos, row, col, box, cell, num, save_bits);
                         size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, num);
 
+                        _doFillNum(pos, row, col, box, cell, num, save_num_bits);
+                        _updateNeighborCellsEffect(recover_state, pos, box, num);
+
+                        bool correctly = verify_bitboard_correctness();
+                        assert(correctly); 
+
                         board.cells[pos] = (char)(num + '1');
 
                         if (this->solve(board, empties - 1)) {
@@ -1739,6 +1967,12 @@ public:
                         this->num_cells_[num] |= save_effect_cells;
                         size_t r_effect_count = restoreNeighborCellsEffect(save_effect_cells, num);
                         assert(effect_count == r_effect_count);
+
+                        _restoreNeighborCellsEffect(recover_state, box, num);
+                        _undoFillNum(pos, row, col, box, cell, num, save_num_bits);
+
+                        correctly = verify_bitboard_correctness();
+                        assert(correctly); 
 
                         num_bits ^= num_bit;
                     }
@@ -1775,6 +2009,12 @@ public:
                         doFillNum(pos, row, col, box, cell, num, save_bits);
                         size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, num);
 
+                        _doFillNum(pos, row, col, box, cell, num, save_num_bits);
+                        _updateNeighborCellsEffect(recover_state, pos, box, num);
+
+                        bool correctly = verify_bitboard_correctness();
+                        assert(correctly); 
+
                         board.cells[pos] = (char)(num + '1');
 
                         if (this->solve(board, empties - 1)) {
@@ -1791,6 +2031,12 @@ public:
                         this->num_cells_[num] |= save_effect_cells;
                         size_t r_effect_count = restoreNeighborCellsEffect(save_effect_cells, num);
                         assert(effect_count == r_effect_count);
+
+                        _restoreNeighborCellsEffect(recover_state, box, num);
+                        _undoFillNum(pos, row, col, box, cell, num, save_num_bits);
+
+                        correctly = verify_bitboard_correctness();
+                        assert(correctly); 
 
                         col_bits ^= col_bit;
                     }
@@ -1827,6 +2073,12 @@ public:
                         doFillNum(pos, row, col, box, cell, num, save_bits);
                         size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, num);
 
+                        _doFillNum(pos, row, col, box, cell, num, save_num_bits);
+                        _updateNeighborCellsEffect(recover_state, pos, box, num);
+
+                        bool correctly = verify_bitboard_correctness();
+                        assert(correctly); 
+
                         board.cells[pos] = (char)(num + '1');
 
                         if (this->solve(board, empties - 1)) {
@@ -1843,6 +2095,12 @@ public:
                         this->num_cells_[num] |= save_effect_cells;
                         size_t r_effect_count = restoreNeighborCellsEffect(save_effect_cells, num);
                         assert(effect_count == r_effect_count);
+
+                        _restoreNeighborCellsEffect(recover_state, box, num);
+                        _undoFillNum(pos, row, col, box, cell, num, save_num_bits);
+
+                        correctly = verify_bitboard_correctness();
+                        assert(correctly); 
 
                         row_bits ^= row_bit;
                     }
@@ -1876,6 +2134,12 @@ public:
                         doFillNum(pos, row, col, box, cell, num, save_bits);
                         size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, num);
 
+                        _doFillNum(pos, row, col, box, cell, num, save_num_bits);
+                        _updateNeighborCellsEffect(recover_state, pos, box, num);
+
+                        bool correctly = verify_bitboard_correctness();
+                        assert(correctly); 
+
                         board.cells[pos] = (char)(num + '1');
 
                         if (this->solve(board, empties - 1)) {
@@ -1892,6 +2156,12 @@ public:
                         this->num_cells_[num] |= save_effect_cells;
                         size_t r_effect_count = restoreNeighborCellsEffect(save_effect_cells, num);
                         assert(effect_count == r_effect_count);
+
+                        _restoreNeighborCellsEffect(recover_state, box, num);
+                        _undoFillNum(pos, row, col, box, cell, num, save_num_bits);
+
+                        correctly = verify_bitboard_correctness();
+                        assert(correctly); 
 
                         cell_bits ^= cell_bit;
                     }
@@ -1960,19 +2230,19 @@ Solver<SudokuTy>::neighbor_boxes_mask;
 
 template <typename SudokuTy>
 PackedBitSet3D<Solver<SudokuTy>::Boxes, Solver<SudokuTy>::BoxSize16, Solver<SudokuTy>::Numbers16>
-Solver<SudokuTy>::neighbors_box_cell_mask[Solver<SudokuTy>::BoardSize][Solver<SudokuTy>::Numbers];
+Solver<SudokuTy>::box_cell_neighbors_mask[Solver<SudokuTy>::BoardSize][Solver<SudokuTy>::Numbers];
 
 template <typename SudokuTy>
 PackedBitSet3D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::Rows16, Solver<SudokuTy>::Cols16>
-Solver<SudokuTy>::neighbors_row_mask;
+Solver<SudokuTy>::row_neighbors_mask;
 
 template <typename SudokuTy>
 PackedBitSet3D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::Cols16, Solver<SudokuTy>::Rows16>
-Solver<SudokuTy>::neighbors_col_mask;
+Solver<SudokuTy>::col_neighbors_mask;
 
 template <typename SudokuTy>
 PackedBitSet3D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::Boxes16, Solver<SudokuTy>::BoxSize16>
-Solver<SudokuTy>::neighbors_box_num_mask;
+Solver<SudokuTy>::box_num_neighbors_mask;
 
 template <typename SudokuTy>
 size_t Solver<SudokuTy>::num_guesses = 0;

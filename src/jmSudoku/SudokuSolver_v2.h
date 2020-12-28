@@ -1219,8 +1219,8 @@ private:
         }
     }
 
-    inline void updateNeighborCellsEffect(size_t in_pos, size_t num) {
-        const BitMask & neighborsMask = SudokuTy::neighbors_mask_tbl[in_pos];
+    inline void updateNeighborCellsEffect(size_t fill_pos, size_t num) {
+        const BitMask & neighborsMask = SudokuTy::neighbors_mask_tbl[fill_pos];
         BitMask & digitCells = this->num_cells_[num];
 
         register BitMask effect_cells = digitCells & neighborsMask;
@@ -1367,8 +1367,8 @@ private:
     }
 
     inline size_t updateNeighborCellsEffect(BitMask & save_effect_cells,
-                                            size_t in_pos, size_t num) {
-        const BitMask & neighborsMask = SudokuTy::neighbors_mask_tbl[in_pos];
+                                            size_t fill_pos, size_t num) {
+        const BitMask & neighborsMask = SudokuTy::neighbors_mask_tbl[fill_pos];
         BitMask & digitCells = this->num_cells_[num];
 
         BitMask effect_cells = digitCells & neighborsMask;
