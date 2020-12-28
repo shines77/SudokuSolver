@@ -521,6 +521,9 @@ private:
                 pos++;
             }
         }
+
+        bool is_correct = verify_bitboard_correctness();
+        assert(is_correct); 
     }
 
     static const size_t kLiteralStep = sizeof(size_t) / sizeof(literal_info_t);
@@ -1743,16 +1746,18 @@ private:
     }
 
     inline void _updateNeighborCellsEffect(size_t fill_pos, size_t box, size_t num) {
-        this->state_.box_cell_nums[box] ^= box_cell_neighbors_mask[fill_pos][num][box];
         const neighbor_boxes_t & neighborBoxes = neighbor_boxes[box];
+        const PackedBitSet3D<Boxes, BoxSize16, Numbers16> & neighbors_mask
+            = box_cell_neighbors_mask[fill_pos][num];
         for (size_t i = 0; i < neighborBoxes.boxes_count(); i++) {
             size_t box_idx = neighborBoxes.boxes[i];
-            this->state_.box_cell_nums[box_idx] ^= box_cell_neighbors_mask[fill_pos][num][box_idx];
+            this->state_.box_cell_nums[box_idx] &= ~neighbors_mask[box_idx];
         }
+        this->state_.box_cell_nums[box] &= ~neighbors_mask[box];
 
-        this->state_.row_num_cols[num] ^= row_neighbors_mask[fill_pos];
-        this->state_.col_num_rows[num] ^= col_neighbors_mask[fill_pos];
-        this->state_.box_num_cells[num] ^= box_num_neighbors_mask[fill_pos];
+        this->state_.row_num_cols[num] &= ~row_neighbors_mask[fill_pos];
+        this->state_.col_num_rows[num] &= ~col_neighbors_mask[fill_pos];
+        this->state_.box_num_cells[num] &= ~box_num_neighbors_mask[fill_pos];
     }
 
     inline void _doFillNum(size_t pos, size_t row, size_t col,
@@ -1834,22 +1839,22 @@ private:
         for (size_t i = 0; i < boxesCount; i++) {
             size_t box_idx = neighborBoxes.boxes[i];
             recover_state.boxes[i] = this->state_.box_cell_nums[box_idx];
-            this->state_.box_cell_nums[box_idx] ^= neighbors_mask[box_idx];
+            this->state_.box_cell_nums[box_idx] &= ~neighbors_mask[box_idx];
         }
         recover_state.boxes[boxesCount] = this->state_.box_cell_nums[box];
-        this->state_.box_cell_nums[box] ^= box_cell_neighbors_mask[fill_pos][num][box];
+        this->state_.box_cell_nums[box] &= ~neighbors_mask[box];
 
         // Row literal
         recover_state.row_cols = this->state_.row_num_cols[num];
-        this->state_.row_num_cols[num] ^= row_neighbors_mask[fill_pos];
+        this->state_.row_num_cols[num] &= ~row_neighbors_mask[fill_pos];
 
         // Col literal
         recover_state.col_rows = this->state_.col_num_rows[num];
-        this->state_.col_num_rows[num] ^= col_neighbors_mask[fill_pos];
+        this->state_.col_num_rows[num] &= ~col_neighbors_mask[fill_pos];
 
         // Box-cell literal
         recover_state.box_cells = this->state_.box_num_cells[num];
-        this->state_.box_num_cells[num] ^= box_num_neighbors_mask[fill_pos];
+        this->state_.box_num_cells[num] &= ~box_num_neighbors_mask[fill_pos];
     }
 
     inline void _restoreNeighborCellsEffect(const RecoverState & recover_state,
