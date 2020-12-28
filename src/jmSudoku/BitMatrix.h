@@ -223,11 +223,11 @@ public:
 
     bool operator != (const this_type & right) noexcept {
         for (size_t row = 0; row < Rows; row++) {
-            if (this->array_[row] == right[row]) {
-                return false;
+            if (this->array_[row] != right[row]) {
+                return true;
             }
         }
-        return true;
+        return false;
     }
 };
 
@@ -372,11 +372,11 @@ public:
 
     bool operator != (const this_type & right) noexcept {
         for (size_t depth = 0; depth < Depths; depth++) {
-            if (this->matrix_[depth] == right[depth]) {
-                return false;
+            if (this->matrix_[depth] != right[depth]) {
+                return true;
             }
         }
-        return true;
+        return false;
     }
 };
 

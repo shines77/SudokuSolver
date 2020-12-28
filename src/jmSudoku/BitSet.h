@@ -325,11 +325,11 @@ public:
 
     bool operator != (const this_type & right) noexcept {
         for (size_t i = 0; i < kUnits; i++) {
-            if (this->array_[i] == right.array(i)) {
-                return false;
+            if (this->array_[i] != right.array(i)) {
+                return true;
             }
         }
-        return true;
+        return false;
     }
 
     this_type & fill(size_t value) noexcept {

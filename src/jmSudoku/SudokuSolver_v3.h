@@ -1874,11 +1874,11 @@ private:
     }
 
     bool verify_bitboard_correctness() {
-        bool correctly1 = (this->state_.box_cell_nums == this->box_cell_nums_);
-        bool correctly2 = (this->state_.row_num_cols == this->row_num_cols_);
-        bool correctly3 = (this->state_.col_num_rows == this->col_num_rows_);
-        bool correctly4 = (this->state_.box_num_cells == this->box_num_cells_);
-        return (correctly1 && correctly2 && correctly3 && correctly4);
+        bool is_correct1 = (this->state_.box_cell_nums == this->box_cell_nums_);
+        bool is_correct2 = (this->state_.row_num_cols == this->row_num_cols_);
+        bool is_correct3 = (this->state_.col_num_rows == this->col_num_rows_);
+        bool is_correct4 = (this->state_.box_num_cells == this->box_num_cells_);
+        return (is_correct1 && is_correct2 && is_correct3 && is_correct4);
     }
 
 public:
@@ -1948,8 +1948,8 @@ public:
                         _doFillNum(pos, row, col, box, cell, num, save_num_bits);
                         _updateNeighborCellsEffect(recover_state, pos, box, num);
 
-                        bool correctly = verify_bitboard_correctness();
-                        assert(correctly); 
+                        bool is_correct = verify_bitboard_correctness();
+                        assert(is_correct); 
 
                         board.cells[pos] = (char)(num + '1');
 
@@ -1971,8 +1971,8 @@ public:
                         _restoreNeighborCellsEffect(recover_state, box, num);
                         _undoFillNum(pos, row, col, box, cell, num, save_num_bits);
 
-                        correctly = verify_bitboard_correctness();
-                        assert(correctly); 
+                        is_correct = verify_bitboard_correctness();
+                        assert(is_correct); 
 
                         num_bits ^= num_bit;
                     }
@@ -2012,8 +2012,8 @@ public:
                         _doFillNum(pos, row, col, box, cell, num, save_num_bits);
                         _updateNeighborCellsEffect(recover_state, pos, box, num);
 
-                        bool correctly = verify_bitboard_correctness();
-                        assert(correctly); 
+                        bool is_correct = verify_bitboard_correctness();
+                        assert(is_correct); 
 
                         board.cells[pos] = (char)(num + '1');
 
@@ -2035,8 +2035,8 @@ public:
                         _restoreNeighborCellsEffect(recover_state, box, num);
                         _undoFillNum(pos, row, col, box, cell, num, save_num_bits);
 
-                        correctly = verify_bitboard_correctness();
-                        assert(correctly); 
+                        is_correct = verify_bitboard_correctness();
+                        assert(is_correct); 
 
                         col_bits ^= col_bit;
                     }
@@ -2076,8 +2076,8 @@ public:
                         _doFillNum(pos, row, col, box, cell, num, save_num_bits);
                         _updateNeighborCellsEffect(recover_state, pos, box, num);
 
-                        bool correctly = verify_bitboard_correctness();
-                        assert(correctly); 
+                        bool is_correct = verify_bitboard_correctness();
+                        assert(is_correct); 
 
                         board.cells[pos] = (char)(num + '1');
 
@@ -2099,8 +2099,8 @@ public:
                         _restoreNeighborCellsEffect(recover_state, box, num);
                         _undoFillNum(pos, row, col, box, cell, num, save_num_bits);
 
-                        correctly = verify_bitboard_correctness();
-                        assert(correctly); 
+                        is_correct = verify_bitboard_correctness();
+                        assert(is_correct); 
 
                         row_bits ^= row_bit;
                     }
@@ -2137,8 +2137,8 @@ public:
                         _doFillNum(pos, row, col, box, cell, num, save_num_bits);
                         _updateNeighborCellsEffect(recover_state, pos, box, num);
 
-                        bool correctly = verify_bitboard_correctness();
-                        assert(correctly); 
+                        bool is_correct = verify_bitboard_correctness();
+                        assert(is_correct); 
 
                         board.cells[pos] = (char)(num + '1');
 
@@ -2160,8 +2160,8 @@ public:
                         _restoreNeighborCellsEffect(recover_state, box, num);
                         _undoFillNum(pos, row, col, box, cell, num, save_num_bits);
 
-                        correctly = verify_bitboard_correctness();
-                        assert(correctly); 
+                        is_correct = verify_bitboard_correctness();
+                        assert(is_correct); 
 
                         cell_bits ^= cell_bit;
                     }
