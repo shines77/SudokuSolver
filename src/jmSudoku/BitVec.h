@@ -77,6 +77,9 @@ struct BitVec16x08 {
     BitVec16x08(uint32_t i00, uint32_t i01, uint32_t i02, uint32_t i03) :
             xmm128(_mm_setr_epi32(i00, i01, i02, i03)) {}
 
+    BitVec16x08(uint64_t q00, uint64_t q01) :
+            xmm128(_mm_setr_epi64x(q00, q01)) {}
+
     BitVec16x08 & operator = (const BitVec16x08 & right) {
         this->xmm128 = right.xmm128;
         return *this;
@@ -85,6 +88,26 @@ struct BitVec16x08 {
     BitVec16x08 & operator = (const __m128i & right) {
         this->xmm128 = right;
         return *this;
+    }
+
+    void loadAligned(const void * mem_aligned_32) {
+        const __m128i * mem_128i = (const __m128i *)mem_aligned_32;
+        this->xmm128 = _mm_load_si128(mem_128i);
+    }
+
+    void loadUnaligned(const void * mem_unaligned) {
+        const __m128i * mem_128i = (const __m128i *)mem_unaligned;
+        this->xmm128 = _mm_loadu_si128(mem_128i);
+    }
+
+    void saveAligned(void * mem_aligned_32) const {
+        __m128i * mem_128i = (__m128i *)mem_aligned_32;
+        _mm_store_si128(mem_128i, this->xmm128);
+    }
+
+    void saveUnaligned(void * mem_unaligned) const {
+        __m128i * mem_128i = (__m128i *)mem_unaligned;
+        _mm_storeu_si128(mem_128i, this->xmm128);
     }
 
     bool operator == (const BitVec16x08 & other) const {
@@ -242,6 +265,46 @@ struct BitVec16x08 {
         __m128i ones;
         return _mm_cmpeq_epi16(this->xmm128, _mm_andnot_si128(ones, ones));
     }
+
+    BitVec16x08 popcount16() const {
+#if defined(__SSSE3__)
+        __m128i lookup  = _mm_setr_epi8(0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4);
+        __m128i mask4   = _mm_set1_epi16(0x0F);
+        __m128i sum_0_3 = _mm_shuffle_epi8(lookup, _mm_and_si128(this->xmm128, mask4));
+        __m128i sum_4_7 = _mm_shuffle_epi8(lookup, _mm_srli_epi16(this->xmm128, 4));
+        __m128i sum_0_7 = _mm_add_epi16(sum_0_3, sum_4_7);
+        __m128i result  = _mm_add_epi16(sum_0_7, _mm_srli_epi16(this->xmm128, 8));
+        return result;
+#else
+        // SSE2 version from https://www.hackersdelight.org/hdcodetxt/pop.c.txt
+        __m128i mask1 = _mm_set1_epi8(0x77);
+        __m128i mask2 = _mm_set1_epi8(0x0f);
+        __m128i mask3 = _mm_set1_epi16(0xff);
+        __m128i x = this->xmm128;
+        __m128i n = _mm_and_si128(mask1, _mm_srli_epi64(x, 1));
+        x = _mm_sub_epi8(x, n);
+        n = _mm_and_si128(mask1, _mm_srli_epi64(n, 1));
+        x = _mm_sub_epi8(x, n);
+        n = _mm_and_si128(mask1, _mm_srli_epi64(n, 1));
+        x = _mm_sub_epi8(x, n);
+        x = _mm_add_epi8(x, _mm_srli_epi16(x, 4));
+        x = _mm_and_si128(mask2, x);
+        // _mm_bsrli_si128() is missing on MSVC (Windows)
+        x = _mm_add_epi16(_mm_and_si128(x, mask3),
+                          _mm_and_si128(_mm_srli_si128(x, 1), mask3));
+        return x;
+#endif
+    }
+
+    void popcount16(void * mem_aligned_32) const {
+        BitVec16x08 popcnt16 = this->popcount16();
+        popcnt16.saveAligned(mem_aligned_32);
+    }
+
+    void popcount16_unaligned(void * mem_unaligned) const {
+        BitVec16x08 popcnt16 = this->popcount16();
+        popcnt16.saveUnaligned(mem_unaligned);
+    }
 };
 
 #endif // >= SSE2
@@ -284,10 +347,41 @@ struct BitVec16x16 {
                 uint32_t i04, uint32_t i05, uint32_t i06, uint32_t i07) :
             low(i00, i01, i02, i03), high(i04, i05, i06, i07)  {}
 
+    BitVec16x16(uint64_t q00, uint64_t q01, uint64_t q02, uint64_t q03) :
+            low(q00, q01), high(q02, q03) {}
+
     BitVec16x16 & operator = (const BitVec16x16 & right) {
         this->low = right.low;
         this->high = right.high;
         return *this;
+    }
+
+    void loadAligned(const void * mem_aligned_32) {
+        const __m128i * mem_128i_low = (const __m128i *)mem_aligned_32;
+        const __m128i * mem_128i_high = ((const __m128i *)mem_aligned_32) + 1;
+        this->low.loadAligned(mem_128i_low);
+        this->low.loadAligned(mem_128i_high);
+    }
+
+    void loadUnaligned(const void * mem_unaligned) {
+        const __m128i * mem_128i_low = (const __m128i *)mem_unaligned;
+        const __m128i * mem_128i_high = ((const __m128i *)mem_unaligned) + 1;
+        this->low.loadUnaligned(mem_128i_low);
+        this->low.loadUnaligned(mem_128i_high);
+    }
+
+    void saveAligned(void * mem_aligned_32) const {
+        __m128i * mem_128i_low = (__m128i *)mem_aligned_32;
+        __m128i * mem_128i_high = ((__m128i *)mem_aligned_32) + 1;
+        this->low.saveAligned(mem_128i_low);
+        this->low.saveAligned(mem_128i_high);
+    }
+
+    void saveUnaligned(void * mem_unaligned) const {
+        __m128i * mem_128i_low = (__m128i *)mem_unaligned;
+        __m128i * mem_128i_high = ((__m128i *)mem_unaligned) + 1;
+        this->low.saveUnaligned(mem_128i_low);
+        this->low.saveUnaligned(mem_128i_high);
     }
 
     bool operator == (const BitVec16x16 & other) const {
@@ -411,6 +505,14 @@ struct BitVec16x16 {
         return (this->low.isAllOnes() && this->high.isAllOnes());
     }
 
+    bool hasAnyZero() const {
+        return (this->low.hasAnyZero() && this->high.hasAnyZero());
+    }
+
+    bool hasAnyOne() const {
+        return (this->low.hasAnyOne() && this->high.hasAnyOne());
+    }
+
     BitVec16x16 whichIsEqual(const BitVec16x16 & other) const {
         return BitVec16x16(this->low.whichIsEqual(other.low), this->high.whichIsEqual(other.high));
     }
@@ -425,6 +527,20 @@ struct BitVec16x16 {
 
     BitVec16x16 whichIsOnes() const {
         return BitVec16x16(this->low.whichIsOnes(), this->high.whichIsOnes());
+    }
+
+    BitVec16x16 popcount16() const {
+        return BitVec16x16(this->low.popcount16(), this->high.popcount16());
+    }
+
+    void popcount16(void * mem_aligned_32) const {
+        BitVec16x16 popcnt16 = this->popcount16();
+        popcnt16.saveAligned(mem_aligned_32);
+    }
+
+    void popcount16_unaligned(void * mem_unaligned) const {
+        BitVec16x16 popcnt16 = this->popcount16();
+        popcnt16.saveAligned(mem_aligned_32);
     }
 };
 
@@ -659,18 +775,19 @@ struct BitVec16x16 {
         __m256i sum_0_3 = _mm256_shuffle_epi8(lookup, _mm256_and_si256(this->xmm256, mask4));
         __m256i sum_4_7 = _mm256_shuffle_epi8(lookup, _mm256_srli_epi16(this->xmm256, 4));
         __m256i sum_0_7 = _mm256_add_epi16(sum_0_3, sum_4_7);
-        return _mm256_add_epi16(sum_0_7, _mm256_srli_epi16(this->xmm256, 8));
+        __m256i result  = _mm256_add_epi16(sum_0_7, _mm256_srli_epi16(this->xmm256, 8));
+        return result;
 #endif
     }
 
-    void popcount16(void * output) const {
-        BitVec16x16 counts16 = this->popcount16();
-        counts16.saveAligned(output);
+    void popcount16(void * mem_aligned_32) const {
+        BitVec16x16 popcnt16 = this->popcount16();
+        popcnt16.saveAligned(mem_aligned_32);
     }
 
-    void popcount16_unaligned(void * output) const {
-        BitVec16x16 counts16 = this->popcount16();
-        counts16.saveUnaligned(output);
+    void popcount16_unaligned(void * mem_unaligned) const {
+        BitVec16x16 popcnt16 = this->popcount16();
+        popcnt16.saveUnaligned(mem_unaligned);
     }
 };
 
