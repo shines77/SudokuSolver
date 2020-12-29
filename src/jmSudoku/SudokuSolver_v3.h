@@ -1989,6 +1989,65 @@ private:
         }
     }
 
+    inline void count_delta_literal_size(RecoverState & recover_state, size_t box, size_t num) {
+        BitVec16x16 bitboard;
+
+        // Position (Box-Cell) literal
+
+        // Neighbor boxes
+        static const size_t boxesCount = neighbor_boxes_t::kBoxesCount;
+        const neighbor_boxes_t & neighborBoxes = neighbor_boxes[box];
+        for (size_t i = 0; i < boxesCount; i++) {
+            size_t box_idx = neighborBoxes.boxes[i];
+            const PackedBitSet2D<BoxSize16, Numbers16> * bitset;
+            bitset = &this->state_.box_cell_nums[box_idx];
+            bitboard.loadAligned(bitset);
+
+            void * count_size = (void *)&box_cells_size_[box_idx * BoxSize16];
+            bitboard.popcount16(count_size);
+        }
+
+        // Current box
+        {
+            const PackedBitSet2D<BoxSize16, Numbers16> * bitset;
+            bitset = &this->state_.box_cell_nums[box];
+            bitboard.loadAligned(bitset);
+
+            void * count_size = (void *)&box_cells_size_[box * BoxSize16];
+            bitboard.popcount16(count_size);
+        }
+
+        // Row literal
+        {
+            const PackedBitSet2D<Rows16, Cols16> * bitset;
+            bitset = &this->state_.row_num_cols[num];
+            bitboard.loadAligned(bitset);
+
+            void * count_size = (void *)&row_nums_size_[num * Rows16];
+            bitboard.popcount16(count_size);
+        }
+
+        // Col literal
+        {
+            const PackedBitSet2D<Cols16, Rows16> * bitset;
+            bitset = &this->state_.col_num_rows[num];
+            bitboard.loadAligned(bitset);
+
+            void * count_size = (void *)&col_nums_size_[num * Cols16];
+            bitboard.popcount16(count_size);
+        }
+
+        // Box-Cell literal
+        {
+            const PackedBitSet2D<Boxes16, BoxSize16> * bitset;
+            bitset = &this->state_.box_num_cells[num];
+            bitboard.loadAligned(bitset);
+
+            void * count_size = (void *)&box_nums_size_[num * Boxes16];
+            bitboard.popcount16(count_size);
+        }
+    }
+
     bool verify_literal_size() {
         bool is_correct = true;
 
