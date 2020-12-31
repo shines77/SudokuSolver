@@ -19,6 +19,9 @@
 //#undef __SSE4_2__
 #endif
 
+//#undef __SSE4_1__
+//#undef __SSE4_2__
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
