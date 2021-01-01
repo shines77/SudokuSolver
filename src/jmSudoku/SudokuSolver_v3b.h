@@ -1951,26 +1951,32 @@ std::vector<typename Solver<SudokuTy>::neighbor_boxes_t>
 Solver<SudokuTy>::neighbor_boxes;
 
 template <typename SudokuTy>
-PackedBitSet2D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::BoardSize16>
+alignas(32)
+PackedBitSet2D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::Rows16 * Solver<SudokuTy>::Cols16>
 Solver<SudokuTy>::neighbor_cells_mask;
 
 template <typename SudokuTy>
-PackedBitSet2D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::BoardSize16>
+alignas(32)
+PackedBitSet2D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::Boxes16 * Solver<SudokuTy>::BoxSize16>
 Solver<SudokuTy>::neighbor_boxes_mask;
 
 template <typename SudokuTy>
+alignas(32)
 PackedBitSet3D<Solver<SudokuTy>::Boxes, Solver<SudokuTy>::BoxSize16, Solver<SudokuTy>::Numbers16>
 Solver<SudokuTy>::neighbors_box_cell_mask[Solver<SudokuTy>::BoardSize][Solver<SudokuTy>::Numbers];
 
 template <typename SudokuTy>
+alignas(32)
 PackedBitSet3D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::Rows16, Solver<SudokuTy>::Cols16>
 Solver<SudokuTy>::neighbors_row_mask;
 
 template <typename SudokuTy>
+alignas(32)
 PackedBitSet3D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::Cols16, Solver<SudokuTy>::Rows16>
 Solver<SudokuTy>::neighbors_col_mask;
 
 template <typename SudokuTy>
+alignas(32)
 PackedBitSet3D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::Boxes16, Solver<SudokuTy>::BoxSize16>
 Solver<SudokuTy>::neighbors_box_num_mask;
 
