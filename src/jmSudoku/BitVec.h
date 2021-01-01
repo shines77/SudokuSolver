@@ -982,7 +982,7 @@ struct BitVec16x16 {
     void _minpos8(BitVec16x16 & minpos) const {
         if (MaxBits <= 8) {
             __m256i numbers = this->ymm256;
-            numbers = _mm256_min_epu8(numbers, _mm256_shuffle_epi32(numbers, _MM_SHUFFLE(1, 0, 3, 2)));
+            numbers = _mm256_min_epu8(numbers, _mm256_shuffle_epi32(numbers, _MM_SHUFFLE(2, 3, 0, 1)));
             numbers = _mm256_min_epu8(numbers, _mm256_shufflelo_epi16(numbers, _MM_SHUFFLE(1, 1, 1, 1)));
 
             // The minimum number of total 16 x int8_t
@@ -1028,7 +1028,8 @@ struct BitVec16x16 {
         numbers = _mm256_min_epu16(numbers, _mm256_shufflelo_epi16(numbers, _MM_SHUFFLE(1, 1, 1, 1)));
 
         // The minimum number of total 16 x int16_t
-        minpos = _mm256_min_epu16(numbers, _mm256_srli_si256(numbers, 16));
+        __m256i numbers_high = _mm256_permute4x64_epi64(numbers, _MM_SHUFFLE(1, 0, 3, 2));
+        BitVec16x16 minpos = _mm256_min_epu16(numbers, numbers_high);
 #else // !__AVX2__
         BitVec16x08 low, high;
         this->splitTo(low, high);
@@ -1053,31 +1054,64 @@ struct BitVec16x16 {
     }
 
     template <size_t MaxBits>
-    size_t minpos16(size_t & old_min_num, size_t & min_index) const {
+    uint32_t minpos16(uint32_t & old_min_num, uint32_t & min_index) const {
         __m256i numbers = this->ymm256;
         numbers = _mm256_min_epu16(numbers, _mm256_shuffle_epi32(numbers, _MM_SHUFFLE(3, 2, 3, 2)));
         numbers = _mm256_min_epu16(numbers, _mm256_shuffle_epi32(numbers, _MM_SHUFFLE(1, 1, 1, 1)));
         numbers = _mm256_min_epu16(numbers, _mm256_shufflelo_epi16(numbers, _MM_SHUFFLE(1, 1, 1, 1)));
 
         // The minimum number of total 16 x int16_t
-        BitVec16x16 minpos = _mm256_min_epu16(numbers, _mm256_srli_si256(numbers, 16));
+        __m256i numbers_high = _mm256_permute4x64_epi64(numbers, _MM_SHUFFLE(1, 0, 3, 2));
+        BitVec16x16 minpos = _mm256_min_epu16(numbers, numbers_high);
 #if (!defined(_MSC_VER) || (_MSC_VER >= 2000))
-        int min_num = _mm256_extract_epi16(minpos.ymm256, 0);
+        uint32_t min_num = _mm256_extract_epi16(minpos.ymm256, 0);
 #else
         BitVec16x08 minpos128;
         minpos.castTo(minpos128);
-        size_t min_num = _mm_extract_epi16(minpos128.xmm128, 0);
+        uint32_t min_num = _mm_extract_epi16(minpos128.xmm128, 0);
 #endif // _MSC_VER
         if (min_num < old_min_num) {
             old_min_num = min_num;
-            __m256i min_num_all = _mm256_broadcastw_epi16(_mm256_castsi256_si128(minpos.ymm256));
-            __m256i equal_result = _mm256_cmpeq_epi8(this->ymm256, min_num_all);
+
+            // Get the index of minimum number
+            __m256i min_num_repeat = _mm256_broadcastw_epi16(_mm256_castsi256_si128(minpos.ymm256));
+            __m256i equal_result = _mm256_cmpeq_epi16(this->ymm256, min_num_repeat);
 
             int equal_mask = _mm256_movemask_epi8(equal_result);
             assert(equal_mask != 0);
             int equal_offset = BitUtils::bsf(equal_mask);
-            min_index = equal_offset;
+            min_index = equal_offset >> 1;
         }
+        return min_num;
+    }
+
+    template <size_t MaxBits>
+    uint32_t minpos16_and_index(uint32_t & min_index) const {
+        __m256i numbers = this->ymm256;
+        numbers = _mm256_min_epu16(numbers, _mm256_shuffle_epi32(numbers, _MM_SHUFFLE(3, 2, 3, 2)));
+        numbers = _mm256_min_epu16(numbers, _mm256_shuffle_epi32(numbers, _MM_SHUFFLE(1, 1, 1, 1)));
+        numbers = _mm256_min_epu16(numbers, _mm256_shufflelo_epi16(numbers, _MM_SHUFFLE(1, 1, 1, 1)));
+
+        // The minimum number of total 16 x int16_t
+        __m256i numbers_high = _mm256_permute4x64_epi64(numbers, _MM_SHUFFLE(1, 0, 3, 2));
+        BitVec16x16 minpos = _mm256_min_epu16(numbers, numbers_high);
+
+        // Get the index of minimum number
+        __m256i min_num_repeat = _mm256_broadcastw_epi16(_mm256_castsi256_si128(minpos.ymm256));
+        __m256i equal_result = _mm256_cmpeq_epi16(this->ymm256, min_num_repeat);
+
+        int equal_mask = _mm256_movemask_epi8(equal_result);
+        assert(equal_mask != 0);
+        int equal_offset = BitUtils::bsf(equal_mask);
+        min_index = equal_offset >> 1;
+
+#if (!defined(_MSC_VER) || (_MSC_VER >= 2000))
+        uint32_t min_num = _mm256_extract_epi16(minpos.ymm256, 0);
+#else
+        BitVec16x08 minpos128;
+        minpos.castTo(minpos128);
+        uint32_t min_num = _mm_extract_epi16(minpos128.xmm128, 0);
+#endif // _MSC_VER
         return min_num;
     }
 };
