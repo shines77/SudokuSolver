@@ -26,9 +26,14 @@
 // For SSE2, SSE3, SSSE3, SSE 4.1, AVX, AVX2
 #if defined(_MSC_VER)
 #include "msvc_x86intrin.h"
-#define _mm_setr_epi64(high, low)   _mm_setr_epi64x(high, low)
 #else
 #include <x86intrin.h>
+#define _mm_setr_epi64x(high, low) \
+            _mm_setr_epi64(_mm_cvtsi64_m64(high), _mm_cvtsi64_m64(low))
+#define _mm256_test_all_zeros(mask, val) \
+            _mm256_testz_si256((mask), (val))
+#define _mm256_test_all_ones(val) \
+            _mm256_testc_si256((val), _mm256_cmpeq_epi32((val), (val)))
 #endif // _MSC_VER
 
 namespace jmSudoku {
@@ -81,7 +86,7 @@ struct BitVec16x08 {
             xmm128(_mm_setr_epi32(i00, i01, i02, i03)) {}
 
     BitVec16x08(uint64_t q00, uint64_t q01) :
-            xmm128(_mm_setr_epi64(q00, q01)) {}
+            xmm128(_mm_setr_epi64x(q00, q01)) {}
 
     BitVec16x08 & operator = (const BitVec16x08 & right) {
         this->xmm128 = right.xmm128;
@@ -1030,7 +1035,7 @@ struct BitVec16x16 {
 
         // The minimum number of total 16 x int16_t
         __m256i numbers_high = _mm256_permute4x64_epi64(numbers, _MM_SHUFFLE(1, 0, 3, 2));
-        BitVec16x16 minpos = _mm256_min_epu16(numbers, numbers_high);
+        minpos = _mm256_min_epu16(numbers, numbers_high);
 #else // !__AVX2__
         BitVec16x08 low, high;
         this->splitTo(low, high);

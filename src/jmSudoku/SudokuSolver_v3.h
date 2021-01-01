@@ -2700,12 +2700,12 @@ Solver<SudokuTy>::neighbor_boxes;
 
 template <typename SudokuTy>
 alignas(32)
-PackedBitSet2D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::BoardSize16>
+PackedBitSet2D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::Rows16 * Solver<SudokuTy>::Cols16>
 Solver<SudokuTy>::neighbor_cells_mask;
 
 template <typename SudokuTy>
 alignas(32)
-PackedBitSet2D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::BoardSize16>
+PackedBitSet2D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::Boxes16 * Solver<SudokuTy>::BoxSize16>
 Solver<SudokuTy>::neighbor_boxes_mask;
 
 template <typename SudokuTy>
