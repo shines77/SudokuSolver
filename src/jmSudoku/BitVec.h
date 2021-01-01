@@ -26,6 +26,7 @@
 // For SSE2, SSE3, SSSE3, SSE 4.1, AVX, AVX2
 #if defined(_MSC_VER)
 #include "msvc_x86intrin.h"
+#define _mm_setr_epi64(high, low)   _mm_setr_epi64x(high, low)
 #else
 #include <x86intrin.h>
 #endif // _MSC_VER
@@ -80,7 +81,7 @@ struct BitVec16x08 {
             xmm128(_mm_setr_epi32(i00, i01, i02, i03)) {}
 
     BitVec16x08(uint64_t q00, uint64_t q01) :
-            xmm128(_mm_setr_epi64x(q00, q01)) {}
+            xmm128(_mm_setr_epi64(q00, q01)) {}
 
     BitVec16x08 & operator = (const BitVec16x08 & right) {
         this->xmm128 = right.xmm128;
@@ -309,7 +310,7 @@ struct BitVec16x08 {
     }
 
     template <size_t MaxBits>
-    void _minpos8(BitVec16x08 & minpos) const {
+    BitVec16x08 _minpos8() const {
 #if defined(__SSE4_1__)
         //
         // See: https://blog.csdn.net/weixin_34378767/article/details/86257834
@@ -362,7 +363,7 @@ struct BitVec16x08 {
 
     template <size_t MaxBits>
     int minpos8(BitVec16x08 & minpos) const {
-        this->_minpos8<MaxBits>(minpos);
+        minpos = this->_minpos8<MaxBits>();
 #if defined(__SSE4_1__)
         return _mm_extract_epi16(minpos.xmm128, 0);
 #else
