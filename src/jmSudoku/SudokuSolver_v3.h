@@ -2597,15 +2597,15 @@ private:
         if (min_literal_size < literal_max_value[min_literal_type]) {
             min_literal_index = min_literal_type * uint32_t(BoardSize16) +
                                 this->count_.total.min_literal_index[min_literal_type];
+            out_min_literal_index = min_literal_index;
         }
         else {
             min_literal_size = 0;
 #ifndef NDEBUG
             min_literal_index = 0;
+            out_min_literal_index = min_literal_index;
 #endif
         }
-
-        out_min_literal_index = min_literal_index;
         return min_literal_size;
     }
 
