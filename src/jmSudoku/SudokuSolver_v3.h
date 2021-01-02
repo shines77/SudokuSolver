@@ -53,6 +53,12 @@
 #define V3_USE_STD_BITSET       0
 #endif
 
+#ifdef NDEBUG
+#define V3_SAVE_COUNT_SIZE      1
+#else
+#define V3_SAVE_COUNT_SIZE      1
+#endif
+
 namespace jmSudoku {
 namespace v3 {
 
@@ -205,7 +211,7 @@ private:
 
     template <size_t nBoxCountX, size_t nBoxCountY>
     struct NeighborBoxes {
-        static const size_t kBoxesCount = (nBoxCountX - 1) + (nBoxCountY - 1);
+        static const size_t kBoxesCount = (nBoxCountX - 1) + (nBoxCountY - 1) + 1;
         size_t boxes_count() const { return kBoxesCount; }
 
         size_t boxes[kBoxesCount];
@@ -221,11 +227,25 @@ private:
     };
 
     struct RecoverState {
-        static const size_t kBoxesTotal = neighbor_boxes_t::kBoxesCount + 1;
+        static const size_t kBoxesTotal = neighbor_boxes_t::kBoxesCount;
         alignas(32) PackedBitSet2D<BoxSize16, Numbers16>          boxes[kBoxesTotal];   // [cell][num]
         alignas(32) PackedBitSet2D<Rows16, Cols16>                row_cols;             // [row][col]
         alignas(32) PackedBitSet2D<Cols16, Rows16>                col_rows;             // [col][row]
         alignas(32) PackedBitSet2D<Boxes16, BoxSize16>            box_cells;            // [box][cell]
+
+        struct Counts {
+            alignas(32) uint16_t box_cells[Boxes16];
+            alignas(32) uint16_t row_nums[Numbers16];
+            alignas(32) uint16_t col_nums[Numbers16];
+            alignas(32) uint16_t box_nums[Numbers16];
+        } counts;
+
+        struct Indexs {
+            alignas(32) uint16_t box_cells[Boxes16];
+            alignas(32) uint16_t row_nums[Numbers16];
+            alignas(32) uint16_t col_nums[Numbers16];
+            alignas(32) uint16_t box_nums[Numbers16];
+        } indexs;
     };
 
     struct Count {
@@ -348,7 +368,7 @@ private:
                                                size_t row, size_t col) {
         PackedBitSet<BoardSize16> & cells_mask = neighbor_cells_mask[fill_pos];
         PackedBitSet<BoardSize16> & boxes_mask = neighbor_boxes_mask[fill_pos];
-        
+
         PackedBitSet2D<Rows16, Cols16> & rows_mask        = row_neighbors_mask[fill_pos];
         PackedBitSet2D<Cols16, Rows16> & cols_mask        = col_neighbors_mask[fill_pos];
         PackedBitSet2D<Boxes16, BoxSize16> & box_num_mask = box_num_neighbors_mask[fill_pos];
@@ -371,14 +391,14 @@ private:
                 size_t pos = pos_y + x;
                 size_t pos16 = row * Cols16 + x;
                 cells_mask.set(pos16);
-                
+
                 const CellInfo & cellInfo = pCellInfo[pos];
                 box = cellInfo.box;
                 cell = cellInfo.cell;
 
                 size_t box_pos16 = box * BoxSize16 + cell;
                 boxes_mask.set(box_pos16);
-                
+
                 rows_mask[row].set(x);
                 cols_mask[x].set(row);
                 box_num_mask[box].set(cell);
@@ -494,7 +514,10 @@ private:
                         neighborBoxes.boxes[index++] = box_j * BoxCellsX + box_x;
                     }
                 }
-                assert(index == 4);
+                neighborBoxes.boxes[index++] = box;
+                assert(index == neighborBoxes.boxes_count());
+
+                std::sort(&neighborBoxes.boxes[0], &neighborBoxes.boxes[neighborBoxes.boxes_count()]);
                 neighbor_boxes.push_back(neighborBoxes);
             }
         }
@@ -528,7 +551,7 @@ private:
 
     void init_board(Board & board) {
         init_literal_info();
-        _init_literal_enable();
+        _init_literal_info();
 
         size_t kBoxSize64 = kAllBoxSizeBit | (kAllBoxSizeBit << 16U) | (kAllBoxSizeBit << 32U) | (kAllBoxSizeBit << 48U);
         this->num_cells_.fill(kBoxSize64);
@@ -542,11 +565,6 @@ private:
         this->state_.row_num_cols.fill(kAllColsBit);
         this->state_.col_num_rows.fill(kAllRowsBit);
         this->state_.box_num_cells.fill(kAllBoxSizeBit);
-
-        for (size_t i = 0; i < 16; i++) {
-            this->count_.total.min_literal_size[i] = 65535;
-            this->count_.total.min_literal_index[i] = uint16_t(-1);
-        }
 
         num_guesses = 0;
         num_unique_candidate = 0;
@@ -1299,24 +1317,24 @@ private:
                 if (equal_mask == 0) {
                     __m128i xmm2 = _mm_load_si128((const __m128i *)(pcount + 16));
                     __m128i xmm3 = _mm_load_si128((const __m128i *)(penable + 16));
-                
-                    xmm2 = _mm_or_si128(xmm2, xmm3);  
+
+                    xmm2 = _mm_or_si128(xmm2, xmm3);
                     xmm2 = _mm_cmpeq_epi8(xmm2, min_cmp);
 
                     equal_mask = _mm_movemask_epi8(xmm2);
                     if (equal_mask == 0) {
                         __m128i xmm4 = _mm_load_si128((const __m128i *)(pcount + 32));
                         __m128i xmm5 = _mm_load_si128((const __m128i *)(penable + 32));
-                
-                        xmm4 = _mm_or_si128(xmm4, xmm5);  
+
+                        xmm4 = _mm_or_si128(xmm4, xmm5);
                         xmm4 = _mm_cmpeq_epi8(xmm4, min_cmp);
 
                         equal_mask = _mm_movemask_epi8(xmm4);
                         if (equal_mask == 0) {
                             __m128i xmm6 = _mm_load_si128((const __m128i *)(pcount + 48));
                             __m128i xmm7 = _mm_load_si128((const __m128i *)(penable + 48));
-                
-                            xmm6 = _mm_or_si128(xmm6, xmm7);  
+
+                            xmm6 = _mm_or_si128(xmm6, xmm7);
                             xmm6 = _mm_cmpeq_epi8(xmm6, min_cmp);
 
                             equal_mask = _mm_movemask_epi8(xmm6);
@@ -1395,8 +1413,8 @@ private:
                 if (equal_mask == 0) {
                     __m128i xmm2 = _mm_load_si128((const __m128i *)(pcount + 16));
                     __m128i xmm3 = _mm_load_si128((const __m128i *)(penable + 16));
-                
-                    xmm2 = _mm_or_si128(xmm2, xmm3);  
+
+                    xmm2 = _mm_or_si128(xmm2, xmm3);
                     xmm2 = _mm_cmpeq_epi8(xmm2, min_cmp);
 
                     equal_mask = _mm_movemask_epi8(xmm2);
@@ -1761,7 +1779,7 @@ private:
                 assert(this->row_num_cols_[num][row].test(col));
                 assert(this->col_num_rows_[num][col].test(row));
                 assert(this->box_num_cells_[num][box].test(cell));
-                
+
                 this->row_num_cols_[num][row].reset(col);
                 this->col_num_rows_[num][col].reset(row);
                 this->box_num_cells_[num][box].reset(cell);
@@ -1819,6 +1837,13 @@ private:
     static const uint16_t kEnableLiteral16 = 0x0000;
     static const uint16_t kDisableLiteral16 = 0xFFFF;
 
+    void _init_literal_info() {
+        _init_literal_enable();
+        _init_literal_count();
+        _init_literal_index();
+        _init_literal_total();
+    }
+
     void _init_literal_enable() {
         for (size_t i = 0; i < Boxes16 * BoxSize16; i++) {
             this->count_.enabled.box_cells[i] = kEnableLiteral16;
@@ -1834,6 +1859,49 @@ private:
 
         for (size_t i = 0; i < Numbers16 * Boxes16; i++) {
             this->count_.enabled.box_nums[i] = kEnableLiteral16;
+        }
+    }
+
+    void _init_literal_count() {
+        for (size_t i = 0; i < Boxes16; i++) {
+            this->count_.counts.box_cells[i] = 255;
+        }
+
+        for (size_t i = 0; i < Numbers16; i++) {
+            this->count_.counts.row_nums[i] = 255;
+        }
+
+        for (size_t i = 0; i < Numbers16; i++) {
+            this->count_.counts.col_nums[i] = 255;
+        }
+
+        for (size_t i = 0; i < Numbers16; i++) {
+            this->count_.counts.box_nums[i] = 255;
+        }
+    }
+
+    void _init_literal_index() {
+        for (size_t i = 0; i < Boxes16; i++) {
+            this->count_.indexs.box_cells[i] = uint16_t(-1);
+        }
+
+        for (size_t i = 0; i < Numbers16; i++) {
+            this->count_.indexs.row_nums[i] = uint16_t(-1);
+        }
+
+        for (size_t i = 0; i < Numbers16; i++) {
+            this->count_.indexs.col_nums[i] = uint16_t(-1);
+        }
+
+        for (size_t i = 0; i < Numbers16; i++) {
+            this->count_.indexs.box_nums[i] = uint16_t(-1);
+        }
+    }
+
+    void _init_literal_total() {
+        for (size_t i = 0; i < 16; i++) {
+            this->count_.total.min_literal_size[i] = 65535;
+            this->count_.total.min_literal_index[i] = uint16_t(-1);
         }
     }
 
@@ -1922,7 +1990,7 @@ private:
             size_t box_idx = neighborBoxes.boxes[i];
             this->state_.box_cell_nums[box_idx] &= neighbors_mask[box_idx];
         }
-        this->state_.box_cell_nums[box] &= neighbors_mask[box];
+        //this->state_.box_cell_nums[box] &= neighbors_mask[box];
 
         this->state_.row_num_cols[num] &= row_neighbors_mask[fill_pos];
         this->state_.col_num_rows[num] &= col_neighbors_mask[fill_pos];
@@ -1931,7 +1999,8 @@ private:
 
     inline void _doFillNum(size_t pos, size_t row, size_t col,
                            size_t box, size_t cell, size_t num,
-                           PackedBitSet<Numbers16> & save_num_bits) {
+                           PackedBitSet<Numbers16> & save_num_bits,
+                           RecoverState & recover_state) {
         assert(this->state_.box_cell_nums[box][cell].test(num));
         assert(this->state_.row_num_cols[num][row].test(col));
         assert(this->state_.col_num_rows[num][col].test(row));
@@ -1957,6 +2026,10 @@ private:
         _disable_col_literal(col_idx);
         _disable_box_literal(box_idx);
 
+        recover_state.counts.row_nums[num] = this->count_.counts.row_nums[num];
+        recover_state.counts.col_nums[num] = this->count_.counts.col_nums[num];
+        recover_state.counts.box_nums[num] = this->count_.counts.box_nums[num];
+
         size_t num_bits = cell_num_bits.to_ulong();
         // Exclude the current number, because it will be process later.
         num_bits ^= (size_t(1) << num);
@@ -1972,12 +2045,17 @@ private:
             this->state_.row_num_cols[_num][row].reset(col);
             this->state_.col_num_rows[_num][col].reset(row);
             this->state_.box_num_cells[_num][box].reset(cell);
+
+            recover_state.counts.row_nums[_num] = this->count_.counts.row_nums[_num];
+            recover_state.counts.col_nums[_num] = this->count_.counts.col_nums[_num];
+            recover_state.counts.box_nums[_num] = this->count_.counts.box_nums[_num];
         }
     }
 
     inline void _undoFillNum(size_t pos, size_t row, size_t col,
                              size_t box, size_t cell, size_t num,
-                             PackedBitSet<Numbers16> & save_num_bits) {
+                             PackedBitSet<Numbers16> & save_num_bits,
+                             RecoverState & recover_state) {
         assert(!this->state_.box_cell_nums[box][cell].test(num));
         //assert(!this->state_.row_num_cols[num][row].test(col));
         //assert(!this->state_.col_num_rows[num][col].test(row));
@@ -2000,6 +2078,10 @@ private:
         _enable_col_literal(col_idx);
         _enable_box_literal(box_idx);
 
+        this->count_.counts.row_nums[num] = recover_state.counts.row_nums[num];
+        this->count_.counts.col_nums[num] = recover_state.counts.col_nums[num];
+        this->count_.counts.box_nums[num] = recover_state.counts.box_nums[num];
+
         size_t num_bits = save_num_bits.to_ulong();
         // Exclude the current number, because it has been processed.
         num_bits ^= (size_t(1) << num);
@@ -2015,6 +2097,10 @@ private:
             this->state_.row_num_cols[_num][row].set(col);
             this->state_.col_num_rows[_num][col].set(row);
             this->state_.box_num_cells[_num][box].set(cell);
+
+            this->count_.counts.row_nums[_num] = recover_state.counts.row_nums[_num];
+            this->count_.counts.col_nums[_num] = recover_state.counts.col_nums[_num];
+            this->count_.counts.box_nums[_num] = recover_state.counts.box_nums[_num];
         }
     }
 
@@ -2029,9 +2115,11 @@ private:
             size_t box_idx = neighborBoxes.boxes[i];
             recover_state.boxes[i] = this->state_.box_cell_nums[box_idx];
             this->state_.box_cell_nums[box_idx] &= neighbors_mask[box_idx];
+
+            recover_state.counts.box_cells[box_idx] = this->count_.counts.box_cells[box_idx];
         }
-        recover_state.boxes[boxesCount] = this->state_.box_cell_nums[box];
-        this->state_.box_cell_nums[box] &= neighbors_mask[box];
+        //recover_state.boxes[boxesCount] = this->state_.box_cell_nums[box];
+        //this->state_.box_cell_nums[box] &= neighbors_mask[box];        
 
         // Row literal
         recover_state.row_cols = this->state_.row_num_cols[num];
@@ -2054,8 +2142,10 @@ private:
         for (size_t i = 0; i < boxesCount; i++) {
             size_t box_idx = neighborBoxes.boxes[i];
             this->state_.box_cell_nums[box_idx] = recover_state.boxes[i];
+
+            this->count_.counts.box_cells[box_idx] = recover_state.counts.box_cells[box_idx];
         }
-        this->state_.box_cell_nums[box] = recover_state.boxes[boxesCount];
+        //this->state_.box_cell_nums[box] = recover_state.boxes[boxesCount];
 
         // Row literal
         this->state_.row_num_cols[num] = recover_state.row_cols;
@@ -2067,28 +2157,21 @@ private:
         this->state_.box_num_cells[num] = recover_state.box_cells;
     }
 
-    bool verify_bitboard_state() {
-        //return true;
-        bool is_correct1 = (this->state_.box_cell_nums == this->box_cell_nums_);
-        bool is_correct2 = (this->state_.row_num_cols == this->row_num_cols_);
-        bool is_correct3 = (this->state_.col_num_rows == this->col_num_rows_);
-        bool is_correct4 = (this->state_.box_num_cells == this->box_num_cells_);
-        return (is_correct1 && is_correct2 && is_correct3 && is_correct4);
-    }
-
     inline uint32_t count_all_literal_size(uint32_t & out_min_literal_index) {
         BitVec16x16 bitboard;
 
         // Position (Box-Cell) literal
-        uint32_t min_cell_size = this->count_.total.min_literal_size[0];
-        uint32_t min_cell_index = this->count_.total.min_literal_index[0];
+        uint32_t min_cell_size = 255;
+        uint32_t min_cell_index = uint32_t(-1);
         for (size_t box = 0; box < Boxes; box++) {
             const PackedBitSet2D<BoxSize16, Numbers16> * bitset;
             bitset = &this->state_.box_cell_nums[box];
             bitboard.loadAligned(bitset);
 
             BitVec16x16 popcnt16 = bitboard.popcount16<Numbers>();
+#if V3_SAVE_COUNT_SIZE
             popcnt16.saveAligned(&this->count_.sizes.box_cells[box * BoxSize16]);
+#endif
             BitVec16x16 enable_mask;
             enable_mask.loadAligned(&this->count_.enabled.box_cells[box * BoxSize16]);
             popcnt16 |= enable_mask;
@@ -2109,16 +2192,17 @@ private:
         this->count_.total.min_literal_index[0] = (uint16_t)min_cell_index;
 
         // Row literal
-        uint32_t min_row_size = this->count_.total.min_literal_size[1];
-        uint32_t min_row_index = this->count_.total.min_literal_index[1];
+        uint32_t min_row_size = 255;
+        uint32_t min_row_index = uint32_t(-1);
         for (size_t num = 0; num < Numbers; num++) {
             const PackedBitSet2D<Rows16, Cols16> * bitset;
             bitset = &this->state_.row_num_cols[num];
             bitboard.loadAligned(bitset);
 
             BitVec16x16 popcnt16 = bitboard.popcount16<Cols>();
+#if V3_SAVE_COUNT_SIZE
             popcnt16.saveAligned(&this->count_.sizes.row_nums[num * Rows16]);
-
+#endif
             BitVec16x16 enable_mask;
             enable_mask.loadAligned(&this->count_.enabled.row_nums[num * Rows16]);
             popcnt16 |= enable_mask;
@@ -2139,16 +2223,17 @@ private:
         this->count_.total.min_literal_index[1] = (uint16_t)min_row_index;
 
         // Col literal
-        uint32_t min_col_size = this->count_.total.min_literal_size[2];
-        uint32_t min_col_index = this->count_.total.min_literal_index[2];
+        uint32_t min_col_size = 255;
+        uint32_t min_col_index = uint32_t(-1);
         for (size_t num = 0; num < Numbers; num++) {
             const PackedBitSet2D<Cols16, Rows16> * bitset;
             bitset = &this->state_.col_num_rows[num];
             bitboard.loadAligned(bitset);
 
             BitVec16x16 popcnt16 = bitboard.popcount16<Rows>();
+#if V3_SAVE_COUNT_SIZE
             popcnt16.saveAligned(&this->count_.sizes.col_nums[num * Cols16]);
-
+#endif
             BitVec16x16 enable_mask;
             enable_mask.loadAligned(&this->count_.enabled.col_nums[num * Cols16]);
             popcnt16 |= enable_mask;
@@ -2169,16 +2254,17 @@ private:
         this->count_.total.min_literal_index[2] = (uint16_t)min_col_index;
 
         // Box-Cell literal
-        uint32_t min_box_size = this->count_.total.min_literal_size[3];
-        uint32_t min_box_index = this->count_.total.min_literal_index[3];
+        uint32_t min_box_size = 255;
+        uint32_t min_box_index = uint32_t(-1);
         for (size_t num = 0; num < Numbers; num++) {
             const PackedBitSet2D<Boxes16, BoxSize16> * bitset;
             bitset = &this->state_.box_num_cells[num];
             bitboard.loadAligned(bitset);
 
             BitVec16x16 popcnt16 = bitboard.popcount16<BoxSize>();
+#if V3_SAVE_COUNT_SIZE
             popcnt16.saveAligned(&this->count_.sizes.box_nums[num * Boxes16]);
-
+#endif
             BitVec16x16 enable_mask;
             enable_mask.loadAligned(&this->count_.enabled.box_nums[num * Boxes16]);
             popcnt16 |= enable_mask;
@@ -2203,17 +2289,21 @@ private:
         BitVec16x16 min_literal;
         min_literal.loadAligned(&this->count_.total.min_literal_size[0]);
         uint32_t min_literal_size = min_literal.minpos16_and_index<4>(min_literal_type);
-        uint32_t min_literal_index = min_literal_type * uint32_t(BoxSize16) +
+        uint32_t min_literal_index = min_literal_type * uint32_t(BoardSize16) +
                                      this->count_.total.min_literal_index[min_literal_type];
 
         out_min_literal_index = min_literal_index;
         return min_literal_size;
     }
 
-    inline void count_delta_literal_size(RecoverState & recover_state, size_t box, size_t num) {
+    inline uint32_t count_delta_literal_size(uint32_t & out_min_literal_index,
+                                             PackedBitSet<Numbers16> & cell_num_bits,
+                                             size_t box) {
         BitVec16x16 bitboard;
 
         // Position (Box-Cell) literal
+        uint32_t min_cell_size = 255;
+        uint32_t min_cell_index = uint32_t(-1);
 
         // Neighbor boxes
         static const size_t boxesCount = neighbor_boxes_t::kBoxesCount;
@@ -2224,53 +2314,315 @@ private:
             bitset = &this->state_.box_cell_nums[box_idx];
             bitboard.loadAligned(bitset);
 
-            void * count_size = (void *)&this->count_.sizes.box_cells[box_idx * BoxSize16];
-            bitboard.popcount16<Numbers>(count_size);
+            BitVec16x16 popcnt16 = bitboard.popcount16<Numbers>();
+#if V3_SAVE_COUNT_SIZE
+            popcnt16.saveAligned(&this->count_.sizes.box_cells[box_idx * BoxSize16]);
+#endif
+            BitVec16x16 enable_mask;
+            enable_mask.loadAligned(&this->count_.enabled.box_cells[box_idx * BoxSize16]);
+            popcnt16 |= enable_mask;
+
+            uint32_t min_index = uint32_t(-1);
+            uint32_t min_size = popcnt16.minpos16<Numbers>(min_cell_size, min_index);
+            this->count_.counts.box_cells[box_idx] = (uint16_t)min_size;
+            if (min_index == uint32_t(-1)) {
+                this->count_.indexs.box_cells[box_idx] = (uint16_t)min_index;
+            }
+            else {
+                size_t cell_index = box_idx * BoxSize16 + min_index;
+                this->count_.indexs.box_cells[box_idx] = (uint16_t)cell_index;
+                min_cell_index = (uint32_t)cell_index;
+            }
         }
 
+#if 0
         // Current box
         {
             const PackedBitSet2D<BoxSize16, Numbers16> * bitset;
             bitset = &this->state_.box_cell_nums[box];
             bitboard.loadAligned(bitset);
 
-            void * count_size = (void *)&this->count_.sizes.box_cells[box * BoxSize16];
-            bitboard.popcount16<Numbers>(count_size);
+            BitVec16x16 popcnt16 = bitboard.popcount16<Numbers>();
+#if V3_SAVE_COUNT_SIZE
+            popcnt16.saveAligned(&this->count_.sizes.box_cells[box * BoxSize16]);
+#endif
+            BitVec16x16 enable_mask;
+            enable_mask.loadAligned(&this->count_.enabled.box_cells[box * BoxSize16]);
+            popcnt16 |= enable_mask;
+
+            uint32_t min_index = uint32_t(-1);
+            uint32_t min_size = popcnt16.minpos16<Numbers>(min_cell_size, min_index);
+            this->count_.counts.box_cells[box] = (uint16_t)min_size;
+            if (min_index == uint32_t(-1)) {
+                this->count_.indexs.box_cells[box] = (uint16_t)min_index;
+            }
+            else {
+                size_t cell_index = box * BoxSize16 + min_index;
+                this->count_.indexs.box_cells[box] = (uint16_t)cell_index;
+                min_cell_index = (uint32_t)cell_index;
+            }
+        }
+#endif
+
+        BitVec16x16 cell_literal_minpos;
+        cell_literal_minpos.loadAligned(&this->count_.counts.box_cells[0]);
+        uint32_t box_id;
+        uint32_t new_min_cell_size = cell_literal_minpos.minpos16_and_index<Numbers>(box_id);
+        min_cell_index = this->count_.indexs.box_cells[box_id];
+        if (min_cell_index == uint32_t(uint16_t(-1))) {
+            const PackedBitSet2D<BoxSize16, Numbers16> * bitset;
+            bitset = &this->state_.box_cell_nums[box_id];
+            bitboard.loadAligned(bitset);
+
+            BitVec16x16 popcnt16 = bitboard.popcount16<Numbers>();
+#if V3_SAVE_COUNT_SIZE
+            popcnt16.saveAligned(&this->count_.sizes.box_cells[box_id * BoxSize16]);
+#endif
+            BitVec16x16 enable_mask;
+            enable_mask.loadAligned(&this->count_.enabled.box_cells[box_id * BoxSize16]);
+            popcnt16 |= enable_mask;
+
+            uint32_t min_index;
+            uint32_t min_size = popcnt16.minpos16_and_index<Numbers>(min_index);
+            this->count_.counts.box_cells[box_id] = (uint16_t)min_size;
+            assert(min_size == new_min_cell_size);
+            uint32_t cell_index = box_id * uint32_t(BoxSize16) + min_index;
+            this->count_.indexs.box_cells[box_id] = (uint16_t)cell_index;
+            min_cell_index = cell_index;
         }
 
+        this->count_.total.min_literal_size[0] = (uint16_t)new_min_cell_size;
+        this->count_.total.min_literal_index[0] = (uint16_t)min_cell_index;
+
         // Row literal
-        {
+        uint32_t min_row_size = 255;
+        uint32_t min_row_index = uint32_t(-1);
+
+        size_t num_bits = cell_num_bits.to_ulong();
+        while (num_bits != 0) {
+            size_t num_bit = BitUtils::ls1b(num_bits);
+            size_t num = BitUtils::bsf(num_bit);
+            num_bits ^= num_bit;
+
             const PackedBitSet2D<Rows16, Cols16> * bitset;
             bitset = &this->state_.row_num_cols[num];
             bitboard.loadAligned(bitset);
 
-            void * count_size = (void *)&this->count_.sizes.row_nums[num * Rows16];
-            bitboard.popcount16<Cols>(count_size);
+            BitVec16x16 popcnt16 = bitboard.popcount16<Cols>();
+#if V3_SAVE_COUNT_SIZE
+            popcnt16.saveAligned(&this->count_.sizes.row_nums[num * Rows16]);
+#endif
+            BitVec16x16 enable_mask;
+            enable_mask.loadAligned(&this->count_.enabled.row_nums[num * Rows16]);
+            popcnt16 |= enable_mask;
+
+            uint32_t min_index = uint32_t(-1);
+            uint32_t min_size = popcnt16.minpos16<Cols>(min_row_size, min_index);
+            this->count_.counts.row_nums[num] = (uint16_t)min_size;
+            if (min_index == uint32_t(-1)) {
+                this->count_.indexs.row_nums[num] = (uint16_t)min_index;
+            }
+            else {
+                size_t row_index = num * Rows16 + min_index;
+                this->count_.indexs.row_nums[num] = (uint16_t)row_index;
+                min_row_index = (uint32_t)row_index;
+            }
         }
 
+        BitVec16x16 row_literal_minpos;
+        row_literal_minpos.loadAligned(&this->count_.counts.row_nums[0]);
+        uint32_t num_index;
+        min_row_size = row_literal_minpos.minpos16_and_index<Numbers>(num_index);
+        min_row_index = this->count_.indexs.row_nums[num_index];
+        if (min_row_index == uint32_t(uint16_t(-1))) {
+            const PackedBitSet2D<Rows16, Cols16> * bitset;
+            bitset = &this->state_.row_num_cols[num_index];
+            bitboard.loadAligned(bitset);
+
+            BitVec16x16 popcnt16 = bitboard.popcount16<Cols>();
+#if V3_SAVE_COUNT_SIZE
+            popcnt16.saveAligned(&this->count_.sizes.row_nums[num_index * Rows16]);
+#endif
+            BitVec16x16 enable_mask;
+            enable_mask.loadAligned(&this->count_.enabled.row_nums[num_index * Rows16]);
+            popcnt16 |= enable_mask;
+
+            uint32_t min_index;
+            uint32_t min_size = popcnt16.minpos16_and_index<Cols>(min_index);
+            this->count_.counts.row_nums[num_index] = (uint16_t)min_size;
+            assert(min_size == min_row_size);
+            uint32_t row_index = num_index * uint32_t(Rows16) + min_index;
+            this->count_.indexs.row_nums[num_index] = (uint16_t)row_index;
+            min_row_index = row_index;
+        }
+
+        this->count_.total.min_literal_size[1] = (uint16_t)min_row_size;
+        this->count_.total.min_literal_index[1] = (uint16_t)min_row_index;
+
         // Col literal
-        {
+        uint32_t min_col_size = 255;
+        uint32_t min_col_index = uint32_t(-1);
+
+        num_bits = cell_num_bits.to_ulong();
+        while (num_bits != 0) {
+            size_t num_bit = BitUtils::ls1b(num_bits);
+            size_t num = BitUtils::bsf(num_bit);
+            num_bits ^= num_bit;
+
             const PackedBitSet2D<Cols16, Rows16> * bitset;
             bitset = &this->state_.col_num_rows[num];
             bitboard.loadAligned(bitset);
 
-            void * count_size = (void *)&this->count_.sizes.col_nums[num * Cols16];
-            bitboard.popcount16<Rows>(count_size);
+            BitVec16x16 popcnt16 = bitboard.popcount16<Rows>();
+#if V3_SAVE_COUNT_SIZE
+            popcnt16.saveAligned(&this->count_.sizes.col_nums[num * Cols16]);
+#endif
+            BitVec16x16 enable_mask;
+            enable_mask.loadAligned(&this->count_.enabled.col_nums[num * Cols16]);
+            popcnt16 |= enable_mask;
+
+            uint32_t min_index = uint32_t(-1);
+            uint32_t min_size = popcnt16.minpos16<Rows>(min_col_size, min_index);
+            this->count_.counts.col_nums[num] = (uint16_t)min_size;
+            if (min_index == uint32_t(-1)) {
+                this->count_.indexs.col_nums[num] = (uint16_t)min_index;
+            }
+            else {
+                size_t col_index = num * Cols16 + min_index;
+                this->count_.indexs.col_nums[num] = (uint16_t)col_index;
+                min_col_index = (uint32_t)col_index;
+            }
         }
 
+        BitVec16x16 col_literal_minpos;
+        col_literal_minpos.loadAligned(&this->count_.counts.col_nums[0]);
+        min_col_size = col_literal_minpos.minpos16_and_index<Numbers>(num_index);
+        min_col_index = this->count_.indexs.col_nums[num_index];
+        if (min_col_index == uint32_t(uint16_t(-1))) {
+            const PackedBitSet2D<Cols16, Rows16> * bitset;
+            bitset = &this->state_.col_num_rows[num_index];
+            bitboard.loadAligned(bitset);
+
+            BitVec16x16 popcnt16 = bitboard.popcount16<Rows>();
+#if V3_SAVE_COUNT_SIZE
+            popcnt16.saveAligned(&this->count_.sizes.col_nums[num_index * Cols16]);
+#endif
+            BitVec16x16 enable_mask;
+            enable_mask.loadAligned(&this->count_.enabled.col_nums[num_index * Cols16]);
+            popcnt16 |= enable_mask;
+
+            uint32_t min_index;
+            uint32_t min_size = popcnt16.minpos16_and_index<Rows>(min_index);
+            this->count_.counts.col_nums[num_index] = (uint16_t)min_size;
+            assert(min_size == min_col_size);
+            uint32_t col_index = num_index * uint32_t(Cols16) + min_index;
+            this->count_.indexs.col_nums[num_index] = (uint16_t)col_index;
+            min_col_index = col_index;
+        }
+
+        this->count_.total.min_literal_size[2] = (uint16_t)min_col_size;
+        this->count_.total.min_literal_index[2] = (uint16_t)min_col_index;
+
         // Box-Cell literal
-        {
+        uint32_t min_box_size = 255;
+        uint32_t min_box_index = uint32_t(-1);
+        num_bits = cell_num_bits.to_ulong();
+        while (num_bits != 0) {
+            size_t num_bit = BitUtils::ls1b(num_bits);
+            size_t num = BitUtils::bsf(num_bit);
+            num_bits ^= num_bit;
+
             const PackedBitSet2D<Boxes16, BoxSize16> * bitset;
             bitset = &this->state_.box_num_cells[num];
             bitboard.loadAligned(bitset);
 
-            void * count_size = (void *)&this->count_.sizes.box_nums[num * Boxes16];
-            bitboard.popcount16<BoxSize>(count_size);
+            BitVec16x16 popcnt16 = bitboard.popcount16<BoxSize>();
+#if V3_SAVE_COUNT_SIZE
+            popcnt16.saveAligned(&this->count_.sizes.box_nums[num * Boxes16]);
+#endif
+            BitVec16x16 enable_mask;
+            enable_mask.loadAligned(&this->count_.enabled.box_nums[num * Boxes16]);
+            popcnt16 |= enable_mask;
+
+            uint32_t min_index = uint32_t(-1);
+            uint32_t min_size = popcnt16.minpos16<BoxSize>(min_box_size, min_index);
+            this->count_.counts.box_nums[num] = (uint16_t)min_size;
+            if (min_index == uint32_t(-1)) {
+                this->count_.indexs.box_nums[num] = (uint16_t)min_index;
+            }
+            else {
+                size_t box_index = num * Boxes16 + min_index;
+                this->count_.indexs.box_nums[num] = (uint16_t)box_index;
+                min_box_index = (uint32_t)box_index;
+            }
         }
+
+        BitVec16x16 box_literal_minpos;
+        box_literal_minpos.loadAligned(&this->count_.counts.box_nums[0]);
+        min_box_size = box_literal_minpos.minpos16_and_index<Numbers>(num_index);
+        min_box_index = this->count_.indexs.box_nums[num_index];
+        if (min_box_index == uint32_t(uint16_t(-1))) {
+            const PackedBitSet2D<Boxes16, BoxSize16> * bitset;
+            bitset = &this->state_.box_num_cells[num_index];
+            bitboard.loadAligned(bitset);
+
+            BitVec16x16 popcnt16 = bitboard.popcount16<BoxSize>();
+#if V3_SAVE_COUNT_SIZE
+            popcnt16.saveAligned(&this->count_.sizes.box_nums[num_index * Boxes16]);
+#endif
+            BitVec16x16 enable_mask;
+            enable_mask.loadAligned(&this->count_.enabled.box_nums[num_index * Boxes16]);
+            popcnt16 |= enable_mask;
+
+            uint32_t min_index;
+            uint32_t min_size = popcnt16.minpos16_and_index<BoxSize>(min_index);
+            this->count_.counts.box_nums[num_index] = (uint16_t)min_size;
+            assert(min_size == min_box_size);
+            uint32_t box_index = num_index * uint32_t(Boxes16) + min_index;
+            this->count_.indexs.box_nums[num_index] = (uint16_t)box_index;
+            min_box_index = box_index;
+        }
+
+        this->count_.total.min_literal_size[3] = (uint16_t)min_box_size;
+        this->count_.total.min_literal_index[3] = (uint16_t)min_box_index;
+
+        static const uint32_t literal_max_value[4] = { Numbers, Cols, Rows, BoxSize };
+
+        BitVec16x16 min_literal;
+        min_literal.loadAligned(&this->count_.total.min_literal_size[0]);
+
+        uint32_t min_literal_type;
+        uint32_t min_literal_size = min_literal.minpos16_and_index<4>(min_literal_type);
+        uint32_t min_literal_index;
+        if (min_literal_size < literal_max_value[min_literal_type]) {
+            min_literal_index = min_literal_type * uint32_t(BoardSize16) +
+                                this->count_.total.min_literal_index[min_literal_type];
+        }
+        else {
+            min_literal_size = 0;
+#ifndef NDEBUG
+            min_literal_index = 0;
+#endif
+        }
+
+        out_min_literal_index = min_literal_index;
+        return min_literal_size;
+    }
+
+    bool verify_bitboard_state() {
+#ifdef NDEBUG
+        return true;
+#endif
+        bool is_correct1 = (this->state_.box_cell_nums == this->box_cell_nums_);
+        bool is_correct2 = (this->state_.row_num_cols == this->row_num_cols_);
+        bool is_correct3 = (this->state_.col_num_rows == this->col_num_rows_);
+        bool is_correct4 = (this->state_.box_num_cells == this->box_num_cells_);
+        return (is_correct1 && is_correct2 && is_correct3 && is_correct4);
     }
 
     bool verify_literal_size() {
         bool is_correct = true;
+        return is_correct;
 
         // Cell (Box-Cell) literal
         for (size_t box = 0; box < Boxes; box++) {
@@ -2360,7 +2712,7 @@ private:
     }
 
 public:
-    bool solve(Board & board, size_t empties) {
+    bool solve(Board & board, size_t empties, uint32_t min_literal_size, uint32_t min_literal_index) {
         if (empties == 0) {
             if (kSearchMode > SearchMode::OneAnswer) {
                 this->answers_.push_back(board);
@@ -2373,12 +2725,10 @@ public:
                 return true;
             }
         }
-      
-        int min_literal_cnt;
-        int min_literal_id = get_min_literal(min_literal_cnt);
-        assert(min_literal_id < TotalLiterals);
-        if (min_literal_cnt > 0) {
-            if (min_literal_cnt == 1)
+
+        uint32_t min_literal_id = min_literal_index;
+        if (min_literal_size > 0) {
+            if (min_literal_size == 1)
                 num_unique_candidate++;
             else
                 num_guesses++;
@@ -2388,6 +2738,7 @@ public:
             PackedBitSet<BoardSize16> save_effect_cells;
             RecoverState recover_state;
             size_t pos, row, col, box, cell, num;
+            uint32_t next_min_literal_size, next_min_literal_index;
 
             int literal_type = min_literal_id / BoardSize16;
             assert(literal_type < LiteralType::MaxLiteralType);
@@ -2411,11 +2762,11 @@ public:
                     row = boxesInfo.row;
                     col = boxesInfo.col;
                     box = boxesInfo.box;
-                    cell = boxesInfo.cell;                    
+                    cell = boxesInfo.cell;
                     pos = boxesInfo.pos;
 #endif
-                    size_t num_bits = this->box_cell_nums_[box][cell].to_ulong();
-                    assert(this->box_cell_nums_[box][cell].count() == get_literal_cnt(min_literal_id));
+                    size_t num_bits = this->state_.box_cell_nums[box][cell].to_ulong();
+                    assert(this->state_.box_cell_nums[box][cell].count() == get_literal_cnt(min_literal_id));
                     while (num_bits != 0) {
                         size_t num_bit = BitUtils::ls1b(num_bits);
                         num = BitUtils::bsf(num_bit);
@@ -2423,15 +2774,27 @@ public:
                         doFillNum(pos, row, col, box, cell, num, save_bits);
                         size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, num);
 
-                        _doFillNum(pos, row, col, box, cell, num, save_num_bits);
+                        _doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
                         _updateNeighborCellsEffect(recover_state, pos, box, num);
 
                         bool is_correct = verify_bitboard_state();
-                        assert(is_correct); 
+                        assert(is_correct);
 
                         board.cells[pos] = (char)(num + '1');
 
-                        if (this->solve(board, empties - 1)) {
+                        int next_min_literal_cnt;
+                        int next_min_literal_id = get_min_literal(next_min_literal_cnt);
+                        next_min_literal_size = count_delta_literal_size(next_min_literal_index, save_num_bits, box);
+                        //next_min_literal_size = count_all_literal_size(next_min_literal_index);
+
+                        bool size_is_correct = verify_literal_size();
+                        assert(size_is_correct);
+
+                        assert(next_min_literal_id < TotalLiterals);
+                        assert(next_min_literal_index < TotalLiterals);
+                        assert(next_min_literal_size == next_min_literal_cnt || next_min_literal_cnt >= Numbers);
+
+                        if (this->solve(board, empties - 1, next_min_literal_size, next_min_literal_index)) {
                             if (kSearchMode == SearchMode::OneAnswer) {
                                 return true;
                             }
@@ -2447,10 +2810,10 @@ public:
                         assert(effect_count == r_effect_count);
 
                         _restoreNeighborCellsEffect(recover_state, box, num);
-                        _undoFillNum(pos, row, col, box, cell, num, save_num_bits);
+                        _undoFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
 
                         is_correct = verify_bitboard_state();
-                        assert(is_correct); 
+                        assert(is_correct);
 
                         num_bits ^= num_bit;
                     }
@@ -2466,8 +2829,8 @@ public:
                     num = literal / Rows16;
                     row = literal % Rows16;
 
-                    size_t col_bits = this->row_num_cols_[num][row].to_ulong();
-                    assert(this->row_num_cols_[num][row].count() == get_literal_cnt(min_literal_id));
+                    size_t col_bits = this->state_.row_num_cols[num][row].to_ulong();
+                    assert(this->state_.row_num_cols[num][row].count() == get_literal_cnt(min_literal_id));
                     while (col_bits != 0) {
                         size_t col_bit = BitUtils::ls1b(col_bits);
                         col = BitUtils::bsf(col_bits);
@@ -2487,15 +2850,27 @@ public:
                         doFillNum(pos, row, col, box, cell, num, save_bits);
                         size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, num);
 
-                        _doFillNum(pos, row, col, box, cell, num, save_num_bits);
+                        _doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
                         _updateNeighborCellsEffect(recover_state, pos, box, num);
 
                         bool is_correct = verify_bitboard_state();
-                        assert(is_correct); 
+                        assert(is_correct);
 
                         board.cells[pos] = (char)(num + '1');
 
-                        if (this->solve(board, empties - 1)) {
+                        int next_min_literal_cnt;
+                        int next_min_literal_id = get_min_literal(next_min_literal_cnt);
+                        next_min_literal_size = count_delta_literal_size(next_min_literal_index, save_num_bits, box);
+                        //next_min_literal_size = count_all_literal_size(next_min_literal_index);
+
+                        bool size_is_correct = verify_literal_size();
+                        assert(size_is_correct);
+
+                        assert(next_min_literal_id < TotalLiterals);
+                        assert(next_min_literal_index < TotalLiterals);
+                        assert(next_min_literal_size == next_min_literal_cnt || next_min_literal_cnt >= Cols);
+
+                        if (this->solve(board, empties - 1, next_min_literal_size, next_min_literal_index)) {
                             if (kSearchMode == SearchMode::OneAnswer) {
                                 return true;
                             }
@@ -2511,10 +2886,10 @@ public:
                         assert(effect_count == r_effect_count);
 
                         _restoreNeighborCellsEffect(recover_state, box, num);
-                        _undoFillNum(pos, row, col, box, cell, num, save_num_bits);
+                        _undoFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
 
                         is_correct = verify_bitboard_state();
-                        assert(is_correct); 
+                        assert(is_correct);
 
                         col_bits ^= col_bit;
                     }
@@ -2530,8 +2905,8 @@ public:
                     num = literal / Cols16;
                     col = literal % Cols16;
 
-                    size_t row_bits = this->col_num_rows_[num][col].to_ulong();
-                    assert(this->col_num_rows_[num][col].count() == get_literal_cnt(min_literal_id));
+                    size_t row_bits = this->state_.col_num_rows[num][col].to_ulong();
+                    assert(this->state_.col_num_rows[num][col].count() == get_literal_cnt(min_literal_id));
                     while (row_bits != 0) {
                         size_t row_bit = BitUtils::ls1b(row_bits);
                         row = BitUtils::bsf(row_bits);
@@ -2551,15 +2926,27 @@ public:
                         doFillNum(pos, row, col, box, cell, num, save_bits);
                         size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, num);
 
-                        _doFillNum(pos, row, col, box, cell, num, save_num_bits);
+                        _doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
                         _updateNeighborCellsEffect(recover_state, pos, box, num);
 
                         bool is_correct = verify_bitboard_state();
-                        assert(is_correct); 
+                        assert(is_correct);
 
                         board.cells[pos] = (char)(num + '1');
 
-                        if (this->solve(board, empties - 1)) {
+                        int next_min_literal_cnt;
+                        int next_min_literal_id = get_min_literal(next_min_literal_cnt);
+                        next_min_literal_size = count_delta_literal_size(next_min_literal_index, save_num_bits, box);
+                        //next_min_literal_size = count_all_literal_size(next_min_literal_index);
+
+                        bool size_is_correct = verify_literal_size();
+                        assert(size_is_correct);
+
+                        assert(next_min_literal_id < TotalLiterals);
+                        assert(next_min_literal_index < TotalLiterals);
+                        assert(next_min_literal_size == next_min_literal_cnt || next_min_literal_cnt >= Rows);
+
+                        if (this->solve(board, empties - 1, next_min_literal_size, next_min_literal_index)) {
                             if (kSearchMode == SearchMode::OneAnswer) {
                                 return true;
                             }
@@ -2575,10 +2962,10 @@ public:
                         assert(effect_count == r_effect_count);
 
                         _restoreNeighborCellsEffect(recover_state, box, num);
-                        _undoFillNum(pos, row, col, box, cell, num, save_num_bits);
+                        _undoFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
 
                         is_correct = verify_bitboard_state();
-                        assert(is_correct); 
+                        assert(is_correct);
 
                         row_bits ^= row_bit;
                     }
@@ -2594,8 +2981,8 @@ public:
                     num = literal / Boxes16;
                     box = literal % Boxes16;
 
-                    size_t cell_bits = this->box_num_cells_[num][box].to_ulong();
-                    assert(this->box_num_cells_[num][box].count() == get_literal_cnt(min_literal_id));
+                    size_t cell_bits = this->state_.box_num_cells[num][box].to_ulong();
+                    assert(this->state_.box_num_cells[num][box].count() == get_literal_cnt(min_literal_id));
                     while (cell_bits != 0) {
                         size_t cell_bit = BitUtils::ls1b(cell_bits);
                         cell = BitUtils::bsf(cell_bits);
@@ -2612,15 +2999,27 @@ public:
                         doFillNum(pos, row, col, box, cell, num, save_bits);
                         size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, num);
 
-                        _doFillNum(pos, row, col, box, cell, num, save_num_bits);
+                        _doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
                         _updateNeighborCellsEffect(recover_state, pos, box, num);
 
                         bool is_correct = verify_bitboard_state();
-                        assert(is_correct); 
+                        assert(is_correct);
 
                         board.cells[pos] = (char)(num + '1');
 
-                        if (this->solve(board, empties - 1)) {
+                        int next_min_literal_cnt;
+                        int next_min_literal_id = get_min_literal(next_min_literal_cnt);
+                        next_min_literal_size = count_delta_literal_size(next_min_literal_index, save_num_bits, box);
+                        //next_min_literal_size = count_all_literal_size(next_min_literal_index);
+
+                        bool size_is_correct = verify_literal_size();
+                        assert(size_is_correct);
+
+                        assert(next_min_literal_id < TotalLiterals);
+                        assert(next_min_literal_index < TotalLiterals);
+                        assert(next_min_literal_size == next_min_literal_cnt || next_min_literal_cnt >= BoxSize);
+
+                        if (this->solve(board, empties - 1, next_min_literal_size, next_min_literal_index)) {
                             if (kSearchMode == SearchMode::OneAnswer) {
                                 return true;
                             }
@@ -2636,10 +3035,10 @@ public:
                         assert(effect_count == r_effect_count);
 
                         _restoreNeighborCellsEffect(recover_state, box, num);
-                        _undoFillNum(pos, row, col, box, cell, num, save_num_bits);
+                        _undoFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
 
                         is_correct = verify_bitboard_state();
-                        assert(is_correct); 
+                        assert(is_correct);
 
                         cell_bits ^= cell_bit;
                     }
@@ -2661,7 +3060,9 @@ public:
 
     bool solve(Board & board) {
         this->init_board(board);
-        bool success = this->solve(board, this->empties_);
+        bool success = this->solve(board, this->empties_,
+                                   this->count_.min_literal_size,
+                                   this->count_.min_literal_index);
         return success;
     }
 
