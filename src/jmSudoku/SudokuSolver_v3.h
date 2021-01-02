@@ -552,9 +552,12 @@ private:
     }
 
     void init_board(Board & board) {
+#if V3_ENABLE_OLD_ALGORITHM
         init_literal_info();
+#endif
         _init_literal_info();
 
+#if V3_ENABLE_OLD_ALGORITHM
         size_t kBoxSize64 = kAllBoxSizeBit | (kAllBoxSizeBit << 16U) | (kAllBoxSizeBit << 32U) | (kAllBoxSizeBit << 48U);
         this->num_cells_.fill(kBoxSize64);
 
@@ -562,7 +565,7 @@ private:
         this->row_num_cols_.fill(kAllColsBit);
         this->col_num_rows_.fill(kAllRowsBit);
         this->box_num_cells_.fill(kAllBoxSizeBit);
-
+#endif
         this->state_.box_cell_nums.fill(kAllNumbersBit);
         this->state_.row_num_cols.fill(kAllColsBit);
         this->state_.col_num_rows.fill(kAllRowsBit);
@@ -590,9 +593,10 @@ private:
                     size_t cell_x = col % BoxCellsX;
                     size_t cell = cell_y + cell_x;
                     size_t num = val - '1';
+#if V3_ENABLE_OLD_ALGORITHM
                     this->doFillNum(pos, row, col, box, cell, num);
                     this->updateNeighborCellsEffect(pos, num);
-
+#endif
                     this->_doFillNum(pos, row, col, box, cell, num);
                     this->_updateNeighborCellsEffect(pos, box, num);
                 }
