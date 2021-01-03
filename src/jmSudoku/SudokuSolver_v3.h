@@ -635,6 +635,9 @@ private:
 #endif
 
 #if defined(__SSE4_1__)
+    static const uint8_t kEnableLiteral8 = 0x00;
+    static const uint8_t kDisableLiteral8 = 0xFF;
+
     inline void init_literal_info() {
         if (kAllDimIsSame)
             init_literal_info_is_same();
@@ -741,11 +744,11 @@ private:
     }
 
     inline void enable_literal(size_t literal) {
-        this->literal_info_[literal].enable = 0x00;
+        this->literal_info_[literal].enable = kEnableLiteral8;
     }
 
     inline void disable_literal(size_t literal) {
-        this->literal_info_[literal].enable = 0xFF;
+        this->literal_info_[literal].enable = kDisableLiteral8;
     }
 
     inline uint8_t get_literal_cnt(size_t literal) {
@@ -775,6 +778,9 @@ private:
     }
 
 #else // !__SSE4_1__
+
+    static const uint8_t kEnableLiteral8 = 0x00;
+    static const uint8_t kDisableLiteral8 = 0xF0;
 
     inline void init_literal_info() {
         if (kAllDimIsSame)
@@ -810,11 +816,11 @@ private:
     }
 
     inline void enable_literal(size_t literal) {
-        this->literal_enable_[literal] = 0x00;
+        this->literal_enable_[literal] = kEnableLiteral8;
     }
 
     inline void disable_literal(size_t literal) {
-        this->literal_enable_[literal] = 0xF0;
+        this->literal_enable_[literal] = kDisableLiteral8;
     }
 
     inline uint8_t get_literal_cnt(size_t literal) {
@@ -2311,10 +2317,10 @@ private:
             enable_mask.loadAligned(&this->count_.enabled.box_cells[box * BoxSize16]);
             popcnt16 |= enable_mask;
 
-            uint32_t min_index = uint32_t(-1);
+            int min_index = -1;
             uint32_t min_size = popcnt16.minpos16<Numbers>(min_cell_size, min_index);
             this->count_.counts.box_cells[box] = (uint16_t)min_size;
-            if (min_index == uint32_t(-1)) {
+            if (min_index == -1) {
                 this->count_.indexs.box_cells[box] = (uint16_t)min_index;
             }
             else {
@@ -2342,10 +2348,10 @@ private:
             enable_mask.loadAligned(&this->count_.enabled.row_nums[num * Rows16]);
             popcnt16 |= enable_mask;
 
-            uint32_t min_index = uint32_t(-1);
+            int min_index = -1;
             uint32_t min_size = popcnt16.minpos16<Cols>(min_row_size, min_index);
             this->count_.counts.row_nums[num] = (uint16_t)min_size;
-            if (min_index == uint32_t(-1)) {
+            if (min_index == -1) {
                 this->count_.indexs.row_nums[num] = (uint16_t)min_index;
             }
             else {
@@ -2373,10 +2379,10 @@ private:
             enable_mask.loadAligned(&this->count_.enabled.col_nums[num * Cols16]);
             popcnt16 |= enable_mask;
 
-            uint32_t min_index = uint32_t(-1);
+            int min_index = -1;
             uint32_t min_size = popcnt16.minpos16<Rows>(min_col_size, min_index);
             this->count_.counts.col_nums[num] = (uint16_t)min_size;
-            if (min_index == uint32_t(-1)) {
+            if (min_index == -1) {
                 this->count_.indexs.col_nums[num] = (uint16_t)min_index;
             }
             else {
@@ -2404,10 +2410,10 @@ private:
             enable_mask.loadAligned(&this->count_.enabled.box_nums[num * Boxes16]);
             popcnt16 |= enable_mask;
 
-            uint32_t min_index = uint32_t(-1);
+            int min_index = -1;
             uint32_t min_size = popcnt16.minpos16<BoxSize>(min_box_size, min_index);
             this->count_.counts.box_nums[num] = (uint16_t)min_size;
-            if (min_index == uint32_t(-1)) {
+            if (min_index == -1) {
                 this->count_.indexs.box_nums[num] = (uint16_t)min_index;
             }
             else {
@@ -2419,7 +2425,7 @@ private:
         this->count_.total.min_literal_size[3] = (uint16_t)min_box_size;
         this->count_.total.min_literal_index[3] = (uint16_t)min_box_index;
 
-        uint32_t min_literal_type;
+        int min_literal_type;
 
         BitVec16x16 min_literal;
         min_literal.loadAligned(&this->count_.total.min_literal_size[0]);
@@ -2457,10 +2463,10 @@ private:
             enable_mask.loadAligned(&this->count_.enabled.box_cells[box_idx * BoxSize16]);
             popcnt16 |= enable_mask;
 
-            uint32_t min_index = uint32_t(-1);
+            int min_index = -1;
             uint32_t min_size = popcnt16.minpos16<Numbers>(min_cell_size, min_index);
             this->count_.counts.box_cells[box_idx] = (uint16_t)min_size;
-            if (min_index == uint32_t(-1)) {
+            if (min_index == -1) {
                 this->count_.indexs.box_cells[box_idx] = (uint16_t)min_index;
             }
             else {
@@ -2485,10 +2491,10 @@ private:
             enable_mask.loadAligned(&this->count_.enabled.box_cells[box * BoxSize16]);
             popcnt16 |= enable_mask;
 
-            uint32_t min_index = uint32_t(-1);
+            int min_index = -1;
             uint32_t min_size = popcnt16.minpos16<Numbers>(min_cell_size, min_index);
             this->count_.counts.box_cells[box] = (uint16_t)min_size;
-            if (min_index == uint32_t(-1)) {
+            if (min_index == -1) {
                 this->count_.indexs.box_cells[box] = (uint16_t)min_index;
             }
             else {
@@ -2501,7 +2507,7 @@ private:
 
         BitVec16x16 cell_literal_minpos;
         cell_literal_minpos.loadAligned(&this->count_.counts.box_cells[0]);
-        uint32_t box_id;
+        int32_t box_id;
         min_cell_size = cell_literal_minpos.minpos16_and_index<Numbers>(box_id);
         min_cell_index = this->count_.indexs.box_cells[box_id];
         if (min_cell_index == uint32_t(uint16_t(-1))) {
@@ -2548,10 +2554,10 @@ private:
             enable_mask.loadAligned(&this->count_.enabled.row_nums[num * Rows16]);
             popcnt16 |= enable_mask;
 
-            uint32_t min_index = uint32_t(-1);
+            int min_index = -1;
             uint32_t min_size = popcnt16.minpos16<Cols>(min_row_size, min_index);
             this->count_.counts.row_nums[num] = (uint16_t)min_size;
-            if (min_index == uint32_t(-1)) {
+            if (min_index == -1) {
                 this->count_.indexs.row_nums[num] = (uint16_t)min_index;
             }
             else {
@@ -2563,7 +2569,7 @@ private:
 
         BitVec16x16 row_literal_minpos;
         row_literal_minpos.loadAligned(&this->count_.counts.row_nums[0]);
-        uint32_t num_index;
+        int32_t num_index;
         min_row_size = row_literal_minpos.minpos16_and_index<Numbers>(num_index);
         min_row_index = this->count_.indexs.row_nums[num_index];
         if (min_row_index == uint32_t(uint16_t(-1))) {
@@ -2610,10 +2616,10 @@ private:
             enable_mask.loadAligned(&this->count_.enabled.col_nums[num * Cols16]);
             popcnt16 |= enable_mask;
 
-            uint32_t min_index = uint32_t(-1);
+            int min_index = -1;
             uint32_t min_size = popcnt16.minpos16<Rows>(min_col_size, min_index);
             this->count_.counts.col_nums[num] = (uint16_t)min_size;
-            if (min_index == uint32_t(-1)) {
+            if (min_index == -1) {
                 this->count_.indexs.col_nums[num] = (uint16_t)min_index;
             }
             else {
@@ -2670,10 +2676,10 @@ private:
             enable_mask.loadAligned(&this->count_.enabled.box_nums[num * Boxes16]);
             popcnt16 |= enable_mask;
 
-            uint32_t min_index = uint32_t(-1);
+            int min_index = -1;
             uint32_t min_size = popcnt16.minpos16<BoxSize>(min_box_size, min_index);
             this->count_.counts.box_nums[num] = (uint16_t)min_size;
-            if (min_index == uint32_t(-1)) {
+            if (min_index == -1) {
                 this->count_.indexs.box_nums[num] = (uint16_t)min_index;
             }
             else {
@@ -2714,7 +2720,7 @@ private:
         BitVec16x16 min_literal;
         min_literal.loadAligned(&this->count_.total.min_literal_size[0]);
 
-        uint32_t min_literal_type;
+        int min_literal_type;
         uint32_t min_literal_size = min_literal.minpos16_and_index<4>(min_literal_type);
         uint32_t min_literal_index;
         if (min_literal_size < literal_max_value[min_literal_type]) {
@@ -2757,7 +2763,7 @@ private:
             uint16_t * count_size = (uint16_t *)&this->count_.sizes.box_cells[box * BoxSize16];
             for (size_t cell = 0; cell < BoxSize; cell++) {
                 uint8_t enable = get_cell_literal_enable(box * BoxSize16 + cell);
-                if (enable != 0xFF) {
+                if (enable != kDisableLiteral8) {
                     assert(this->count_.enabled.box_cells[box * BoxSize16 + cell] == kEnableLiteral16);
                     uint16_t size1 = get_cell_literal_cnt(box * BoxSize16 + cell);
                     uint16_t size2 = count_size[cell];
@@ -2780,7 +2786,7 @@ private:
             uint16_t * count_size = (uint16_t *)&this->count_.sizes.row_nums[num * Rows16];
             for (size_t row = 0; row < Rows; row++) {
                 uint8_t enable = get_row_literal_enable(num, row);
-                if (enable != 0xFF) {
+                if (enable != kDisableLiteral8) {
                     assert(this->count_.enabled.row_nums[num * Rows16 + row] == kEnableLiteral16);
                     uint16_t size1 = get_row_literal_cnt(num, row);
                     uint16_t size2 = count_size[row];
@@ -2803,7 +2809,7 @@ private:
             uint16_t * count_size = (uint16_t *)&this->count_.sizes.col_nums[num * Cols16];
             for (size_t col = 0; col < Cols; col++) {
                 uint8_t enable = get_col_literal_enable(num, col);
-                if (enable != 0xFF) {
+                if (enable != kDisableLiteral8) {
                     assert(this->count_.enabled.col_nums[num * Cols16 + col] == kEnableLiteral16);
                     uint16_t size1 = get_col_literal_cnt(num, col);
                     uint16_t size2 = count_size[col];
@@ -2826,7 +2832,7 @@ private:
             uint16_t * count_size = (uint16_t *)&this->count_.sizes.box_nums[num * Boxes16];
             for (size_t box = 0; box < Boxes; box++) {
                 uint8_t enable = get_box_literal_enable(num, box);
-                if (enable != 0xFF) {
+                if (enable != kDisableLiteral8) {
                     assert(this->count_.enabled.box_nums[num * Boxes16 + box] == kEnableLiteral16);
                     uint16_t size1 = get_box_literal_cnt(num, box);
                     uint16_t size2 = count_size[box];
