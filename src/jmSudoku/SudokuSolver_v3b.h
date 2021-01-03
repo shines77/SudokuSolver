@@ -449,7 +449,12 @@ private:
     void init_board(Board & board) {
         init_literal_info();
 
+#if defined(WIN64) || defined(_WIN64) || defined(_M_X64) || defined(_M_AMD64) \
+ || defined(_M_IA64) || defined(__amd64__) || defined(__x86_64__)
         size_t kBoxSize64 = kAllBoxSizeBit | (kAllBoxSizeBit << 16U) | (kAllBoxSizeBit << 32U) | (kAllBoxSizeBit << 48U);
+#else
+        size_t kBoxSize64 = kAllBoxSizeBit | (kAllBoxSizeBit << 16U);
+#endif
         this->num_cells_.fill(kBoxSize64);
 
         this->box_cell_nums_.fill(kAllNumbersBit);
@@ -1393,7 +1398,7 @@ private:
         disable_col_literal(col_idx);
         disable_box_literal(box_idx);
 
-        size_t num_bits = this->box_cell_nums_[box][cell].to_ullong();
+        size_t num_bits = this->box_cell_nums_[box][cell].to_ulong();
         while (num_bits != 0) {
             size_t num_bit = BitUtils::ls1b(num_bits);
             size_t _num = BitUtils::bsf(num_bit);

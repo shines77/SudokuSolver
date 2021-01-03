@@ -48,7 +48,7 @@
 #define V3_LITERAL_ORDER_MODE   0
 
 #ifdef NDEBUG
-#define V3_SAVE_COUNT_SIZE      0
+#define V3_SAVE_COUNT_SIZE      1
 #else
 #define V3_SAVE_COUNT_SIZE      1
 #endif
