@@ -290,6 +290,7 @@ private:
 
 #pragma pack(pop)
 
+#if V3_ENABLE_OLD_ALGORITHM
     typedef PackedBitSet<Numbers16>     bitset_type;
 
     alignas(32) PackedBitSet2D<Numbers, Boxes16 * BoxSize16>  num_cells_;       // [num][box * BoxSize16 + cell]
@@ -298,15 +299,18 @@ private:
     alignas(32) PackedBitSet3D<Numbers, Rows16, Cols16>       row_num_cols_;    // [num][row][col]
     alignas(32) PackedBitSet3D<Numbers, Cols16, Rows16>       col_num_rows_;    // [num][col][row]
     alignas(32) PackedBitSet3D<Numbers, Boxes16, BoxSize16>   box_num_cells_;   // [num][box][cell]
+#endif
 
     State   state_;
     Count   count_;
 
+#if V3_ENABLE_OLD_ALGORITHM
 #if defined(__SSE4_1__)
     alignas(16) literal_info_t literal_info_[TotalLiterals];
 #else
     alignas(16) uint8_t literal_count_[TotalLiterals];
     alignas(16) uint8_t literal_enable_[TotalLiterals];
+#endif
 #endif
 
     size_t empties_;
@@ -609,13 +613,16 @@ private:
         this->count_.min_literal_size = min_literal_size;
         this->count_.min_literal_index = min_literal_index;
 
+#if V3_ENABLE_OLD_ALGORITHM
         bool is_correct = verify_bitboard_state();
         assert(is_correct);
 
         bool size_is_correct = verify_literal_size();
         assert(size_is_correct);
+#endif
     }
 
+#if V3_ENABLE_OLD_ALGORITHM
     static const size_t kLiteralStep = sizeof(size_t) / sizeof(literal_info_t);
 
 #if defined(WIN64) || defined(_WIN64) || defined(_M_X64) || defined(_M_AMD64) \
@@ -1539,7 +1546,9 @@ private:
     }
 
 #endif // __SSE4_1__
+#endif // V3_ENABLE_OLD_ALGORITHM
 
+#if V3_ENABLE_OLD_ALGORITHM
     inline void doFillNum(size_t pos, size_t row, size_t col,
                           size_t box, size_t cell, size_t num) {
         size_t box_pos = box * BoxSize16 + cell;
@@ -1839,6 +1848,7 @@ private:
 
         return count;
     }
+#endif // V3_ENABLE_OLD_ALGORITHM
 
     static const uint16_t kEnableLiteral16 = 0x0000;
     static const uint16_t kDisableLiteral16 = 0xFFFF;
@@ -2036,6 +2046,10 @@ private:
         recover_state.counts.col_nums[num] = this->count_.counts.col_nums[num];
         recover_state.counts.box_nums[num] = this->count_.counts.box_nums[num];
 
+        recover_state.indexs.row_nums[num] = this->count_.indexs.row_nums[num];
+        recover_state.indexs.col_nums[num] = this->count_.indexs.col_nums[num];
+        recover_state.indexs.box_nums[num] = this->count_.indexs.box_nums[num];
+
         size_t num_bits = cell_num_bits.to_ulong();
         // Exclude the current number, because it will be process later.
         num_bits ^= (size_t(1) << num);
@@ -2055,6 +2069,10 @@ private:
             recover_state.counts.row_nums[_num] = this->count_.counts.row_nums[_num];
             recover_state.counts.col_nums[_num] = this->count_.counts.col_nums[_num];
             recover_state.counts.box_nums[_num] = this->count_.counts.box_nums[_num];
+
+            recover_state.indexs.row_nums[_num] = this->count_.indexs.row_nums[_num];
+            recover_state.indexs.col_nums[_num] = this->count_.indexs.col_nums[_num];
+            recover_state.indexs.box_nums[_num] = this->count_.indexs.box_nums[_num];
         }
     }
 
@@ -2088,6 +2106,10 @@ private:
         this->count_.counts.col_nums[num] = recover_state.counts.col_nums[num];
         this->count_.counts.box_nums[num] = recover_state.counts.box_nums[num];
 
+        this->count_.indexs.row_nums[num] = recover_state.indexs.row_nums[num];
+        this->count_.indexs.col_nums[num] = recover_state.indexs.col_nums[num];
+        this->count_.indexs.box_nums[num] = recover_state.indexs.box_nums[num];
+
         size_t num_bits = save_num_bits.to_ulong();
         // Exclude the current number, because it has been processed.
         num_bits ^= (size_t(1) << num);
@@ -2107,6 +2129,10 @@ private:
             this->count_.counts.row_nums[_num] = recover_state.counts.row_nums[_num];
             this->count_.counts.col_nums[_num] = recover_state.counts.col_nums[_num];
             this->count_.counts.box_nums[_num] = recover_state.counts.box_nums[_num];
+
+            this->count_.indexs.row_nums[_num] = recover_state.indexs.row_nums[_num];
+            this->count_.indexs.col_nums[_num] = recover_state.indexs.col_nums[_num];
+            this->count_.indexs.box_nums[_num] = recover_state.indexs.box_nums[_num];
         }
     }
 
@@ -2123,6 +2149,7 @@ private:
             this->state_.box_cell_nums[box_idx] &= neighbors_mask[box_idx];
 
             recover_state.counts.box_cells[box_idx] = this->count_.counts.box_cells[box_idx];
+            recover_state.indexs.box_cells[box_idx] = this->count_.indexs.box_cells[box_idx];
         }
         //recover_state.boxes[boxesCount] = this->state_.box_cell_nums[box];
         //this->state_.box_cell_nums[box] &= neighbors_mask[box];        
@@ -2150,6 +2177,7 @@ private:
             this->state_.box_cell_nums[box_idx] = recover_state.boxes[i];
 
             this->count_.counts.box_cells[box_idx] = recover_state.counts.box_cells[box_idx];
+            this->count_.indexs.box_cells[box_idx] = recover_state.indexs.box_cells[box_idx];
         }
         //this->state_.box_cell_nums[box] = recover_state.boxes[boxesCount];
 
@@ -2373,7 +2401,7 @@ private:
         BitVec16x16 cell_literal_minpos;
         cell_literal_minpos.loadAligned(&this->count_.counts.box_cells[0]);
         uint32_t box_id;
-        uint32_t new_min_cell_size = cell_literal_minpos.minpos16_and_index<Numbers>(box_id);
+        min_cell_size = cell_literal_minpos.minpos16_and_index<Numbers>(box_id);
         min_cell_index = this->count_.indexs.box_cells[box_id];
         if (min_cell_index == uint32_t(uint16_t(-1))) {
             const PackedBitSet2D<BoxSize16, Numbers16> * bitset;
@@ -2391,13 +2419,13 @@ private:
             uint32_t min_index;
             uint32_t min_size = popcnt16.minpos16_and_index<Numbers>(min_index);
             this->count_.counts.box_cells[box_id] = (uint16_t)min_size;
-            assert(min_size == new_min_cell_size);
+            assert(min_size == min_cell_size);
             uint32_t cell_index = box_id * uint32_t(BoxSize16) + min_index;
             this->count_.indexs.box_cells[box_id] = (uint16_t)cell_index;
             min_cell_index = cell_index;
         }
 
-        this->count_.total.min_literal_size[0] = (uint16_t)new_min_cell_size;
+        this->count_.total.min_literal_size[0] = (uint16_t)min_cell_size;
         this->count_.total.min_literal_index[0] = (uint16_t)min_cell_index;
 
         // Row literal
@@ -2615,10 +2643,8 @@ private:
         return min_literal_size;
     }
 
+#if V3_ENABLE_OLD_ALGORITHM
     bool verify_bitboard_state() {
-#if (V3_ENABLE_OLD_ALGORITHM == 0)
-        return true;
-#endif
 #ifdef NDEBUG
         return true;
 #endif
@@ -2628,13 +2654,14 @@ private:
         bool is_correct4 = (this->state_.box_num_cells == this->box_num_cells_);
         return (is_correct1 && is_correct2 && is_correct3 && is_correct4);
     }
+#endif
 
+#if V3_ENABLE_OLD_ALGORITHM
     bool verify_literal_size() {
-#if (V3_ENABLE_OLD_ALGORITHM == 0)
+#ifdef NDEBUG
         return true;
 #endif
-        bool is_correct = true;
-        return is_correct;
+        size_t wrong_cnt = 0;
 
         // Cell (Box-Cell) literal
         for (size_t box = 0; box < Boxes; box++) {
@@ -2642,16 +2669,18 @@ private:
             for (size_t cell = 0; cell < BoxSize; cell++) {
                 uint8_t enable = get_cell_literal_enable(box * BoxSize16 + cell);
                 if (enable != 0xFF) {
+                    assert(this->count_.enabled.box_cells[box * BoxSize16 + cell] == kEnableLiteral16);
                     uint16_t size1 = get_cell_literal_cnt(box * BoxSize16 + cell);
                     uint16_t size2 = count_size[cell];
                     if (size1 != size2) {
-                        return false;
+                        wrong_cnt++;
                     }
                 }
                 else {
+                    assert(this->count_.enabled.box_cells[box * BoxSize16 + cell] == kDisableLiteral16);
                     uint16_t size2 = count_size[cell];
                     if (size2 != 0) {
-                        return false;
+                        wrong_cnt++;
                     }
                 }
             }
@@ -2663,16 +2692,18 @@ private:
             for (size_t row = 0; row < Rows; row++) {
                 uint8_t enable = get_row_literal_enable(num, row);
                 if (enable != 0xFF) {
+                    assert(this->count_.enabled.row_nums[num * Rows16 + row] == kEnableLiteral16);
                     uint16_t size1 = get_row_literal_cnt(num, row);
                     uint16_t size2 = count_size[row];
                     if (size1 != size2) {
-                        return false;
+                        wrong_cnt++;
                     }
                 }
                 else {
+                    assert(this->count_.enabled.row_nums[num * Rows16 + row] == kDisableLiteral16);
                     uint16_t size2 = count_size[row];
                     if (size2 != 0) {
-                        return false;
+                        wrong_cnt++;
                     }
                 }
             }
@@ -2684,16 +2715,18 @@ private:
             for (size_t col = 0; col < Cols; col++) {
                 uint8_t enable = get_col_literal_enable(num, col);
                 if (enable != 0xFF) {
+                    assert(this->count_.enabled.col_nums[num * Cols16 + col] == kEnableLiteral16);
                     uint16_t size1 = get_col_literal_cnt(num, col);
                     uint16_t size2 = count_size[col];
                     if (size1 != size2) {
-                        return false;
+                        wrong_cnt++;
                     }
                 }
                 else {
+                    assert(this->count_.enabled.col_nums[num * Cols16 + col] == kDisableLiteral16);
                     uint16_t size2 = count_size[col];
                     if (size2 != 0) {
-                        return false;
+                        wrong_cnt++;
                     }
                 }
             }
@@ -2705,23 +2738,26 @@ private:
             for (size_t box = 0; box < Boxes; box++) {
                 uint8_t enable = get_box_literal_enable(num, box);
                 if (enable != 0xFF) {
+                    assert(this->count_.enabled.box_nums[num * Boxes16 + box] == kEnableLiteral16);
                     uint16_t size1 = get_box_literal_cnt(num, box);
                     uint16_t size2 = count_size[box];
                     if (size1 != size2) {
-                        return false;
+                        wrong_cnt++;
                     }
                 }
                 else {
+                    assert(this->count_.enabled.box_nums[num * Boxes16 + box] == kDisableLiteral16);
                     uint16_t size2 = count_size[box];
                     if (size2 != 0) {
-                        return false;
+                        wrong_cnt++;
                     }
                 }
             }
         }
 
-        return is_correct;
+        return (wrong_cnt == 0);
     }
+#endif
 
 public:
     bool solve(Board & board, size_t empties, uint32_t min_literal_size, uint32_t min_literal_index) {
@@ -2784,6 +2820,7 @@ public:
                     while (num_bits != 0) {
                         size_t num_bit = BitUtils::ls1b(num_bits);
                         num = BitUtils::bsf(num_bit);
+                        num_bits ^= num_bit;
 
 #if V3_ENABLE_OLD_ALGORITHM
                         doFillNum(pos, row, col, box, cell, num, save_bits);
@@ -2792,9 +2829,10 @@ public:
                         _doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
                         _updateNeighborCellsEffect(recover_state, pos, box, num);
 
+#if V3_ENABLE_OLD_ALGORITHM
                         bool is_correct = verify_bitboard_state();
                         assert(is_correct);
-
+#endif
                         board.cells[pos] = (char)(num + '1');
 
 #if V3_ENABLE_OLD_ALGORITHM
@@ -2804,10 +2842,10 @@ public:
                         next_min_literal_size = count_delta_literal_size(next_min_literal_index, save_num_bits, box);
                         //next_min_literal_size = count_all_literal_size(next_min_literal_index);
 
-                        bool size_is_correct = verify_literal_size();
-                        assert(size_is_correct);
-
 #if V3_ENABLE_OLD_ALGORITHM
+                        bool size_is_correct = verify_literal_size();
+                        //assert(size_is_correct);
+
                         assert(next_min_literal_id < TotalLiterals);
                         assert(next_min_literal_index < TotalLiterals);
                         assert(next_min_literal_size == next_min_literal_cnt || next_min_literal_cnt >= Numbers);
@@ -2831,10 +2869,10 @@ public:
                         _restoreNeighborCellsEffect(recover_state, box, num);
                         _undoFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
 
+#if V3_ENABLE_OLD_ALGORITHM
                         is_correct = verify_bitboard_state();
                         assert(is_correct);
-
-                        num_bits ^= num_bit;
+#endif
                     }
 
                     break;
@@ -2855,6 +2893,7 @@ public:
                     while (col_bits != 0) {
                         size_t col_bit = BitUtils::ls1b(col_bits);
                         col = BitUtils::bsf(col_bits);
+                        col_bits ^= col_bit;
                         pos = row * Cols + col;
 #if 0
                         size_t box_x = col / BoxCellsX;
@@ -2876,9 +2915,10 @@ public:
                         _doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
                         _updateNeighborCellsEffect(recover_state, pos, box, num);
 
+#if V3_ENABLE_OLD_ALGORITHM
                         bool is_correct = verify_bitboard_state();
                         assert(is_correct);
-
+#endif
                         board.cells[pos] = (char)(num + '1');
 
 #if V3_ENABLE_OLD_ALGORITHM
@@ -2888,10 +2928,10 @@ public:
                         next_min_literal_size = count_delta_literal_size(next_min_literal_index, save_num_bits, box);
                         //next_min_literal_size = count_all_literal_size(next_min_literal_index);
 
-                        bool size_is_correct = verify_literal_size();
-                        assert(size_is_correct);
-
 #if V3_ENABLE_OLD_ALGORITHM
+                        bool size_is_correct = verify_literal_size();
+                        //assert(size_is_correct);
+
                         assert(next_min_literal_id < TotalLiterals);
                         assert(next_min_literal_index < TotalLiterals);
                         assert(next_min_literal_size == next_min_literal_cnt || next_min_literal_cnt >= Cols);
@@ -2915,10 +2955,10 @@ public:
                         _restoreNeighborCellsEffect(recover_state, box, num);
                         _undoFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
 
+#if V3_ENABLE_OLD_ALGORITHM
                         is_correct = verify_bitboard_state();
                         assert(is_correct);
-
-                        col_bits ^= col_bit;
+#endif
                     }
 
                     break;
@@ -2939,6 +2979,7 @@ public:
                     while (row_bits != 0) {
                         size_t row_bit = BitUtils::ls1b(row_bits);
                         row = BitUtils::bsf(row_bits);
+                        row_bits ^= row_bit;
                         pos = row * Cols + col;
 #if 0
                         size_t box_x = col / BoxCellsX;
@@ -2960,9 +3001,10 @@ public:
                         _doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
                         _updateNeighborCellsEffect(recover_state, pos, box, num);
 
+#if V3_ENABLE_OLD_ALGORITHM
                         bool is_correct = verify_bitboard_state();
                         assert(is_correct);
-
+#endif
                         board.cells[pos] = (char)(num + '1');
 
 #if V3_ENABLE_OLD_ALGORITHM
@@ -2972,10 +3014,10 @@ public:
                         next_min_literal_size = count_delta_literal_size(next_min_literal_index, save_num_bits, box);
                         //next_min_literal_size = count_all_literal_size(next_min_literal_index);
 
-                        bool size_is_correct = verify_literal_size();
-                        assert(size_is_correct);
-
 #if V3_ENABLE_OLD_ALGORITHM
+                        bool size_is_correct = verify_literal_size();
+                        //assert(size_is_correct);
+
                         assert(next_min_literal_id < TotalLiterals);
                         assert(next_min_literal_index < TotalLiterals);
                         assert(next_min_literal_size == next_min_literal_cnt || next_min_literal_cnt >= Rows);
@@ -2999,10 +3041,10 @@ public:
                         _restoreNeighborCellsEffect(recover_state, box, num);
                         _undoFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
 
+#if V3_ENABLE_OLD_ALGORITHM
                         is_correct = verify_bitboard_state();
                         assert(is_correct);
-
-                        row_bits ^= row_bit;
+#endif
                     }
 
                     break;
@@ -3023,6 +3065,7 @@ public:
                     while (cell_bits != 0) {
                         size_t cell_bit = BitUtils::ls1b(cell_bits);
                         cell = BitUtils::bsf(cell_bits);
+                        cell_bits ^= cell_bit;
 #if 0
                         row = (box / BoxCountX) * BoxCellsY + (cell / BoxCellsX);
                         col = (box % BoxCountX) * BoxCellsX + (cell % BoxCellsX);
@@ -3041,9 +3084,10 @@ public:
                         _doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
                         _updateNeighborCellsEffect(recover_state, pos, box, num);
 
+#if V3_ENABLE_OLD_ALGORITHM
                         bool is_correct = verify_bitboard_state();
                         assert(is_correct);
-
+#endif
                         board.cells[pos] = (char)(num + '1');
 
 #if V3_ENABLE_OLD_ALGORITHM
@@ -3053,10 +3097,10 @@ public:
                         next_min_literal_size = count_delta_literal_size(next_min_literal_index, save_num_bits, box);
                         //next_min_literal_size = count_all_literal_size(next_min_literal_index);
 
-                        bool size_is_correct = verify_literal_size();
-                        assert(size_is_correct);
-
 #if V3_ENABLE_OLD_ALGORITHM
+                        bool size_is_correct = verify_literal_size();
+                        //assert(size_is_correct);
+
                         assert(next_min_literal_id < TotalLiterals);
                         assert(next_min_literal_index < TotalLiterals);
                         assert(next_min_literal_size == next_min_literal_cnt || next_min_literal_cnt >= BoxSize);
@@ -3080,10 +3124,10 @@ public:
                         _restoreNeighborCellsEffect(recover_state, box, num);
                         _undoFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
 
+#if V3_ENABLE_OLD_ALGORITHM
                         is_correct = verify_bitboard_state();
                         assert(is_correct);
-
-                        cell_bits ^= cell_bit;
+#endif
                     }
 
                     break;
