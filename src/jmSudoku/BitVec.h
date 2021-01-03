@@ -340,22 +340,19 @@ struct BitVec16x08 {
             __m128i zero = _mm_setzero_si128();
             __m128i low64 = _mm_unpacklo_epi8(this->xmm128, zero);
             __m128i minpos128 = _mm_minpos_epu16(low64);
-            BitVec16x08 minpos = _mm_packus_epi16(minpos128, _mm_setzero_si128());
-            return minpos;
+            minpos = _mm_packus_epi16(minpos128, _mm_setzero_si128());
         }
         else if (MaxBits == 9) {
             __m128i zero = _mm_setzero_si128();
             __m128i low64  = _mm_unpacklo_epi8(this->xmm128, zero);
             __m128i high64 = _mm_unpackhi_epi8(this->xmm128, zero);
-            BitVec16x08 minpos = _mm_min_epu16(_mm_minpos_epu16(low64), high64);
-            return minpos;
+            minpos = _mm_min_epu16(_mm_minpos_epu16(low64), high64);
         }
         else {
             __m128i zero = _mm_setzero_si128();
             __m128i low64  = _mm_unpacklo_epi8(this->xmm128, zero);
             __m128i high64 = _mm_unpackhi_epi8(this->xmm128, zero);
-            BitVec16x08 minpos = _mm_min_epu16(_mm_minpos_epu16(low64), _mm_minpos_epu16(high64));
-            return minpos;
+            minpos = _mm_min_epu16(_mm_minpos_epu16(low64), _mm_minpos_epu16(high64));
         }
 #else
         //
@@ -722,23 +719,21 @@ struct BitVec16x16 {
 
     template <size_t MaxBits>
     void _minpos8(BitVec16x16 & minpos) const {
-        static const size_t MaxBitsLow = (MaxBits < 8) ? MaxBits : 8;
-        static const size_t MaxBitsHigh = ((MaxBits - MaxBitsLow) < 8) ? (MaxBits - MaxBitsLow) : 8;
+        static const size_t MaxBitsLow = (MaxBits < 16) ? MaxBits : 16;
+        static const size_t MaxBitsHigh = ((MaxBits - MaxBitsLow) < 16) ? (MaxBits - MaxBitsLow) : 16;
 
         if (MaxBits <= 8) {
-            BitVec16x08 low_minpos;
-            this->low._minpos8(minpos.low);
+            this->low._minpos8<MaxBitsLow>(minpos.low);
         }
         else if (MaxBits == 9) {
-            this->low._minpos8(minpos.low);
-            BitVec16x08 minpos128 = _mm_min_epu8(minpos.low, this->high);
+            this->low._minpos8<MaxBitsLow>(minpos.low);
+            BitVec16x08 minpos128 = _mm_min_epu8(minpos.low.xmm128, this->high.xmm128);
             minpos.setLow(minpos128);
         }
         else {
-            BitVec16x08 low_minpos, high_minpos;
-            this->low._minpos8(minpos.low);
-            this->high._minpos8(minpos.high);
-            BitVec16x08 minpos128 = _mm_min_epu8(minpos.low, minpos.high);
+            this->low._minpos8<MaxBitsLow>(minpos.low);
+            this->high._minpos8<MaxBitsHigh>(minpos.high);
+            BitVec16x08 minpos128 = _mm_min_epu8(minpos.low.xmm128, minpos.high.xmm128);
             minpos.setLow(minpos128);
         }
     }
