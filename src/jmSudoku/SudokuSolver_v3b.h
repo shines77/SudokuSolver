@@ -233,13 +233,13 @@ private:
     typedef NeighborBoxes<BoxCountX, BoxCountY>     neighbor_boxes_t;
     static std::vector<neighbor_boxes_t>            neighbor_boxes;
 
-    static alignas(32) PackedBitSet2D<BoardSize, Rows16 * Cols16>     neighbor_cells_mask;
-    static alignas(32) PackedBitSet2D<BoardSize, Boxes16 * BoxSize16> neighbor_boxes_mask;
+    static PackedBitSet2D<BoardSize, Rows16 * Cols16>     neighbor_cells_mask;
+    static PackedBitSet2D<BoardSize, Boxes16 * BoxSize16> neighbor_boxes_mask;
 
-    static alignas(32) PackedBitSet3D<Boxes, BoxSize16, Numbers16>    neighbors_box_cell_mask[BoardSize][Numbers];
-    static alignas(32) PackedBitSet3D<BoardSize, Rows16, Cols16>      neighbors_row_mask;
-    static alignas(32) PackedBitSet3D<BoardSize, Cols16, Rows16>      neighbors_col_mask;
-    static alignas(32) PackedBitSet3D<BoardSize, Boxes16, BoxSize16>  neighbors_box_num_mask;
+    static PackedBitSet3D<Boxes, BoxSize16, Numbers16>    neighbors_box_cell_mask[BoardSize][Numbers];
+    static PackedBitSet3D<BoardSize, Rows16, Cols16>      neighbors_row_mask;
+    static PackedBitSet3D<BoardSize, Cols16, Rows16>      neighbors_col_mask;
+    static PackedBitSet3D<BoardSize, Boxes16, BoxSize16>  neighbors_box_num_mask;
 
 public:
     Solver() : empties_(0) {
