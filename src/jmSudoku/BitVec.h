@@ -1110,8 +1110,8 @@ struct BitVec16x16 {
 
             int equal_mask = _mm256_movemask_epi8(equal_result);
             assert(equal_mask != 0);
-            int equal_offset = BitUtils::bsf(equal_mask);
-            min_index = equal_offset >> 1;
+            uint32_t equal_offset = BitUtils::bsf(equal_mask);
+            min_index = equal_offset >> 1U;
         }
         return min_num;
     }
@@ -1127,8 +1127,8 @@ struct BitVec16x16 {
 
         int equal_mask = _mm256_movemask_epi8(equal_result);
         assert(equal_mask != 0);
-        int equal_offset = BitUtils::bsf(equal_mask);
-        min_index = equal_offset >> 1;
+        uint32_t equal_offset = BitUtils::bsf(equal_mask);
+        min_index = equal_offset >> 1U;
 
 #if (!defined(_MSC_VER) || (_MSC_VER >= 2000))
         uint32_t min_num = _mm256_extract_epi16(minpos.ymm256, 0);
@@ -1138,6 +1138,18 @@ struct BitVec16x16 {
         uint32_t min_num = _mm_extract_epi16(minpos128.xmm128, 0);
 #endif // _MSC_VER
         return min_num;
+    }
+
+    uint32_t whichIsEqual16(uint32_t min_num) const {
+        // Get the index of minimum number
+        __m256i min_num_repeat = _mm256_set1_epi16((int16_t)min_num);
+        __m256i equal_result = _mm256_cmpeq_epi16(this->ymm256, min_num_repeat);
+
+        int equal_mask = _mm256_movemask_epi8(equal_result);
+        assert(equal_mask != 0);
+        uint32_t equal_offset = BitUtils::bsf(equal_mask);
+        uint32_t min_index = equal_offset >> 1U;
+        return min_index;
     }
 };
 

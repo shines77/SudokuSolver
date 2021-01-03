@@ -318,16 +318,15 @@ private:
     std::vector<Board>  answers_;
 
     static bool is_mask_inited;
-
     static std::vector<neighbor_boxes_t> neighbor_boxes;
 
-    static alignas(32) PackedBitSet2D<BoardSize, Rows16 * Cols16>     neighbor_cells_mask;
-    static alignas(32) PackedBitSet2D<BoardSize, Boxes16 * BoxSize16> neighbor_boxes_mask;
+    static PackedBitSet2D<BoardSize, Rows16 * Cols16>     neighbor_cells_mask;
+    static PackedBitSet2D<BoardSize, Boxes16 * BoxSize16> neighbor_boxes_mask;
 
-    static alignas(32) PackedBitSet3D<Boxes, BoxSize16, Numbers16>    box_cell_neighbors_mask[BoardSize][Numbers];
-    static alignas(32) PackedBitSet3D<BoardSize, Rows16, Cols16>      row_neighbors_mask;
-    static alignas(32) PackedBitSet3D<BoardSize, Cols16, Rows16>      col_neighbors_mask;
-    static alignas(32) PackedBitSet3D<BoardSize, Boxes16, BoxSize16>  box_num_neighbors_mask;
+    static PackedBitSet3D<Boxes, BoxSize16, Numbers16>    box_cell_neighbors_mask[BoardSize][Numbers];
+    static PackedBitSet3D<BoardSize, Rows16, Cols16>      row_neighbors_mask;
+    static PackedBitSet3D<BoardSize, Cols16, Rows16>      col_neighbors_mask;
+    static PackedBitSet3D<BoardSize, Boxes16, BoxSize16>  box_num_neighbors_mask;
 
 public:
     Solver() : empties_(0) {
@@ -510,6 +509,7 @@ private:
                 size_t box = box_y_base + box_x;
                 size_t index = 0;
                 neighbor_boxes_t neighborBoxes;
+                neighborBoxes.boxes[index++] = box;
                 for (size_t box_i = 0; box_i < BoxCellsX; box_i++) {
                     if (box_i != box_x) {
                         neighborBoxes.boxes[index++] = box_y * BoxCellsX + box_i;
@@ -520,10 +520,9 @@ private:
                         neighborBoxes.boxes[index++] = box_j * BoxCellsX + box_x;
                     }
                 }
-                neighborBoxes.boxes[index++] = box;
                 assert(index == neighborBoxes.boxes_count());
 
-                std::sort(&neighborBoxes.boxes[0], &neighborBoxes.boxes[neighborBoxes.boxes_count()]);
+                std::sort(&neighborBoxes.boxes[1], &neighborBoxes.boxes[neighborBoxes.boxes_count()]);
                 neighbor_boxes.push_back(neighborBoxes);
             }
         }
@@ -2416,10 +2415,7 @@ private:
             enable_mask.loadAligned(&this->count_.enabled.box_cells[box_id * BoxSize16]);
             popcnt16 |= enable_mask;
 
-            uint32_t min_index;
-            uint32_t min_size = popcnt16.minpos16_and_index<Numbers>(min_index);
-            this->count_.counts.box_cells[box_id] = (uint16_t)min_size;
-            assert(min_size == min_cell_size);
+            uint32_t min_index = popcnt16.whichIsEqual16(min_cell_size);
             uint32_t cell_index = box_id * uint32_t(BoxSize16) + min_index;
             this->count_.indexs.box_cells[box_id] = (uint16_t)cell_index;
             min_cell_index = cell_index;
@@ -2481,10 +2477,7 @@ private:
             enable_mask.loadAligned(&this->count_.enabled.row_nums[num_index * Rows16]);
             popcnt16 |= enable_mask;
 
-            uint32_t min_index;
-            uint32_t min_size = popcnt16.minpos16_and_index<Cols>(min_index);
-            this->count_.counts.row_nums[num_index] = (uint16_t)min_size;
-            assert(min_size == min_row_size);
+            uint32_t min_index = popcnt16.whichIsEqual16(min_row_size);
             uint32_t row_index = num_index * uint32_t(Rows16) + min_index;
             this->count_.indexs.row_nums[num_index] = (uint16_t)row_index;
             min_row_index = row_index;
@@ -2545,10 +2538,7 @@ private:
             enable_mask.loadAligned(&this->count_.enabled.col_nums[num_index * Cols16]);
             popcnt16 |= enable_mask;
 
-            uint32_t min_index;
-            uint32_t min_size = popcnt16.minpos16_and_index<Rows>(min_index);
-            this->count_.counts.col_nums[num_index] = (uint16_t)min_size;
-            assert(min_size == min_col_size);
+            uint32_t min_index = popcnt16.whichIsEqual16(min_col_size);
             uint32_t col_index = num_index * uint32_t(Cols16) + min_index;
             this->count_.indexs.col_nums[num_index] = (uint16_t)col_index;
             min_col_index = col_index;
@@ -2608,10 +2598,7 @@ private:
             enable_mask.loadAligned(&this->count_.enabled.box_nums[num_index * Boxes16]);
             popcnt16 |= enable_mask;
 
-            uint32_t min_index;
-            uint32_t min_size = popcnt16.minpos16_and_index<BoxSize>(min_index);
-            this->count_.counts.box_nums[num_index] = (uint16_t)min_size;
-            assert(min_size == min_box_size);
+            uint32_t min_index = popcnt16.whichIsEqual16(min_box_size);
             uint32_t box_index = num_index * uint32_t(Boxes16) + min_index;
             this->count_.indexs.box_nums[num_index] = (uint16_t)box_index;
             min_box_index = box_index;
