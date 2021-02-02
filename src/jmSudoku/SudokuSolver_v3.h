@@ -56,6 +56,8 @@
 #define V3_ENABLE_OLD_ALGORITHM     0
 #define V3_USE_SMID_COPY_BOARD      1
 
+#define V3_RECOVER_STATE_DISABL_CHANGED     1
+
 namespace jmSudoku {
 namespace v3 {
 
@@ -229,6 +231,13 @@ private:
         alignas(32) PackedBitSet2D<Rows16, Cols16>                row_cols;             // [row][col]
         alignas(32) PackedBitSet2D<Cols16, Rows16>                col_rows;             // [col][row]
         alignas(32) PackedBitSet2D<Boxes16, BoxSize16>            box_cells;            // [box][cell]
+
+        struct Changed {
+            alignas(32) uint16_t box_cells[Boxes16];
+            alignas(32) uint16_t row_nums[Numbers16];
+            alignas(32) uint16_t col_nums[Numbers16];
+            alignas(32) uint16_t box_nums[Numbers16];
+        } changed;
 
         struct Counts {
             alignas(32) uint16_t box_cells[Boxes16];
@@ -2140,6 +2149,7 @@ private:
 
     inline void _updateNeighborCellsEffect(RecoverState & recover_state,
                                            size_t fill_pos, size_t box, size_t num) {
+        static const bool hasChanged = true;
         // Position (Box-Cell) literal
         static const size_t boxesCount = neighbor_boxes_t::kBoxesCount;
         const neighbor_boxes_t & neighborBoxes = neighbor_boxes[box];
@@ -2148,19 +2158,60 @@ private:
         for (size_t i = 0; i < boxesCount; i++) {
             size_t box_idx = neighborBoxes.boxes[i];
 
+#if V3_RECOVER_STATE_DISABL_CHANGED
             // recover_state.boxes[i] = this->state_.box_cell_nums[box_idx];
             BitVec16x16 box_cell_nums;
             box_cell_nums.loadAligned(&this->state_.box_cell_nums[box_idx]);
             box_cell_nums.saveAligned(&recover_state.boxes[i]);
             
             // this->state_.box_cell_nums[box_idx] &= neighbors_mask[box_idx];
-            BitVec16x16 box_cell_neighbors_mask;
-            box_cell_neighbors_mask.loadAligned(&neighbors_mask[box_idx]);
-            box_cell_nums &= box_cell_neighbors_mask;
+            BitVec16x16 box_cell_neighbor_mask;
+            box_cell_neighbor_mask.loadAligned(&neighbors_mask[box_idx]);
+            box_cell_nums &= box_cell_neighbor_mask;
             box_cell_nums.saveAligned(&this->state_.box_cell_nums[box_idx]);
 
             recover_state.counts.box_cells[box_idx] = this->count_.counts.box_cells[box_idx];
             recover_state.indexs.box_cells[box_idx] = this->count_.indexs.box_cells[box_idx];
+#elif 1
+            // recover_state.boxes[i] = this->state_.box_cell_nums[box_idx];
+            BitVec16x16 box_cell_nums;
+            box_cell_nums.loadAligned(&this->state_.box_cell_nums[box_idx]);
+            box_cell_nums.saveAligned(&recover_state.boxes[i]);
+            
+            // this->state_.box_cell_nums[box_idx] &= neighbors_mask[box_idx];
+            BitVec16x16 box_cell_neighbor_mask;
+            box_cell_neighbor_mask.loadAligned(&neighbors_mask[box_idx]);
+            box_cell_nums &= box_cell_neighbor_mask;
+
+            box_cell_nums.saveAligned(&this->state_.box_cell_nums[box_idx]);
+
+            bool boxHasChanged = (box_idx == box) ||
+                                 !BitVec16x16::isMemEqual(&recover_state.boxes[i], &this->state_.box_cell_nums[box_idx]);
+            recover_state.changed.box_cells[box_idx] = boxHasChanged;
+            if (boxHasChanged) {
+                recover_state.counts.box_cells[box_idx] = this->count_.counts.box_cells[box_idx];
+                recover_state.indexs.box_cells[box_idx] = this->count_.indexs.box_cells[box_idx];
+            }
+#else
+            // recover_state.boxes[i] = this->state_.box_cell_nums[box_idx];
+            BitVec16x16 box_cell_nums, new_box_cell_nums;
+            box_cell_nums.loadAligned(&this->state_.box_cell_nums[box_idx]);
+            new_box_cell_nums = box_cell_nums;
+            box_cell_nums.saveAligned(&recover_state.boxes[i]);
+            
+            // this->state_.box_cell_nums[box_idx] &= neighbors_mask[box_idx];
+            BitVec16x16 box_cell_neighbor_mask;
+            box_cell_neighbor_mask.loadAligned(&neighbors_mask[box_idx]);
+            new_box_cell_nums &= box_cell_neighbor_mask;
+
+            bool boxHasChanged = (box_idx == box) || (new_box_cell_nums != box_cell_nums);
+            recover_state.changed.box_cells[box_idx] = boxHasChanged;
+            if (boxHasChanged) {
+                new_box_cell_nums.saveAligned(&this->state_.box_cell_nums[box_idx]);
+                recover_state.counts.box_cells[box_idx] = this->count_.counts.box_cells[box_idx];
+                recover_state.indexs.box_cells[box_idx] = this->count_.indexs.box_cells[box_idx];
+            }
+#endif
         }
         //recover_state.boxes[boxesCount] = this->state_.box_cell_nums[box];
         //this->state_.box_cell_nums[box] &= neighbors_mask[box];        
@@ -2175,7 +2226,11 @@ private:
         BitVec16x16 row_neighbors_masks;
         row_neighbors_masks.loadAligned(&row_neighbors_mask[fill_pos]);
         row_num_cols &= row_neighbors_masks;
-        row_num_cols.saveAligned(&this->state_.row_num_cols[num]);
+        //hasChanged = (new_row_num_cols != row_num_cols);
+        //recover_state.changed.row_nums[num] = hasChanged;
+        if (hasChanged) {
+            row_num_cols.saveAligned(&this->state_.row_num_cols[num]);
+        }
 
         // Col literal
         // recover_state.col_rows = this->state_.col_num_rows[num];
@@ -2187,7 +2242,11 @@ private:
         BitVec16x16 col_neighbors_masks;
         col_neighbors_masks.loadAligned(&col_neighbors_mask[fill_pos]);
         col_num_rows &= col_neighbors_masks;
-        col_num_rows.saveAligned(&this->state_.col_num_rows[num]);
+        //hasChanged = (new_col_num_rows != col_num_rows);
+        //recover_state.changed.col_nums[num] = hasChanged;
+        if (hasChanged) {
+            col_num_rows.saveAligned(&this->state_.col_num_rows[num]);
+        }
 
         // Box-cell literal
         // recover_state.box_cells = this->state_.box_num_cells[num];
@@ -2199,7 +2258,11 @@ private:
         BitVec16x16 box_num_neighbors_masks;
         box_num_neighbors_masks.loadAligned(&box_num_neighbors_mask[fill_pos]);
         box_num_cells &= box_num_neighbors_masks;
-        box_num_cells.saveAligned(&this->state_.box_num_cells[num]);
+        //hasChanged = (new_box_num_cells != box_num_cells);
+        //recover_state.changed.box_nums[num] = hasChanged;
+        if (hasChanged) {
+            box_num_cells.saveAligned(&this->state_.box_num_cells[num]);
+        }
     }
 
     inline void _restoreNeighborCellsEffect(const RecoverState & recover_state,
@@ -2209,34 +2272,34 @@ private:
         const neighbor_boxes_t & neighborBoxes = neighbor_boxes[box];
         for (size_t i = 0; i < boxesCount; i++) {
             size_t box_idx = neighborBoxes.boxes[i];
+            if (V3_RECOVER_STATE_DISABL_CHANGED || recover_state.changed.box_cells[box_idx]) {
+                // this->state_.box_cell_nums[box_idx] = recover_state.boxes[i];
 
-            // this->state_.box_cell_nums[box_idx] = recover_state.boxes[i];
-            BitVec16x16 box_cell_nums;
-            box_cell_nums.loadAligned(&recover_state.boxes[i]);
-            box_cell_nums.saveAligned(&this->state_.box_cell_nums[box_idx]);
+                BitVec16x16::copyAligned(&recover_state.boxes[i], &this->state_.box_cell_nums[box_idx]);
 
-            this->count_.counts.box_cells[box_idx] = recover_state.counts.box_cells[box_idx];
-            this->count_.indexs.box_cells[box_idx] = recover_state.indexs.box_cells[box_idx];
+                this->count_.counts.box_cells[box_idx] = recover_state.counts.box_cells[box_idx];
+                this->count_.indexs.box_cells[box_idx] = recover_state.indexs.box_cells[box_idx];
+            }
         }
         //this->state_.box_cell_nums[box] = recover_state.boxes[boxesCount];
 
         // Row literal
         // this->state_.row_num_cols[num] = recover_state.row_cols;
-        BitVec16x16 row_num_cols;
-        row_num_cols.loadAligned(&recover_state.row_cols);
-        row_num_cols.saveAligned(&this->state_.row_num_cols[num]);
+        //if (recover_state.changed.row_nums[num]) {
+            BitVec16x16::copyAligned(&recover_state.row_cols, &this->state_.row_num_cols[num]);
+        //}
 
         // Col literal
         // this->state_.col_num_rows[num] = recover_state.col_rows;
-        BitVec16x16 col_num_rows;
-        col_num_rows.loadAligned(&recover_state.col_rows);
-        col_num_rows.saveAligned(&this->state_.col_num_rows[num]);
+        //if (recover_state.changed.col_nums[num]) {
+            BitVec16x16::copyAligned(&recover_state.col_rows, &this->state_.col_num_rows[num]);
+        //}
 
         // Box-cell literal
         // this->state_.box_num_cells[num] = recover_state.box_cells;
-        BitVec16x16 box_num_cells;
-        box_num_cells.loadAligned(&recover_state.box_cells);
-        box_num_cells.saveAligned(&this->state_.box_num_cells[num]);
+        //if (recover_state.changed.box_nums[num]) {
+            BitVec16x16::copyAligned(&recover_state.box_cells, &this->state_.box_num_cells[num]);
+        //}
     }
 
 #else
@@ -2438,7 +2501,8 @@ private:
     }
 
     inline uint32_t count_delta_literal_size(uint32_t & out_min_literal_index,
-                                             PackedBitSet<Numbers16> & cell_num_bits,
+                                             const RecoverState & recover_state,
+                                             const PackedBitSet<Numbers16> & cell_num_bits,
                                              size_t box) {
         BitVec16x16 bitboard;
 
@@ -2447,34 +2511,40 @@ private:
         uint32_t min_cell_index = uint32_t(-1);
 
         // Neighbor boxes
+        size_t cnt = 0;
         static const size_t boxesCount = neighbor_boxes_t::kBoxesCount;
         const neighbor_boxes_t & neighborBoxes = neighbor_boxes[box];
         for (size_t i = 0; i < boxesCount; i++) {
             size_t box_idx = neighborBoxes.boxes[i];
-            const PackedBitSet2D<BoxSize16, Numbers16> * bitset;
-            bitset = &this->state_.box_cell_nums[box_idx];
-            bitboard.loadAligned(bitset);
+            if (V3_RECOVER_STATE_DISABL_CHANGED || recover_state.changed.box_cells[box_idx]) {
+                const PackedBitSet2D<BoxSize16, Numbers16> * bitset;
+                bitset = &this->state_.box_cell_nums[box_idx];
+                bitboard.loadAligned(bitset);
 
-            BitVec16x16 popcnt16 = bitboard.popcount16<Numbers>();
+                BitVec16x16 popcnt16 = bitboard.popcount16<Numbers>();
 #if V3_SAVE_COUNT_SIZE
-            popcnt16.saveAligned(&this->count_.sizes.box_cells[box_idx * BoxSize16]);
+                popcnt16.saveAligned(&this->count_.sizes.box_cells[box_idx * BoxSize16]);
 #endif
-            BitVec16x16 enable_mask;
-            enable_mask.loadAligned(&this->count_.enabled.box_cells[box_idx * BoxSize16]);
-            popcnt16 |= enable_mask;
+                BitVec16x16 enable_mask;
+                enable_mask.loadAligned(&this->count_.enabled.box_cells[box_idx * BoxSize16]);
+                popcnt16 |= enable_mask;
 
-            int min_index = -1;
-            uint32_t min_size = popcnt16.minpos16<Numbers>(min_cell_size, min_index);
-            this->count_.counts.box_cells[box_idx] = (uint16_t)min_size;
-            if (min_index == -1) {
-                this->count_.indexs.box_cells[box_idx] = (uint16_t)min_index;
-            }
-            else {
-                size_t cell_index = box_idx * BoxSize16 + min_index;
-                this->count_.indexs.box_cells[box_idx] = (uint16_t)cell_index;
-                min_cell_index = (uint32_t)cell_index;
+                int min_index = -1;
+                uint32_t min_size = popcnt16.minpos16<Numbers>(min_cell_size, min_index);
+                this->count_.counts.box_cells[box_idx] = (uint16_t)min_size;
+                if (min_index == -1) {
+                    this->count_.indexs.box_cells[box_idx] = (uint16_t)min_index;
+                }
+                else {
+                    size_t cell_index = box_idx * BoxSize16 + min_index;
+                    this->count_.indexs.box_cells[box_idx] = (uint16_t)cell_index;
+                    min_cell_index = (uint32_t)cell_index;
+                }
+                cnt++;
             }
         }
+
+        assert(cnt > 0);
 
 #if 0
         // Current box
@@ -2936,7 +3006,7 @@ public:
                         int next_min_literal_cnt;
                         int next_min_literal_id = get_min_literal(next_min_literal_cnt);
 #endif
-                        next_min_literal_size = count_delta_literal_size(next_min_literal_index, save_num_bits, box);
+                        next_min_literal_size = count_delta_literal_size(next_min_literal_index, recover_state, save_num_bits, box);
                         //next_min_literal_size = count_all_literal_size(next_min_literal_index);
 
 #if V3_ENABLE_OLD_ALGORITHM
@@ -3022,7 +3092,7 @@ public:
                         int next_min_literal_cnt;
                         int next_min_literal_id = get_min_literal(next_min_literal_cnt);
 #endif
-                        next_min_literal_size = count_delta_literal_size(next_min_literal_index, save_num_bits, box);
+                        next_min_literal_size = count_delta_literal_size(next_min_literal_index, recover_state, save_num_bits, box);
                         //next_min_literal_size = count_all_literal_size(next_min_literal_index);
 
 #if V3_ENABLE_OLD_ALGORITHM
@@ -3108,7 +3178,7 @@ public:
                         int next_min_literal_cnt;
                         int next_min_literal_id = get_min_literal(next_min_literal_cnt);
 #endif
-                        next_min_literal_size = count_delta_literal_size(next_min_literal_index, save_num_bits, box);
+                        next_min_literal_size = count_delta_literal_size(next_min_literal_index, recover_state, save_num_bits, box);
                         //next_min_literal_size = count_all_literal_size(next_min_literal_index);
 
 #if V3_ENABLE_OLD_ALGORITHM
@@ -3191,7 +3261,7 @@ public:
                         int next_min_literal_cnt;
                         int next_min_literal_id = get_min_literal(next_min_literal_cnt);
 #endif
-                        next_min_literal_size = count_delta_literal_size(next_min_literal_index, save_num_bits, box);
+                        next_min_literal_size = count_delta_literal_size(next_min_literal_index, recover_state, save_num_bits, box);
                         //next_min_literal_size = count_all_literal_size(next_min_literal_index);
 
 #if V3_ENABLE_OLD_ALGORITHM

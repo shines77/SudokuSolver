@@ -20,7 +20,7 @@
 #include <type_traits>
 
 //#define __SSE2__
-//#define __AVX__
+#define __AVX__
 //#define __AVX2__
 
 //#undef __SSE4_1__
@@ -102,23 +102,29 @@ struct BitVec16x08 {
     }
 
     void loadAligned(const void * mem_addr) {
-        const __m128i * mem_128i = (const __m128i *)mem_addr;
-        this->xmm128 = _mm_load_si128(mem_128i);
+        this->xmm128 = _mm_load_si128((const __m128i *)mem_addr);
     }
 
     void loadUnaligned(const void * mem_addr) {
-        const __m128i * mem_128i = (const __m128i *)mem_addr;
-        this->xmm128 = _mm_loadu_si128(mem_128i);
+        this->xmm128 = _mm_loadu_si128((const __m128i *)mem_addr);
     }
 
     void saveAligned(void * mem_addr) const {
-        __m128i * mem_128i = (__m128i *)mem_addr;
-        _mm_store_si128(mem_128i, this->xmm128);
+        _mm_store_si128((__m128i *)mem_addr, this->xmm128);
     }
 
     void saveUnaligned(void * mem_addr) const {
-        __m128i * mem_128i = (__m128i *)mem_addr;
-        _mm_storeu_si128(mem_128i, this->xmm128);
+        _mm_storeu_si128((__m128i *)mem_addr, this->xmm128);
+    }
+
+    static void copyAligned(const void * src_mem_addr, void * dest_mem_addr) {
+        __m128i tmp = _mm_load_si128((const __m128i *)src_mem_addr);
+        _mm_store_si128((__m128i *)dest_mem_addr, tmp);
+    }
+
+    static void copyUnaligned(const void * src_mem_addr, void * dest_mem_addr) {
+        __m128i tmp = _mm_loadu_si128((const __m128i *)src_mem_addr);
+        _mm_storeu_si128((__m128i *)dest_mem_addr, tmp);
     }
 
     bool operator == (const BitVec16x08 & other) const {
@@ -230,6 +236,13 @@ struct BitVec16x08 {
 
     void fill_u64(uint64_t value) {
         this->xmm128 = _mm_set1_epi64x(value);     // SSE2
+    }
+
+    static bool isMemEqual(const void * mem_addr_1, const void * mem_addr_2) {
+        const IntVec128 * pIntVec128_1 = (const IntVec128 *)mem_addr_1;
+        const IntVec128 * pIntVec128_2 = (const IntVec128 *)mem_addr_2;
+        bool isEqual = (pIntVec128_1->u64[0] == pIntVec128_2->u64[0]) && (pIntVec128_1->u64[1] == pIntVec128_2->u64[1]);
+        return isEqual;
     }
 
     // All zeros or all ones
@@ -526,31 +539,61 @@ struct BitVec16x16 {
     }
 
     void loadAligned(const void * mem_addr) {
-        const __m128i * mem_128i_low = (const __m128i *)mem_addr;
-        const __m128i * mem_128i_high = ((const __m128i *)mem_addr) + 1;
+        const void * mem_128i_low = mem_addr;
+        const void * mem_128i_high = (const void *)((const __m128i *)mem_addr + 1);
         this->low.loadAligned(mem_128i_low);
         this->high.loadAligned(mem_128i_high);
     }
 
     void loadUnaligned(const void * mem_addr) {
-        const __m128i * mem_128i_low = (const __m128i *)mem_addr;
-        const __m128i * mem_128i_high = ((const __m128i *)mem_addr) + 1;
+        const void * mem_128i_low = mem_addr;
+        const void * mem_128i_high = (const void *)((const __m128i *)mem_addr + 1);
         this->low.loadUnaligned(mem_128i_low);
         this->high.loadUnaligned(mem_128i_high);
     }
 
     void saveAligned(void * mem_addr) const {
-        __m128i * mem_128i_low = (__m128i *)mem_addr;
-        __m128i * mem_128i_high = ((__m128i *)mem_addr) + 1;
+        void * mem_128i_low = mem_addr;
+        void * mem_128i_high = (void *)((__m128i *)mem_addr + 1);
         this->low.saveAligned(mem_128i_low);
         this->high.saveAligned(mem_128i_high);
     }
 
     void saveUnaligned(void * mem_addr) const {
-        __m128i * mem_128i_low = (__m128i *)mem_addr;
-        __m128i * mem_128i_high = ((__m128i *)mem_addr) + 1;
+        void * mem_128i_low = mem_addr;
+        void * mem_128i_high = (void *)((__m128i *)mem_addr + 1);
         this->low.saveUnaligned(mem_128i_low);
         this->high.saveUnaligned(mem_128i_high);
+    }
+
+    static void copyAligned(const void * src_mem_addr, void * dest_mem_addr) {
+#ifndef __AVX__
+        const void * src_mem_addr_low = src_mem_addr;
+        const void * src_mem_addr_high = (const void *)((const __m128i *)src_mem_addr + 1);
+        void * dest_mem_addr_low = dest_mem_addr;
+        void * dest_mem_addr_high = (void * )((__m128i *)dest_mem_addr + 1);
+
+        BitVec16x08::copyAligned(src_mem_addr_low, dest_mem_addr_low);
+        BitVec16x08::copyAligned(src_mem_addr_high, dest_mem_addr_high);
+#else
+        __m256i tmp = _mm256_load_si256((const __m256i *)src_mem_addr);
+        _mm256_store_si256((__m256i *)dest_mem_addr, tmp);
+#endif
+    }
+
+    static void copyUnaligned(const void * src_mem_addr, void * dest_mem_addr) {
+#ifndef __AVX__
+        const void * src_mem_addr_low = src_mem_addr;
+        const void * src_mem_addr_high = (const void *)((const __m128i *)src_mem_addr + 1);
+        void * dest_mem_addr_low = dest_mem_addr;
+        void * dest_mem_addr_high = (void * )((__m128i *)dest_mem_addr + 1);
+
+        BitVec16x08::copyUnaligned(src_mem_addr_low, dest_mem_addr_low);
+        BitVec16x08::copyUnaligned(src_mem_addr_high, dest_mem_addr_high);
+#else
+        __m256i tmp = _mm256_loadu_si256((const __m256i *)src_mem_addr);
+        _mm256_storeu_si256((__m256i *)dest_mem_addr, tmp);
+#endif
     }
 
     bool operator == (const BitVec16x16 & other) const {
@@ -653,6 +696,14 @@ struct BitVec16x16 {
     void fill_u64(uint64_t value) {
         this->low.fill_u64(value);
         this->high.fill_u64(value);
+    }
+
+    static bool isMemEqual(const void * mem_addr_1, const void * mem_addr_2) {
+        const IntVec256 * pIntVec256_1 = (const IntVec256 *)mem_addr_1;
+        const IntVec256 * pIntVec256_2 = (const IntVec256 *)mem_addr_2;
+        bool isEqual = (pIntVec256_1->u64[0] == pIntVec256_2->u64[0]) && (pIntVec256_1->u64[1] == pIntVec256_2->u64[1]) &&
+                       (pIntVec256_1->u64[2] == pIntVec256_2->u64[2]) && (pIntVec256_1->u64[3] == pIntVec256_2->u64[3]);
+        return isEqual;
     }
 
     // All zeros or all ones
@@ -1040,23 +1091,29 @@ struct BitVec16x16 {
     }
 
     void loadAligned(const void * mem_addr) {
-        const __m256i * mem_256i = (const __m256i *)mem_addr;
-        this->ymm256 = _mm256_load_si256(mem_256i);
+        this->ymm256 = _mm256_load_si256((const __m256i *)mem_addr);
     }
 
     void loadUnaligned(const void * mem_addr) {
-        const __m256i * mem_256i = (const __m256i *)mem_addr;
-        this->ymm256 = _mm256_loadu_si256(mem_256i);
+        this->ymm256 = _mm256_loadu_si256((const __m256i *)mem_addr);
     }
 
     void saveAligned(void * mem_addr) const {
-        __m256i * mem_256i = (__m256i *)mem_addr;
-        _mm256_store_si256(mem_256i, this->ymm256);
+        _mm256_store_si256((__m256i *)mem_addr, this->ymm256);
     }
 
     void saveUnaligned(void * mem_addr) const {
-        __m256i * mem_256i = (__m256i *)mem_addr;
-        _mm256_storeu_si256(mem_256i, this->ymm256);
+        _mm256_storeu_si256((__m256i *)mem_addr, this->ymm256);
+    }
+
+    static void copyAligned(const void * src_mem_addr, void * dest_mem_addr) {
+        __m256i tmp = _mm256_load_si256((const __m256i *)src_mem_addr);
+        _mm256_store_si256((__m256i *)dest_mem_addr, tmp);
+    }
+
+    static void copyUnaligned(const void * src_mem_addr, void * dest_mem_addr) {
+        __m256i tmp = _mm256_loadu_si256((const __m256i *)src_mem_addr);
+        _mm256_storeu_si256((__m256i *)dest_mem_addr, tmp);
     }
 
     bool operator == (const BitVec16x16 & other) const {
@@ -1151,6 +1208,14 @@ struct BitVec16x16 {
 
     void fill_u64(uint64_t value) {
         this->ymm256 = _mm256_set1_epi64x(value);
+    }
+
+    static bool isMemEqual(const void * mem_addr_1, const void * mem_addr_2) {
+        const IntVec256 * pIntVec256_1 = (const IntVec256 *)mem_addr_1;
+        const IntVec256 * pIntVec256_2 = (const IntVec256 *)mem_addr_2;
+        bool isEqual = (pIntVec256_1->u64[0] == pIntVec256_2->u64[0]) && (pIntVec256_1->u64[1] == pIntVec256_2->u64[1]) &&
+                       (pIntVec256_1->u64[2] == pIntVec256_2->u64[2]) && (pIntVec256_1->u64[3] == pIntVec256_2->u64[3]);
+        return isEqual;
     }
 
     // All zeros or all ones
