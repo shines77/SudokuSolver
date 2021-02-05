@@ -174,6 +174,7 @@ public:
     static const bool kAllDimIsSame = SudokuTy::kAllDimIsSame;
 
     static const int kLiteralCntThreshold = 0;
+    static const uint32_t kLiteralCntThreshold2 = 0;
 
     static size_t num_guesses;
     static size_t num_unique_candidate;
@@ -560,9 +561,9 @@ private:
 
     void init_board(Board & board) {
 #if V3_ENABLE_OLD_ALGORITHM
-        init_literal_info();
+        old_init_literal_info();
 #endif
-        _init_literal_info();
+        init_literal_info();
 
 #if V3_ENABLE_OLD_ALGORITHM
         size_t kBoxSize64 = kAllBoxSizeBit | (kAllBoxSizeBit << 16U) | (kAllBoxSizeBit << 32U) | (kAllBoxSizeBit << 48U);
@@ -601,11 +602,11 @@ private:
                     size_t cell = cell_y + cell_x;
                     size_t num = val - '1';
 #if V3_ENABLE_OLD_ALGORITHM
-                    this->doFillNum(pos, row, col, box, cell, num);
-                    this->updateNeighborCellsEffect(pos, num);
+                    this->old_doFillNum(pos, row, col, box, cell, num);
+                    this->old_updateNeighborCellsEffect(pos, num);
 #endif
-                    this->_doFillNum(pos, row, col, box, cell, num);
-                    this->_updateNeighborCellsEffect(pos, box, num);
+                    this->doFillNum(pos, row, col, box, cell, num);
+                    this->updateNeighborCellsEffect(pos, box, num);
                 }
                 pos++;
             }
@@ -647,14 +648,14 @@ private:
     static const uint8_t kEnableLiteral8 = 0x00;
     static const uint8_t kDisableLiteral8 = 0xFF;
 
-    inline void init_literal_info() {
+    inline void old_init_literal_info() {
         if (kAllDimIsSame)
-            init_literal_info_is_same();
+            old_init_literal_info_is_same();
         else
-            init_literal_info_not_same();
+            old_init_literal_info_not_same();
     }
 
-    inline void init_literal_info_is_same() {
+    inline void old_init_literal_info_is_same() {
         static const size_t kLiteralLimit = (LiteralLast / kLiteralStep) * kLiteralStep;
 
         // Cell-Literal, Row-Literal, Col-Literal, Box-Literal
@@ -667,11 +668,11 @@ private:
             pinfo++;
         }
         for (size_t i = kLiteralLimit; i < LiteralLast; i++) {
-            init_literal_info(i, (uint16_t)Numbers);
+            old_init_literal_info(i, (uint16_t)Numbers);
         }
     }
 
-    inline void init_literal_info_not_same() {
+    inline void old_init_literal_info_not_same() {
         size_t * pinfo_first = (size_t *)(&this->literal_info_[0]);
         assert((uintptr_t(pinfo_first) & 0x0FU) == 0);
 
@@ -684,13 +685,13 @@ private:
             *pinfo = kInitCellLiteral;
         }
         for (; i < CellLiteralLast; i++) {
-            init_literal_info(i, (uint16_t)Numbers);
+            old_init_literal_info(i, (uint16_t)Numbers);
         }
 
         // Row-Literal
         literalFront = RowLiteralFirst + (RowLiteralFirst % kLiteralStep);
         for (i = RowLiteralFirst; i < literalFront; i++) {
-            init_literal_info(i, (uint16_t)Cols);
+            old_init_literal_info(i, (uint16_t)Cols);
         }
         literalLast = (RowLiteralLast / kLiteralStep) * kLiteralStep;
         for (; i < literalLast; i += kLiteralStep) {
@@ -698,13 +699,13 @@ private:
             *pinfo = kInitRowLiteral;
         }
         for (; i < RowLiteralLast; i++) {
-            init_literal_info(i, (uint16_t)Cols);
+            old_init_literal_info(i, (uint16_t)Cols);
         }
 
         // Col-Literal
         literalFront = ColLiteralFirst + (ColLiteralFirst % kLiteralStep);
         for (i = ColLiteralFirst; i < literalFront; i++) {
-            init_literal_info(i, (uint16_t)Rows);
+            old_init_literal_info(i, (uint16_t)Rows);
         }
         literalLast = (ColLiteralLast / kLiteralStep) * kLiteralStep;
         for (; i < literalLast; i += kLiteralStep) {
@@ -712,13 +713,13 @@ private:
             *pinfo = kInitColLiteral;
         }
         for (; i < ColLiteralLast; i++) {
-            init_literal_info(i, (uint16_t)Rows);
+            old_init_literal_info(i, (uint16_t)Rows);
         }
 
         // Box-Literal
         literalFront = BoxLiteralFirst + (BoxLiteralFirst % kLiteralStep);
         for (i = BoxLiteralFirst; i < literalFront; i++) {
-            init_literal_info(i, (uint16_t)BoxSize);
+            old_init_literal_info(i, (uint16_t)BoxSize);
         }
         literalLast = (BoxLiteralLast / kLiteralStep) * kLiteralStep;
         for (; i < literalLast; i += kLiteralStep) {
@@ -726,62 +727,62 @@ private:
             *pinfo = kInitBoxLiteral;
         }
         for (; i < BoxLiteralLast; i++) {
-            init_literal_info(i, (uint16_t)BoxSize);
+            old_init_literal_info(i, (uint16_t)BoxSize);
         }
     }
 
-    inline void init_literal_info_normal() {
+    inline void old_init_literal_info_normal() {
 #if 0
         std::memset((void *)&this->literal_info_[0], 0, sizeof(this->literal_info_));
 #endif
         for (size_t i = CellLiteralFirst; i < CellLiteralLast; i++) {
-            init_literal_info(i, (uint16_t)Numbers);
+            old_init_literal_info(i, (uint16_t)Numbers);
         }
         for (size_t i = RowLiteralFirst; i < RowLiteralLast; i++) {
-            init_literal_info(i, (uint16_t)Cols);
+            old_init_literal_info(i, (uint16_t)Cols);
         }
         for (size_t i = ColLiteralFirst; i < ColLiteralLast; i++) {
-            init_literal_info(i, (uint16_t)Rows);
+            old_init_literal_info(i, (uint16_t)Rows);
         }
         for (size_t i = BoxLiteralFirst; i < BoxLiteralLast; i++) {
-            init_literal_info(i, (uint16_t)BoxSize);
+            old_init_literal_info(i, (uint16_t)BoxSize);
         }
     }
 
-    inline void init_literal_info(size_t literal, uint16_t value) {
+    inline void old_init_literal_info(size_t literal, uint16_t value) {
         this->literal_info_[literal].value = value;
     }
 
-    inline void enable_literal(size_t literal) {
+    inline void old_enable_literal(size_t literal) {
         this->literal_info_[literal].enable = kEnableLiteral8;
     }
 
-    inline void disable_literal(size_t literal) {
+    inline void old_disable_literal(size_t literal) {
         this->literal_info_[literal].enable = kDisableLiteral8;
     }
 
-    inline uint8_t get_literal_cnt(size_t literal) {
+    inline uint8_t old_get_literal_cnt(size_t literal) {
         return this->literal_info_[literal].count;
     }
 
-    inline uint8_t get_literal_enable(size_t literal) {
+    inline uint8_t old_get_literal_enable(size_t literal) {
         return this->literal_info_[literal].enable;
     }
 
-    inline void set_literal_cnt(size_t literal, uint8_t count) {
+    inline void old_set_literal_cnt(size_t literal, uint8_t count) {
         this->literal_info_[literal].count = count;
     }
 
-    inline void set_literal_enable(size_t literal, uint8_t enable) {
+    inline void old_set_literal_enable(size_t literal, uint8_t enable) {
         this->literal_info_[literal].enable = enable;
     }
 
-    inline void inc_literal_cnt(size_t literal) {
+    inline void old_inc_literal_cnt(size_t literal) {
         this->literal_info_[literal].count++;
         assert(this->literal_info_[literal].count <= Numbers);
     }
 
-    inline void dec_literal_cnt(size_t literal) {
+    inline void old_dec_literal_cnt(size_t literal) {
         assert(this->literal_info_[literal].count > 0);
         this->literal_info_[literal].count--;
     }
@@ -791,69 +792,69 @@ private:
     static const uint8_t kEnableLiteral8 = 0x00;
     static const uint8_t kDisableLiteral8 = 0xF0;
 
-    inline void init_literal_info() {
+    inline void old_init_literal_info() {
         if (kAllDimIsSame)
-            init_literal_info_is_same();
+            old_init_literal_info_is_same();
         else
-            init_literal_info_not_same();
+            old_init_literal_info_not_same();
     }
 
-    inline void init_literal_info_is_same() {
+    inline void old_init_literal_info_is_same() {
         std::memset((void *)&this->literal_count_[0],  (int)kInitLiteral, sizeof(this->literal_count_));
         std::memset((void *)&this->literal_enable_[0], 0,                 sizeof(this->literal_enable_));
     }
 
-    inline void init_literal_info_not_same() {
+    inline void old_init_literal_info_not_same() {
         for (size_t i = CellLiteralFirst; i < CellLiteralLast; i++) {
-            init_literal_info(i, (uint8_t)Numbers);
+            old_init_literal_info(i, (uint8_t)Numbers);
         }
         for (size_t i = RowLiteralFirst; i < RowLiteralLast; i++) {
-            init_literal_info(i, (uint8_t)Cols);
+            old_init_literal_info(i, (uint8_t)Cols);
         }
         for (size_t i = ColLiteralFirst; i < ColLiteralLast; i++) {
-            init_literal_info(i, (uint8_t)Rows);
+            old_init_literal_info(i, (uint8_t)Rows);
         }
         for (size_t i = BoxLiteralFirst; i < BoxLiteralLast; i++) {
-            init_literal_info(i, (uint8_t)BoardSize);
+            old_init_literal_info(i, (uint8_t)BoardSize);
         }
 
         std::memset((void *)&this->literal_enable_[0], 0, sizeof(this->literal_enable_));
     }
 
-    inline void init_literal_info(size_t literal, uint8_t count) {
+    inline void old_init_literal_info(size_t literal, uint8_t count) {
         this->literal_count_[literal] = count;
     }
 
-    inline void enable_literal(size_t literal) {
+    inline void old_enable_literal(size_t literal) {
         this->literal_enable_[literal] = kEnableLiteral8;
     }
 
-    inline void disable_literal(size_t literal) {
+    inline void old_disable_literal(size_t literal) {
         this->literal_enable_[literal] = kDisableLiteral8;
     }
 
-    inline uint8_t get_literal_cnt(size_t literal) {
+    inline uint8_t old_get_literal_cnt(size_t literal) {
         return this->literal_count_[literal];
     }
 
-    inline uint8_t get_literal_enable(size_t literal) {
+    inline uint8_t old_get_literal_enable(size_t literal) {
         return this->literal_enable_[literal];
     }
 
-    inline void set_literal_cnt(size_t literal, uint8_t count) {
+    inline void old_set_literal_cnt(size_t literal, uint8_t count) {
         this->literal_count_[literal] = count;
     }
 
-    inline void set_literal_enable(size_t literal, uint8_t enable) {
+    inline void old_set_literal_enable(size_t literal, uint8_t enable) {
         this->literal_enable_[literal] = enable;
     }
 
-    inline void inc_literal_cnt(size_t literal) {
+    inline void old_inc_literal_cnt(size_t literal) {
         this->literal_count_[literal]++;
         assert(this->literal_count_[literal] <= Numbers);
     }
 
-    inline void dec_literal_cnt(size_t literal) {
+    inline void old_dec_literal_cnt(size_t literal) {
         assert(this->literal_count_[literal] > 0);
         this->literal_count_[literal]--;
     }
@@ -861,225 +862,225 @@ private:
 #endif // __SSE4_1__
 
     // enable_xxxx_literal()
-    inline void enable_cell_literal(size_t pos) {
+    inline void old_enable_cell_literal(size_t pos) {
         size_t literal = CellLiteralFirst + pos;
-        this->enable_literal(literal);
+        this->old_enable_literal(literal);
     }
 
-    inline void enable_row_literal(size_t index) {
+    inline void old_enable_row_literal(size_t index) {
         size_t literal = RowLiteralFirst + index;
-        this->enable_literal(literal);
+        this->old_enable_literal(literal);
     }
 
-    inline void enable_row_literal(size_t num, size_t row) {
+    inline void old_enable_row_literal(size_t num, size_t row) {
         size_t literal = RowLiteralFirst + num * Rows16 + row;
-        this->enable_literal(literal);
+        this->old_enable_literal(literal);
     }
 
-    inline void enable_col_literal(size_t index) {
+    inline void old_enable_col_literal(size_t index) {
         size_t literal = ColLiteralFirst + index;
-        this->enable_literal(literal);
+        this->old_enable_literal(literal);
     }
 
-    inline void enable_col_literal(size_t num, size_t col) {
+    inline void old_enable_col_literal(size_t num, size_t col) {
         size_t literal = ColLiteralFirst + num * Cols16 + col;
-        this->enable_literal(literal);
+        this->old_enable_literal(literal);
     }
 
-    inline void enable_box_literal(size_t index) {
+    inline void old_enable_box_literal(size_t index) {
         size_t literal = BoxLiteralFirst + index;
-        this->enable_literal(literal);
+        this->old_enable_literal(literal);
     }
 
-    inline void enable_box_literal(size_t num, size_t box) {
+    inline void old_enable_box_literal(size_t num, size_t box) {
         size_t literal = BoxLiteralFirst + num * Boxes16 + box;
-        this->enable_literal(literal);
+        this->old_enable_literal(literal);
     }
 
     // disable_xxxx_literal()
-    inline void disable_cell_literal(size_t pos) {
+    inline void old_disable_cell_literal(size_t pos) {
         size_t literal = CellLiteralFirst + pos;
-        this->disable_literal(literal);
+        this->old_disable_literal(literal);
     }
 
-    inline void disable_row_literal(size_t index) {
+    inline void old_disable_row_literal(size_t index) {
         size_t literal = RowLiteralFirst + index;
-        this->disable_literal(literal);
+        this->old_disable_literal(literal);
     }
 
-    inline void disable_row_literal(size_t num, size_t row) {
+    inline void old_disable_row_literal(size_t num, size_t row) {
         size_t literal = RowLiteralFirst + num * Rows16 + row;
-        this->disable_literal(literal);
+        this->old_disable_literal(literal);
     }
 
-    inline void disable_col_literal(size_t index) {
+    inline void old_disable_col_literal(size_t index) {
         size_t literal = ColLiteralFirst + index;
-        this->disable_literal(literal);
+        this->old_disable_literal(literal);
     }
 
-    inline void disable_col_literal(size_t num, size_t col) {
+    inline void old_disable_col_literal(size_t num, size_t col) {
         size_t literal = ColLiteralFirst + num * Cols16 + col;
-        this->disable_literal(literal);
+        this->old_disable_literal(literal);
     }
 
-    inline void disable_box_literal(size_t index) {
+    inline void old_disable_box_literal(size_t index) {
         size_t literal = BoxLiteralFirst + index;
-        this->disable_literal(literal);
+        this->old_disable_literal(literal);
     }
 
-    inline void disable_box_literal(size_t num, size_t box) {
+    inline void old_disable_box_literal(size_t num, size_t box) {
         size_t literal = BoxLiteralFirst + num * Boxes16 + box;
-        this->disable_literal(literal);
+        this->old_disable_literal(literal);
     }
 
     // get_xxxx_literal_enable()
-    inline uint8_t get_cell_literal_enable(size_t pos) {
+    inline uint8_t old_get_cell_literal_enable(size_t pos) {
         size_t literal = CellLiteralFirst + pos;
-        return this->get_literal_enable(literal);
+        return this->old_get_literal_enable(literal);
     }
 
-    inline uint8_t get_row_literal_enable(size_t num, size_t row) {
+    inline uint8_t old_get_row_literal_enable(size_t num, size_t row) {
         size_t literal = RowLiteralFirst + num * Rows16 + row;
-        return this->get_literal_enable(literal);
+        return this->old_get_literal_enable(literal);
     }
 
-    inline uint8_t get_col_literal_enable(size_t num, size_t col) {
+    inline uint8_t old_get_col_literal_enable(size_t num, size_t col) {
         size_t literal = ColLiteralFirst + num * Cols16 + col;
-        return this->get_literal_enable(literal);
+        return this->old_get_literal_enable(literal);
     }
 
-    inline uint8_t get_box_literal_enable(size_t num, size_t box) {
+    inline uint8_t old_get_box_literal_enable(size_t num, size_t box) {
         size_t literal = BoxLiteralFirst + num * Boxes16 + box;
-        return this->get_literal_enable(literal);
+        return this->old_get_literal_enable(literal);
     }
 
     // get_xxxx_literal_cnt()
-    inline uint8_t get_cell_literal_cnt(size_t pos) {
+    inline uint8_t old_get_cell_literal_cnt(size_t pos) {
         size_t literal = CellLiteralFirst + pos;
-        return this->get_literal_cnt(literal);
+        return this->old_get_literal_cnt(literal);
     }
 
-    inline uint8_t get_row_literal_cnt(size_t num, size_t row) {
+    inline uint8_t old_get_row_literal_cnt(size_t num, size_t row) {
         size_t literal = RowLiteralFirst + num * Rows16 + row;
-        return this->get_literal_cnt(literal);
+        return this->old_get_literal_cnt(literal);
     }
 
-    inline uint8_t get_col_literal_cnt(size_t num, size_t col) {
+    inline uint8_t old_get_col_literal_cnt(size_t num, size_t col) {
         size_t literal = ColLiteralFirst + num * Cols16 + col;
-        return this->get_literal_cnt(literal);
+        return this->old_get_literal_cnt(literal);
     }
 
-    inline uint8_t get_box_literal_cnt(size_t num, size_t box) {
+    inline uint8_t old_get_box_literal_cnt(size_t num, size_t box) {
         size_t literal = BoxLiteralFirst + num * Boxes16 + box;
-        return this->get_literal_cnt(literal);
+        return this->old_get_literal_cnt(literal);
     }
 
     // set_xxxx_literal_cnt()
-    inline void set_cell_literal_cnt(size_t pos, uint8_t count) {
+    inline void old_set_cell_literal_cnt(size_t pos, uint8_t count) {
         size_t literal = CellLiteralFirst + pos;
-        this->set_literal_cnt(literal, count);
+        this->old_set_literal_cnt(literal, count);
     }
 
-    inline void set_row_literal_cnt(size_t index, uint8_t count) {
+    inline void old_set_row_literal_cnt(size_t index, uint8_t count) {
         size_t literal = RowLiteralFirst + index;
-        this->set_literal_cnt(literal, count);
+        this->old_set_literal_cnt(literal, count);
     }
 
-    inline void set_row_literal_cnt(size_t num, size_t row, uint8_t count) {
+    inline void old_set_row_literal_cnt(size_t num, size_t row, uint8_t count) {
         size_t literal = RowLiteralFirst + num * Rows16 + row;
-        this->set_literal_cnt(literal, count);
+        this->old_set_literal_cnt(literal, count);
     }
 
-    inline void set_col_literal_cnt(size_t index, uint8_t count) {
+    inline void old_set_col_literal_cnt(size_t index, uint8_t count) {
         size_t literal = ColLiteralFirst + index;
-        this->set_literal_cnt(literal, count);
+        this->old_set_literal_cnt(literal, count);
     }
 
-    inline void set_col_literal_cnt(size_t num, size_t col, uint8_t count) {
+    inline void old_set_col_literal_cnt(size_t num, size_t col, uint8_t count) {
         size_t literal = ColLiteralFirst + num * Cols16 + col;
-        this->set_literal_cnt(literal, count);
+        this->old_set_literal_cnt(literal, count);
     }
 
-    inline void set_box_literal_cnt(size_t index, uint8_t count) {
+    inline void old_set_box_literal_cnt(size_t index, uint8_t count) {
         size_t literal = BoxLiteralFirst + index;
-        this->set_literal_cnt(literal, count);
+        this->old_set_literal_cnt(literal, count);
     }
 
-    inline void set_box_literal_cnt(size_t num, size_t box, uint8_t count) {
+    inline void old_set_box_literal_cnt(size_t num, size_t box, uint8_t count) {
         size_t literal = BoxLiteralFirst + num * Boxes16 + box;
-        this->set_literal_cnt(literal, count);
+        this->old_set_literal_cnt(literal, count);
     }
 
     // inc_xxxx_literal_cnt()
-    inline void inc_cell_literal_cnt(size_t pos) {
+    inline void old_inc_cell_literal_cnt(size_t pos) {
         size_t literal = CellLiteralFirst + pos;
-        this->inc_literal_cnt(literal);
+        this->old_inc_literal_cnt(literal);
     }
 
-    inline void inc_row_literal_cnt(size_t index) {
+    inline void old_inc_row_literal_cnt(size_t index) {
         size_t literal = RowLiteralFirst + index;
-        this->inc_literal_cnt(literal);
+        this->old_inc_literal_cnt(literal);
     }
 
-    inline void inc_row_literal_cnt(size_t num, size_t row) {
+    inline void old_inc_row_literal_cnt(size_t num, size_t row) {
         size_t literal = RowLiteralFirst + num * Rows16 + row;
-        this->inc_literal_cnt(literal);
+        this->old_inc_literal_cnt(literal);
     }
 
-    inline void inc_col_literal_cnt(size_t index) {
+    inline void old_inc_col_literal_cnt(size_t index) {
         size_t literal = ColLiteralFirst + index;
-        this->inc_literal_cnt(literal);
+        this->old_inc_literal_cnt(literal);
     }
 
-    inline void inc_col_literal_cnt(size_t num, size_t col) {
+    inline void old_inc_col_literal_cnt(size_t num, size_t col) {
         size_t literal = ColLiteralFirst + num * Cols16 + col;
-        this->inc_literal_cnt(literal);
+        this->old_inc_literal_cnt(literal);
     }
 
-    inline void inc_box_literal_cnt(size_t index) {
+    inline void old_inc_box_literal_cnt(size_t index) {
         size_t literal = BoxLiteralFirst + index;
-        this->inc_literal_cnt(literal);
+        this->old_inc_literal_cnt(literal);
     }
 
-    inline void inc_box_literal_cnt(size_t num, size_t box) {
+    inline void old_inc_box_literal_cnt(size_t num, size_t box) {
         size_t literal = BoxLiteralFirst + num * Boxes16 + box;
-        this->inc_literal_cnt(literal);
+        this->old_inc_literal_cnt(literal);
     }
 
     // dec_xxxx_literal_cnt()
-    inline void dec_cell_literal_cnt(size_t pos) {
+    inline void old_dec_cell_literal_cnt(size_t pos) {
         size_t literal = CellLiteralFirst + pos;
-        this->dec_literal_cnt(literal);
+        this->old_dec_literal_cnt(literal);
     }
 
-    inline void dec_row_literal_cnt(size_t index) {
+    inline void old_dec_row_literal_cnt(size_t index) {
         size_t literal = RowLiteralFirst + index;
-        this->dec_literal_cnt(literal);
+        this->old_dec_literal_cnt(literal);
     }
 
-    inline void dec_row_literal_cnt(size_t num, size_t row) {
+    inline void old_dec_row_literal_cnt(size_t num, size_t row) {
         size_t literal = RowLiteralFirst + num * Rows16 + row;
-        this->dec_literal_cnt(literal);
+        this->old_dec_literal_cnt(literal);
     }
 
-    inline void dec_col_literal_cnt(size_t index) {
+    inline void old_dec_col_literal_cnt(size_t index) {
         size_t literal = ColLiteralFirst + index;
-        this->dec_literal_cnt(literal);
+        this->old_dec_literal_cnt(literal);
     }
 
-    inline void dec_col_literal_cnt(size_t num, size_t col) {
+    inline void old_dec_col_literal_cnt(size_t num, size_t col) {
         size_t literal = ColLiteralFirst + num * Cols16 + col;
-        this->dec_literal_cnt(literal);
+        this->old_dec_literal_cnt(literal);
     }
 
-    inline void dec_box_literal_cnt(size_t index) {
+    inline void old_dec_box_literal_cnt(size_t index) {
         size_t literal = BoxLiteralFirst + index;
-        this->dec_literal_cnt(literal);
+        this->old_dec_literal_cnt(literal);
     }
 
-    inline void dec_box_literal_cnt(size_t num, size_t box) {
+    inline void old_dec_box_literal_cnt(size_t num, size_t box) {
         size_t literal = BoxLiteralFirst + num * Boxes16 + box;
-        this->dec_literal_cnt(literal);
+        this->old_dec_literal_cnt(literal);
     }
 
 #if defined(__SSE4_1__)
@@ -1558,8 +1559,8 @@ private:
 #endif // V3_ENABLE_OLD_ALGORITHM
 
 #if V3_ENABLE_OLD_ALGORITHM
-    inline void doFillNum(size_t pos, size_t row, size_t col,
-                          size_t box, size_t cell, size_t num) {
+    inline void old_doFillNum(size_t pos, size_t row, size_t col,
+                              size_t box, size_t cell, size_t num) {
         size_t box_pos = box * BoxSize16 + cell;
         size_t row_idx = num * Rows16 + row;
         size_t col_idx = num * Cols16 + col;
@@ -1572,10 +1573,10 @@ private:
         assert(this->col_num_rows_[num][col].test(row));
         assert(this->box_num_cells_[num][box].test(cell));
 
-        disable_cell_literal(box_pos);
-        disable_row_literal(row_idx);
-        disable_col_literal(col_idx);
-        disable_box_literal(box_idx);
+        old_disable_cell_literal(box_pos);
+        old_disable_row_literal(row_idx);
+        old_disable_col_literal(col_idx);
+        old_disable_box_literal(box_idx);
 
         size_t num_bits = this->box_cell_nums_[box][cell].to_ullong();
         while (num_bits != 0) {
@@ -1600,16 +1601,16 @@ private:
             this->col_num_rows_[_num][col].reset(row);
             this->box_num_cells_[_num][box].reset(cell);
 
-            dec_cell_literal_cnt(box_pos);
-            dec_row_literal_cnt(row_idx);
-            dec_col_literal_cnt(col_idx);
-            dec_box_literal_cnt(box_idx);
+            old_dec_cell_literal_cnt(box_pos);
+            old_dec_row_literal_cnt(row_idx);
+            old_dec_col_literal_cnt(col_idx);
+            old_dec_box_literal_cnt(box_idx);
 
             num_bits ^= num_bit;
         }
     }
 
-    inline void updateNeighborCellsEffect(size_t fill_pos, size_t num) {
+    inline void old_updateNeighborCellsEffect(size_t fill_pos, size_t num) {
         const PackedBitSet<BoardSize16> & neighborsMask = neighbor_boxes_mask[fill_pos];
         PackedBitSet<BoardSize16> & digitCells = this->num_cells_[num];
 
@@ -1626,7 +1627,7 @@ private:
             size_t cell = boxesInfo.cell;
             if (this->box_cell_nums_[box][cell].test(num)) {
                 this->box_cell_nums_[box][cell].reset(num);
-                dec_cell_literal_cnt(box_pos);
+                old_dec_cell_literal_cnt(box_pos);
 
                 size_t row = boxesInfo.row;
                 size_t col = boxesInfo.col;
@@ -1643,16 +1644,16 @@ private:
                 this->col_num_rows_[num][col].reset(row);
                 this->box_num_cells_[num][box].reset(cell);
 
-                dec_row_literal_cnt(row_idx);
-                dec_col_literal_cnt(col_idx);
-                dec_box_literal_cnt(box_idx);
+                old_dec_row_literal_cnt(row_idx);
+                old_dec_col_literal_cnt(col_idx);
+                old_dec_box_literal_cnt(box_idx);
             }
         }
     }
 
-    inline void doFillNum(size_t pos, size_t row, size_t col,
-                          size_t box, size_t cell, size_t num,
-                          PackedBitSet<Numbers16> & save_bits) {
+    inline void old_doFillNum(size_t pos, size_t row, size_t col,
+                              size_t box, size_t cell, size_t num,
+                              PackedBitSet<Numbers16> & save_bits) {
         size_t box_pos = box * BoxSize16 + cell;
         size_t row_idx = num * Rows16 + row;
         size_t col_idx = num * Cols16 + col;
@@ -1665,10 +1666,10 @@ private:
         assert(this->col_num_rows_[num][col].test(row));
         assert(this->box_num_cells_[num][box].test(cell));
 
-        disable_cell_literal(box_pos);
-        disable_row_literal(row_idx);
-        disable_col_literal(col_idx);
-        disable_box_literal(box_idx);
+        old_disable_cell_literal(box_pos);
+        old_disable_row_literal(row_idx);
+        old_disable_col_literal(col_idx);
+        old_disable_box_literal(box_idx);
 
         this->num_cells_[num].reset(box_pos);
 
@@ -1703,17 +1704,17 @@ private:
             this->col_num_rows_[_num][col].reset(row);
             this->box_num_cells_[_num][box].reset(cell);
 
-            dec_row_literal_cnt(row_idx);
-            dec_col_literal_cnt(col_idx);
-            dec_box_literal_cnt(box_idx);
+            old_dec_row_literal_cnt(row_idx);
+            old_dec_col_literal_cnt(col_idx);
+            old_dec_box_literal_cnt(box_idx);
 
             num_bits ^= num_bit;
         }
     }
 
-    inline void undoFillNum(size_t pos, size_t row, size_t col,
-                            size_t box, size_t cell, size_t num,
-                            PackedBitSet<Numbers16> & save_bits) {
+    inline void old_undoFillNum(size_t pos, size_t row, size_t col,
+                                size_t box, size_t cell, size_t num,
+                                PackedBitSet<Numbers16> & save_bits) {
         size_t box_pos = box * BoxSize16 + cell;
         size_t row_idx = num * Rows16 + row;
         size_t col_idx = num * Cols16 + col;
@@ -1726,10 +1727,10 @@ private:
         assert(!this->col_num_rows_[num][col].test(row));
         assert(!this->box_num_cells_[num][box].test(cell));
 
-        enable_cell_literal(box_pos);
-        enable_row_literal(row_idx);
-        enable_col_literal(col_idx);
-        enable_box_literal(box_idx);
+        old_enable_cell_literal(box_pos);
+        old_enable_row_literal(row_idx);
+        old_enable_col_literal(col_idx);
+        old_enable_box_literal(box_idx);
 
         this->num_cells_[num].set(box_pos);
 
@@ -1763,16 +1764,16 @@ private:
             this->col_num_rows_[_num][col].set(row);
             this->box_num_cells_[_num][box].set(cell);
 
-            inc_row_literal_cnt(row_idx);
-            inc_col_literal_cnt(col_idx);
-            inc_box_literal_cnt(box_idx);
+            old_inc_row_literal_cnt(row_idx);
+            old_inc_col_literal_cnt(col_idx);
+            old_inc_box_literal_cnt(box_idx);
 
             num_bits ^= num_bit;
         }
     }
 
-    inline size_t updateNeighborCellsEffect(PackedBitSet<BoardSize16> & save_effect_cells,
-                                            size_t fill_pos, size_t num) {
+    inline size_t old_updateNeighborCellsEffect(PackedBitSet<BoardSize16> & save_effect_cells,
+                                                size_t fill_pos, size_t num) {
         const PackedBitSet<BoardSize16> & neighborsMask = neighbor_boxes_mask[fill_pos];
         PackedBitSet<BoardSize16> & digitCells = this->num_cells_[num];
 
@@ -1791,7 +1792,7 @@ private:
             size_t cell = boxesInfo.cell;
             if (this->box_cell_nums_[box][cell].test(num)) {
                 this->box_cell_nums_[box][cell].reset(num);
-                dec_cell_literal_cnt(box_pos);
+                old_dec_cell_literal_cnt(box_pos);
 
                 size_t row = boxesInfo.row;
                 size_t col = boxesInfo.col;
@@ -1808,9 +1809,9 @@ private:
                 this->col_num_rows_[num][col].reset(row);
                 this->box_num_cells_[num][box].reset(cell);
 
-                dec_row_literal_cnt(row_idx);
-                dec_col_literal_cnt(col_idx);
-                dec_box_literal_cnt(box_idx);
+                old_dec_row_literal_cnt(row_idx);
+                old_dec_col_literal_cnt(col_idx);
+                old_dec_box_literal_cnt(box_idx);
 
                 count++;
             }
@@ -1819,7 +1820,7 @@ private:
         return count;
     }
 
-    inline size_t restoreNeighborCellsEffect(PackedBitSet<BoardSize16> & effect_cells, size_t num) {
+    inline size_t old_restoreNeighborCellsEffect(PackedBitSet<BoardSize16> & effect_cells, size_t num) {
         size_t count = 0;
         size_t cell_bit, index;
         while ((cell_bit = effect_cells.ls1b(index)) != 0) {
@@ -1834,7 +1835,7 @@ private:
             size_t col = boxesInfo.col;
 
             this->box_cell_nums_[box][cell].set(num);
-            inc_cell_literal_cnt(box_pos);
+            old_inc_cell_literal_cnt(box_pos);
 
             size_t row_idx = num * Rows16 + row;
             size_t col_idx = num * Cols16 + col;
@@ -1848,9 +1849,9 @@ private:
             this->col_num_rows_[num][col].set(row);
             this->box_num_cells_[num][box].set(cell);
 
-            inc_row_literal_cnt(row_idx);
-            inc_col_literal_cnt(col_idx);
-            inc_box_literal_cnt(box_idx);
+            old_inc_row_literal_cnt(row_idx);
+            old_inc_col_literal_cnt(col_idx);
+            old_inc_box_literal_cnt(box_idx);
 
             count++;
         }
@@ -1862,14 +1863,14 @@ private:
     static const uint16_t kEnableLiteral16 = 0x0000;
     static const uint16_t kDisableLiteral16 = 0xFFFF;
 
-    void _init_literal_info() {
-        _init_literal_enable();
-        _init_literal_count();
-        _init_literal_index();
-        _init_literal_total();
+    void init_literal_info() {
+        init_literal_enable();
+        init_literal_count();
+        init_literal_index();
+        init_literal_total();
     }
 
-    void _init_literal_enable() {
+    void init_literal_enable() {
         for (size_t i = 0; i < Boxes16 * BoxSize16; i++) {
             this->count_.enabled.box_cells[i] = kEnableLiteral16;
         }
@@ -1887,7 +1888,7 @@ private:
         }
     }
 
-    void _init_literal_count() {
+    void init_literal_count() {
         for (size_t i = 0; i < Boxes16; i++) {
             this->count_.counts.box_cells[i] = 255;
         }
@@ -1905,7 +1906,7 @@ private:
         }
     }
 
-    void _init_literal_index() {
+    void init_literal_index() {
         for (size_t i = 0; i < Boxes16; i++) {
             this->count_.indexs.box_cells[i] = uint16_t(-1);
         }
@@ -1923,49 +1924,49 @@ private:
         }
     }
 
-    void _init_literal_total() {
+    void init_literal_total() {
         for (size_t i = 0; i < 16; i++) {
             this->count_.total.min_literal_size[i] = 65535;
             this->count_.total.min_literal_index[i] = uint16_t(-1);
         }
     }
 
-    // _enable_xxxx_literal()
-    inline void _enable_cell_literal(size_t cell_literal) {
+    // enable_xxxx_literal()
+    inline void enable_cell_literal(size_t cell_literal) {
         this->count_.enabled.box_cells[cell_literal] = kEnableLiteral16;
     }
 
-    inline void _enable_row_literal(size_t row_literal) {
+    inline void enable_row_literal(size_t row_literal) {
         this->count_.enabled.row_nums[row_literal] = kEnableLiteral16;
     }
 
-    inline void _enable_col_literal(size_t col_literal) {
+    inline void enable_col_literal(size_t col_literal) {
         this->count_.enabled.col_nums[col_literal] = kEnableLiteral16;
     }
 
-    inline void _enable_box_literal(size_t box_literal) {
+    inline void enable_box_literal(size_t box_literal) {
         this->count_.enabled.box_nums[box_literal] = kEnableLiteral16;
     }
 
-    // _disable_xxxx_literal()
-    inline void _disable_cell_literal(size_t cell_literal) {
+    // disable_xxxx_literal()
+    inline void disable_cell_literal(size_t cell_literal) {
         this->count_.enabled.box_cells[cell_literal] = kDisableLiteral16;
     }
 
-    inline void _disable_row_literal(size_t row_literal) {
+    inline void disable_row_literal(size_t row_literal) {
         this->count_.enabled.row_nums[row_literal] = kDisableLiteral16;
     }
 
-    inline void _disable_col_literal(size_t col_literal) {
+    inline void disable_col_literal(size_t col_literal) {
         this->count_.enabled.col_nums[col_literal] = kDisableLiteral16;
     }
 
-    inline void _disable_box_literal(size_t box_literal) {
+    inline void disable_box_literal(size_t box_literal) {
         this->count_.enabled.box_nums[box_literal] = kDisableLiteral16;
     }
 
-    inline void _doFillNum(size_t pos, size_t row, size_t col,
-                           size_t box, size_t cell, size_t num) {
+    inline void doFillNum(size_t pos, size_t row, size_t col,
+                          size_t box, size_t cell, size_t num) {
         assert(this->state_.box_cell_nums[box][cell].test(num));
         assert(this->state_.row_num_cols[num][row].test(col));
         assert(this->state_.col_num_rows[num][col].test(row));
@@ -1984,10 +1985,10 @@ private:
         size_t col_idx = num * Cols16 + col;
         size_t box_idx = num * Boxes16 + box;
 
-        _disable_cell_literal(box_pos);
-        _disable_row_literal(row_idx);
-        _disable_col_literal(col_idx);
-        _disable_box_literal(box_idx);
+        disable_cell_literal(box_pos);
+        disable_row_literal(row_idx);
+        disable_col_literal(col_idx);
+        disable_box_literal(box_idx);
 
         size_t num_bits = cell_num_bits.to_ulong();
         // Exclude the current number, because it will be process later.
@@ -2007,7 +2008,7 @@ private:
         }
     }
 
-    inline void _updateNeighborCellsEffect(size_t fill_pos, size_t box, size_t num) {
+    inline void updateNeighborCellsEffect(size_t fill_pos, size_t box, size_t num) {
         const neighbor_boxes_t & neighborBoxes = neighbor_boxes[box];
         const PackedBitSet3D<Boxes, BoxSize16, Numbers16> & neighbors_mask
             = box_cell_neighbors_mask[fill_pos][num];
@@ -2022,10 +2023,10 @@ private:
         this->state_.box_num_cells[num] &= box_num_neighbors_mask[fill_pos];
     }
 
-    inline void _doFillNum(size_t pos, size_t row, size_t col,
-                           size_t box, size_t cell, size_t num,
-                           PackedBitSet<Numbers16> & save_num_bits,
-                           RecoverState & recover_state) {
+    inline void doFillNum(size_t pos, size_t row, size_t col,
+                          size_t box, size_t cell, size_t num,
+                          PackedBitSet<Numbers16> & save_num_bits,
+                          RecoverState & recover_state) {
         assert(this->state_.box_cell_nums[box][cell].test(num));
         assert(this->state_.row_num_cols[num][row].test(col));
         assert(this->state_.col_num_rows[num][col].test(row));
@@ -2046,10 +2047,10 @@ private:
         size_t col_idx = num * Cols16 + col;
         size_t box_idx = num * Boxes16 + box;
 
-        _disable_cell_literal(box_pos);
-        _disable_row_literal(row_idx);
-        _disable_col_literal(col_idx);
-        _disable_box_literal(box_idx);
+        disable_cell_literal(box_pos);
+        disable_row_literal(row_idx);
+        disable_col_literal(col_idx);
+        disable_box_literal(box_idx);
 
         recover_state.counts.row_nums[num] = this->count_.counts.row_nums[num];
         recover_state.counts.col_nums[num] = this->count_.counts.col_nums[num];
@@ -2085,10 +2086,10 @@ private:
         }
     }
 
-    inline void _undoFillNum(size_t pos, size_t row, size_t col,
-                             size_t box, size_t cell, size_t num,
-                             PackedBitSet<Numbers16> & save_num_bits,
-                             RecoverState & recover_state) {
+    inline void undoFillNum(size_t pos, size_t row, size_t col,
+                            size_t box, size_t cell, size_t num,
+                            PackedBitSet<Numbers16> & save_num_bits,
+                            RecoverState & recover_state) {
         assert(!this->state_.box_cell_nums[box][cell].test(num));
         //assert(!this->state_.row_num_cols[num][row].test(col));
         //assert(!this->state_.col_num_rows[num][col].test(row));
@@ -2106,10 +2107,10 @@ private:
         size_t col_idx = num * Cols16 + col;
         size_t box_idx = num * Boxes16 + box;
 
-        _enable_cell_literal(box_pos);
-        _enable_row_literal(row_idx);
-        _enable_col_literal(col_idx);
-        _enable_box_literal(box_idx);
+        enable_cell_literal(box_pos);
+        enable_row_literal(row_idx);
+        enable_col_literal(col_idx);
+        enable_box_literal(box_idx);
 
         this->count_.counts.row_nums[num] = recover_state.counts.row_nums[num];
         this->count_.counts.col_nums[num] = recover_state.counts.col_nums[num];
@@ -2147,8 +2148,8 @@ private:
 
 #if V3_USE_SMID_COPY_BOARD
 
-    inline void _updateNeighborCellsEffect(RecoverState & recover_state,
-                                           size_t fill_pos, size_t box, size_t num) {
+    inline void updateNeighborCellsEffect(RecoverState & recover_state,
+                                          size_t fill_pos, size_t box, size_t num) {
         static const bool hasChanged = true;
         // Position (Box-Cell) literal
         static const size_t boxesCount = neighbor_boxes_t::kBoxesCount;
@@ -2265,8 +2266,8 @@ private:
         }
     }
 
-    inline void _restoreNeighborCellsEffect(const RecoverState & recover_state,
-                                            size_t box, size_t num) {
+    inline void restoreNeighborCellsEffect(const RecoverState & recover_state,
+                                           size_t box, size_t num) {
         // Position (Box-Cell) literal
         static const size_t boxesCount = neighbor_boxes_t::kBoxesCount;
         const neighbor_boxes_t & neighborBoxes = neighbor_boxes[box];
@@ -2304,8 +2305,8 @@ private:
 
 #else
 
-    inline void _updateNeighborCellsEffect(RecoverState & recover_state,
-                                           size_t fill_pos, size_t box, size_t num) {
+    inline void updateNeighborCellsEffect(RecoverState & recover_state,
+                                          size_t fill_pos, size_t box, size_t num) {
         // Position (Box-Cell) literal
         static const size_t boxesCount = neighbor_boxes_t::kBoxesCount;
         const neighbor_boxes_t & neighborBoxes = neighbor_boxes[box];
@@ -2335,8 +2336,8 @@ private:
         this->state_.box_num_cells[num] &= box_num_neighbors_mask[fill_pos];
     }
 
-    inline void _restoreNeighborCellsEffect(const RecoverState & recover_state,
-                                            size_t box, size_t num) {
+    inline void restoreNeighborCellsEffect(const RecoverState & recover_state,
+                                           size_t box, size_t num) {
         // Position (Box-Cell) literal
         static const size_t boxesCount = neighbor_boxes_t::kBoxesCount;
         const neighbor_boxes_t & neighborBoxes = neighbor_boxes[box];
@@ -2508,10 +2509,10 @@ private:
 
         // Position (Box-Cell) literal
         uint32_t min_cell_size = 255;
-        uint32_t min_cell_index = uint32_t(-1);
+        uint32_t min_cell_index = uint32_t(uint16_t(-1));
 
         // Neighbor boxes
-        size_t cnt = 0;
+        size_t box_changed_cnt = 0;
         static const size_t boxesCount = neighbor_boxes_t::kBoxesCount;
         const neighbor_boxes_t & neighborBoxes = neighbor_boxes[box];
         for (size_t i = 0; i < boxesCount; i++) {
@@ -2539,41 +2540,16 @@ private:
                     size_t cell_index = box_idx * BoxSize16 + min_index;
                     this->count_.indexs.box_cells[box_idx] = (uint16_t)cell_index;
                     min_cell_index = (uint32_t)cell_index;
+                    //if (min_size <= kLiteralCntThreshold2) {
+                    //    out_min_literal_index = min_cell_index;
+                    //    return min_size;
+                    //}
                 }
-                cnt++;
+                box_changed_cnt++;
             }
         }
 
-        assert(cnt > 0);
-
-#if 0
-        // Current box
-        {
-            const PackedBitSet2D<BoxSize16, Numbers16> * bitset;
-            bitset = &this->state_.box_cell_nums[box];
-            bitboard.loadAligned(bitset);
-
-            BitVec16x16 popcnt16 = bitboard.popcount16<Numbers>();
-#if V3_SAVE_COUNT_SIZE
-            popcnt16.saveAligned(&this->count_.sizes.box_cells[box * BoxSize16]);
-#endif
-            BitVec16x16 enable_mask;
-            enable_mask.loadAligned(&this->count_.enabled.box_cells[box * BoxSize16]);
-            popcnt16 |= enable_mask;
-
-            int min_index = -1;
-            uint32_t min_size = popcnt16.minpos16<Numbers>(min_cell_size, min_index);
-            this->count_.counts.box_cells[box] = (uint16_t)min_size;
-            if (min_index == -1) {
-                this->count_.indexs.box_cells[box] = (uint16_t)min_index;
-            }
-            else {
-                size_t cell_index = box * BoxSize16 + min_index;
-                this->count_.indexs.box_cells[box] = (uint16_t)cell_index;
-                min_cell_index = (uint32_t)cell_index;
-            }
-        }
-#endif
+        assert(box_changed_cnt > 0);
 
         BitVec16x16 cell_literal_minpos;
         cell_literal_minpos.loadAligned(&this->count_.counts.box_cells[0]);
@@ -2599,12 +2575,17 @@ private:
             min_cell_index = cell_index;
         }
 
+        //if (min_cell_size <= kLiteralCntThreshold2) {
+        //    out_min_literal_index = min_cell_index;
+        //    return min_cell_size;
+        //}
+
         this->count_.total.min_literal_size[0] = (uint16_t)min_cell_size;
         this->count_.total.min_literal_index[0] = (uint16_t)min_cell_index;
 
         // Row literal
         uint32_t min_row_size = 255;
-        uint32_t min_row_index = uint32_t(-1);
+        uint32_t min_row_index = uint32_t(uint16_t(-1));
 
         size_t num_bits = cell_num_bits.to_ulong();
         while (num_bits != 0) {
@@ -2661,12 +2642,17 @@ private:
             min_row_index = row_index;
         }
 
+        //if (min_row_size <= kLiteralCntThreshold2) {
+        //    out_min_literal_index = min_row_index;
+        //    return min_row_size;
+        //}
+
         this->count_.total.min_literal_size[1] = (uint16_t)min_row_size;
         this->count_.total.min_literal_index[1] = (uint16_t)min_row_index;
 
         // Col literal
         uint32_t min_col_size = 255;
-        uint32_t min_col_index = uint32_t(-1);
+        uint32_t min_col_index = uint32_t(uint16_t(-1));
 
         num_bits = cell_num_bits.to_ulong();
         while (num_bits != 0) {
@@ -2722,12 +2708,18 @@ private:
             min_col_index = col_index;
         }
 
+        //if (min_col_size <= kLiteralCntThreshold2) {
+        //    out_min_literal_index = min_col_index;
+        //    return min_col_size;
+        //}
+
         this->count_.total.min_literal_size[2] = (uint16_t)min_col_size;
         this->count_.total.min_literal_index[2] = (uint16_t)min_col_index;
 
         // Box-Cell literal
         uint32_t min_box_size = 255;
-        uint32_t min_box_index = uint32_t(-1);
+        uint32_t min_box_index = uint32_t(uint16_t(-1));
+
         num_bits = cell_num_bits.to_ulong();
         while (num_bits != 0) {
             size_t num_bit = BitUtils::ls1b(num_bits);
@@ -2782,6 +2774,11 @@ private:
             min_box_index = box_index;
         }
 
+        //if (min_box_size <= kLiteralCntThreshold2) {
+        //    out_min_literal_index = min_box_index;
+        //    return min_box_size;
+        //}
+
         this->count_.total.min_literal_size[3] = (uint16_t)min_box_size;
         this->count_.total.min_literal_index[3] = (uint16_t)min_box_index;
 
@@ -2832,10 +2829,10 @@ private:
         for (size_t box = 0; box < Boxes; box++) {
             uint16_t * count_size = (uint16_t *)&this->count_.sizes.box_cells[box * BoxSize16];
             for (size_t cell = 0; cell < BoxSize; cell++) {
-                uint8_t enable = get_cell_literal_enable(box * BoxSize16 + cell);
+                uint8_t enable = old_get_cell_literal_enable(box * BoxSize16 + cell);
                 if (enable != kDisableLiteral8) {
                     assert(this->count_.enabled.box_cells[box * BoxSize16 + cell] == kEnableLiteral16);
-                    uint16_t size1 = get_cell_literal_cnt(box * BoxSize16 + cell);
+                    uint16_t size1 = old_get_cell_literal_cnt(box * BoxSize16 + cell);
                     uint16_t size2 = count_size[cell];
                     if (size1 != size2) {
                         wrong_cnt++;
@@ -2855,10 +2852,10 @@ private:
         for (size_t num = 0; num < Numbers; num++) {
             uint16_t * count_size = (uint16_t *)&this->count_.sizes.row_nums[num * Rows16];
             for (size_t row = 0; row < Rows; row++) {
-                uint8_t enable = get_row_literal_enable(num, row);
+                uint8_t enable = old_get_row_literal_enable(num, row);
                 if (enable != kDisableLiteral8) {
                     assert(this->count_.enabled.row_nums[num * Rows16 + row] == kEnableLiteral16);
-                    uint16_t size1 = get_row_literal_cnt(num, row);
+                    uint16_t size1 = old_get_row_literal_cnt(num, row);
                     uint16_t size2 = count_size[row];
                     if (size1 != size2) {
                         wrong_cnt++;
@@ -2878,10 +2875,10 @@ private:
         for (size_t num = 0; num < Numbers; num++) {
             uint16_t * count_size = (uint16_t *)&this->count_.sizes.col_nums[num * Cols16];
             for (size_t col = 0; col < Cols; col++) {
-                uint8_t enable = get_col_literal_enable(num, col);
+                uint8_t enable = old_get_col_literal_enable(num, col);
                 if (enable != kDisableLiteral8) {
                     assert(this->count_.enabled.col_nums[num * Cols16 + col] == kEnableLiteral16);
-                    uint16_t size1 = get_col_literal_cnt(num, col);
+                    uint16_t size1 = old_get_col_literal_cnt(num, col);
                     uint16_t size2 = count_size[col];
                     if (size1 != size2) {
                         wrong_cnt++;
@@ -2901,10 +2898,10 @@ private:
         for (size_t num = 0; num < Numbers; num++) {
             uint16_t * count_size = (uint16_t *)&this->count_.sizes.box_nums[num * Boxes16];
             for (size_t box = 0; box < Boxes; box++) {
-                uint8_t enable = get_box_literal_enable(num, box);
+                uint8_t enable = old_get_box_literal_enable(num, box);
                 if (enable != kDisableLiteral8) {
                     assert(this->count_.enabled.box_nums[num * Boxes16 + box] == kEnableLiteral16);
-                    uint16_t size1 = get_box_literal_cnt(num, box);
+                    uint16_t size1 = old_get_box_literal_cnt(num, box);
                     uint16_t size2 = count_size[box];
                     if (size1 != size2) {
                         wrong_cnt++;
@@ -2982,7 +2979,7 @@ public:
 #endif
                     size_t num_bits = this->state_.box_cell_nums[box][cell].to_ulong();
 #if V3_ENABLE_OLD_ALGORITHM
-                    assert(this->state_.box_cell_nums[box][cell].count() == get_literal_cnt(min_literal_id));
+                    assert(this->state_.box_cell_nums[box][cell].count() == old_get_literal_cnt(min_literal_id));
 #endif
                     while (num_bits != 0) {
                         size_t num_bit = BitUtils::ls1b(num_bits);
@@ -2990,11 +2987,11 @@ public:
                         num_bits ^= num_bit;
 
 #if V3_ENABLE_OLD_ALGORITHM
-                        doFillNum(pos, row, col, box, cell, num, save_bits);
-                        size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, num);
+                        old_doFillNum(pos, row, col, box, cell, num, save_bits);
+                        size_t effect_count = old_updateNeighborCellsEffect(save_effect_cells, pos, num);
 #endif
-                        _doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
-                        _updateNeighborCellsEffect(recover_state, pos, box, num);
+                        doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
+                        updateNeighborCellsEffect(recover_state, pos, box, num);
 
 #if V3_ENABLE_OLD_ALGORITHM
                         bool is_correct = verify_bitboard_state();
@@ -3008,6 +3005,8 @@ public:
 #endif
                         next_min_literal_size = count_delta_literal_size(next_min_literal_index, recover_state, save_num_bits, box);
                         //next_min_literal_size = count_all_literal_size(next_min_literal_index);
+                        assert(next_min_literal_size >= 0 && next_min_literal_size != 255);
+                        assert(next_min_literal_index >= 0 && next_min_literal_index != uint32_t(uint16_t(-1)));
 
 #if V3_ENABLE_OLD_ALGORITHM
                         bool size_is_correct = verify_literal_size();
@@ -3028,13 +3027,13 @@ public:
                         }
 
 #if V3_ENABLE_OLD_ALGORITHM
-                        undoFillNum(pos, row, col, box, cell, num, save_bits);
+                        old_undoFillNum(pos, row, col, box, cell, num, save_bits);
                         this->num_cells_[num] |= save_effect_cells;
-                        size_t r_effect_count = restoreNeighborCellsEffect(save_effect_cells, num);
+                        size_t r_effect_count = old_restoreNeighborCellsEffect(save_effect_cells, num);
                         assert(effect_count == r_effect_count);
 #endif
-                        _restoreNeighborCellsEffect(recover_state, box, num);
-                        _undoFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
+                        restoreNeighborCellsEffect(recover_state, box, num);
+                        undoFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
 
 #if V3_ENABLE_OLD_ALGORITHM
                         is_correct = verify_bitboard_state();
@@ -3055,7 +3054,7 @@ public:
 
                     size_t col_bits = this->state_.row_num_cols[num][row].to_ulong();
 #if V3_ENABLE_OLD_ALGORITHM
-                    assert(this->state_.row_num_cols[num][row].count() == get_literal_cnt(min_literal_id));
+                    assert(this->state_.row_num_cols[num][row].count() == old_get_literal_cnt(min_literal_id));
 #endif
                     while (col_bits != 0) {
                         size_t col_bit = BitUtils::ls1b(col_bits);
@@ -3076,11 +3075,11 @@ public:
 #endif
 
 #if V3_ENABLE_OLD_ALGORITHM
-                        doFillNum(pos, row, col, box, cell, num, save_bits);
-                        size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, num);
+                        old_doFillNum(pos, row, col, box, cell, num, save_bits);
+                        size_t effect_count = old_updateNeighborCellsEffect(save_effect_cells, pos, num);
 #endif
-                        _doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
-                        _updateNeighborCellsEffect(recover_state, pos, box, num);
+                        doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
+                        updateNeighborCellsEffect(recover_state, pos, box, num);
 
 #if V3_ENABLE_OLD_ALGORITHM
                         bool is_correct = verify_bitboard_state();
@@ -3094,6 +3093,8 @@ public:
 #endif
                         next_min_literal_size = count_delta_literal_size(next_min_literal_index, recover_state, save_num_bits, box);
                         //next_min_literal_size = count_all_literal_size(next_min_literal_index);
+                        assert(next_min_literal_size >= 0 && next_min_literal_size != 255);
+                        assert(next_min_literal_index >= 0 && next_min_literal_index != uint32_t(uint16_t(-1)));
 
 #if V3_ENABLE_OLD_ALGORITHM
                         bool size_is_correct = verify_literal_size();
@@ -3114,13 +3115,13 @@ public:
                         }
 
 #if V3_ENABLE_OLD_ALGORITHM
-                        undoFillNum(pos, row, col, box, cell, num, save_bits);
+                        old_undoFillNum(pos, row, col, box, cell, num, save_bits);
                         this->num_cells_[num] |= save_effect_cells;
-                        size_t r_effect_count = restoreNeighborCellsEffect(save_effect_cells, num);
+                        size_t r_effect_count = old_restoreNeighborCellsEffect(save_effect_cells, num);
                         assert(effect_count == r_effect_count);
 #endif
-                        _restoreNeighborCellsEffect(recover_state, box, num);
-                        _undoFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
+                        restoreNeighborCellsEffect(recover_state, box, num);
+                        undoFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
 
 #if V3_ENABLE_OLD_ALGORITHM
                         is_correct = verify_bitboard_state();
@@ -3141,7 +3142,7 @@ public:
 
                     size_t row_bits = this->state_.col_num_rows[num][col].to_ulong();
 #if V3_ENABLE_OLD_ALGORITHM
-                    assert(this->state_.col_num_rows[num][col].count() == get_literal_cnt(min_literal_id));
+                    assert(this->state_.col_num_rows[num][col].count() == old_get_literal_cnt(min_literal_id));
 #endif
                     while (row_bits != 0) {
                         size_t row_bit = BitUtils::ls1b(row_bits);
@@ -3162,11 +3163,11 @@ public:
 #endif
 
 #if V3_ENABLE_OLD_ALGORITHM
-                        doFillNum(pos, row, col, box, cell, num, save_bits);
-                        size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, num);
+                        old_doFillNum(pos, row, col, box, cell, num, save_bits);
+                        size_t effect_count = old_updateNeighborCellsEffect(save_effect_cells, pos, num);
 #endif
-                        _doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
-                        _updateNeighborCellsEffect(recover_state, pos, box, num);
+                        doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
+                        updateNeighborCellsEffect(recover_state, pos, box, num);
 
 #if V3_ENABLE_OLD_ALGORITHM
                         bool is_correct = verify_bitboard_state();
@@ -3180,6 +3181,8 @@ public:
 #endif
                         next_min_literal_size = count_delta_literal_size(next_min_literal_index, recover_state, save_num_bits, box);
                         //next_min_literal_size = count_all_literal_size(next_min_literal_index);
+                        assert(next_min_literal_size >= 0 && next_min_literal_size != 255);
+                        assert(next_min_literal_index >= 0 && next_min_literal_index != uint32_t(uint16_t(-1)));
 
 #if V3_ENABLE_OLD_ALGORITHM
                         bool size_is_correct = verify_literal_size();
@@ -3200,13 +3203,13 @@ public:
                         }
 
 #if V3_ENABLE_OLD_ALGORITHM
-                        undoFillNum(pos, row, col, box, cell, num, save_bits);
+                        old_undoFillNum(pos, row, col, box, cell, num, save_bits);
                         this->num_cells_[num] |= save_effect_cells;
-                        size_t r_effect_count = restoreNeighborCellsEffect(save_effect_cells, num);
+                        size_t r_effect_count = old_restoreNeighborCellsEffect(save_effect_cells, num);
                         assert(effect_count == r_effect_count);
 #endif
-                        _restoreNeighborCellsEffect(recover_state, box, num);
-                        _undoFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
+                        restoreNeighborCellsEffect(recover_state, box, num);
+                        undoFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
 
 #if V3_ENABLE_OLD_ALGORITHM
                         is_correct = verify_bitboard_state();
@@ -3227,7 +3230,7 @@ public:
 
                     size_t cell_bits = this->state_.box_num_cells[num][box].to_ulong();
 #if V3_ENABLE_OLD_ALGORITHM
-                    assert(this->state_.box_num_cells[num][box].count() == get_literal_cnt(min_literal_id));
+                    assert(this->state_.box_num_cells[num][box].count() == old_get_literal_cnt(min_literal_id));
 #endif
                     while (cell_bits != 0) {
                         size_t cell_bit = BitUtils::ls1b(cell_bits);
@@ -3245,11 +3248,11 @@ public:
 #endif
 
 #if V3_ENABLE_OLD_ALGORITHM
-                        doFillNum(pos, row, col, box, cell, num, save_bits);
-                        size_t effect_count = updateNeighborCellsEffect(save_effect_cells, pos, num);
+                        old_doFillNum(pos, row, col, box, cell, num, save_bits);
+                        size_t effect_count = old_updateNeighborCellsEffect(save_effect_cells, pos, num);
 #endif
-                        _doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
-                        _updateNeighborCellsEffect(recover_state, pos, box, num);
+                        doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
+                        updateNeighborCellsEffect(recover_state, pos, box, num);
 
 #if V3_ENABLE_OLD_ALGORITHM
                         bool is_correct = verify_bitboard_state();
@@ -3263,6 +3266,8 @@ public:
 #endif
                         next_min_literal_size = count_delta_literal_size(next_min_literal_index, recover_state, save_num_bits, box);
                         //next_min_literal_size = count_all_literal_size(next_min_literal_index);
+                        assert(next_min_literal_size >= 0 && next_min_literal_size != 255);
+                        assert(next_min_literal_index >= 0 && next_min_literal_index != uint32_t(uint16_t(-1)));
 
 #if V3_ENABLE_OLD_ALGORITHM
                         bool size_is_correct = verify_literal_size();
@@ -3283,13 +3288,13 @@ public:
                         }
 
 #if V3_ENABLE_OLD_ALGORITHM
-                        undoFillNum(pos, row, col, box, cell, num, save_bits);
+                        old_undoFillNum(pos, row, col, box, cell, num, save_bits);
                         this->num_cells_[num] |= save_effect_cells;
-                        size_t r_effect_count = restoreNeighborCellsEffect(save_effect_cells, num);
+                        size_t r_effect_count = old_restoreNeighborCellsEffect(save_effect_cells, num);
                         assert(effect_count == r_effect_count);
 #endif
-                        _restoreNeighborCellsEffect(recover_state, box, num);
-                        _undoFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
+                        restoreNeighborCellsEffect(recover_state, box, num);
+                        undoFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
 
 #if V3_ENABLE_OLD_ALGORITHM
                         is_correct = verify_bitboard_state();
