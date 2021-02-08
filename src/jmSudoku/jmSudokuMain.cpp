@@ -51,6 +51,7 @@
 #include "SudokuSolver_v2.h"
 #include "SudokuSolver_v3a.h"
 #include "SudokuSolver_v3b.h"
+#include "SudokuSolver_v3e.h"
 #include "SudokuSolver_v3.h"
 
 #include "CPUWarmUp.h"
@@ -208,6 +209,11 @@ void run_a_testcase(size_t index)
         run_solver_testcase<v3b::Solver<SudokuTy>>(index);
 
         printf("------------------------------------------\n\n");
+        printf("jmSudoku: v3e::Solution - dfs\n\n");
+
+        run_solver_testcase<v3e::Solver<SudokuTy>>(index);
+
+        printf("------------------------------------------\n\n");
         printf("jmSudoku: v3::Solution - dfs\n\n");
 
         run_solver_testcase<v3::Solver<SudokuTy>>(index);
@@ -341,6 +347,7 @@ int main(int argc, char * argv[])
             run_sudoku_test<v2::Solver<Sudoku>>(filename, "dfs::v2");
             run_sudoku_test<v3a::Solver<Sudoku>>(filename, "dfs::v3a");
             run_sudoku_test<v3b::Solver<Sudoku>>(filename, "dfs::v3b");
+            run_sudoku_test<v3e::Solver<Sudoku>>(filename, "dfs::v3e");
             run_sudoku_test<v3::Solver<Sudoku>>(filename, "dfs::v3");
         }
     }
