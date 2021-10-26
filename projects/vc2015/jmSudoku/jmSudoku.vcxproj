@@ -177,6 +177,7 @@
     <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v3a.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v3b.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v3e.h" />
+    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v4.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\SudokuTables.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\TestCase.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\msvc_x86intrin.h" />

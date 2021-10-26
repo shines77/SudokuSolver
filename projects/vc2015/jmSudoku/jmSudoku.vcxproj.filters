@@ -70,6 +70,9 @@
     <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v3e.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\jmSudoku\SudokuSolver_v4.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\jmSudoku\jmSudokuMain.cpp">

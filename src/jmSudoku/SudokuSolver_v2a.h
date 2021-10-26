@@ -121,10 +121,10 @@ public:
     static const size_t ColLiteralLast   = LiteralLast;
 #endif // (V2A_LITERAL_ORDER_MODE == 0)
 
-    static const size_t kAllRowsBit = SudokuTy::kAllRowsBit;
-    static const size_t kAllColsBit = SudokuTy::kAllColsBit;
-    static const size_t kAllBoxesBit = SudokuTy::kAllBoxesBit;
-    static const size_t kAllNumbersBit = SudokuTy::kAllNumbersBit;
+    static const size_t kAllRowsBits = SudokuTy::kAllRowsBits;
+    static const size_t kAllColsBits = SudokuTy::kAllColsBits;
+    static const size_t kAllBoxesBits = SudokuTy::kAllBoxesBits;
+    static const size_t kAllNumbersBits = SudokuTy::kAllNumbersBits;
 
     static const bool kAllDimIsSame = SudokuTy::kAllDimIsSame;
 
