@@ -53,6 +53,7 @@
 #include "SudokuSolver_v3b.h"
 #include "SudokuSolver_v3e.h"
 #include "SudokuSolver_v3.h"
+#include "SudokuSolver_v4.h"
 
 #include "CPUWarmUp.h"
 #include "StopWatch.h"
@@ -217,6 +218,11 @@ void run_a_testcase(size_t index)
         printf("jmSudoku: v3::Solution - dfs\n\n");
 
         run_solver_testcase<v3::Solver<SudokuTy>>(index);
+
+        printf("------------------------------------------\n\n");
+        printf("jmSudoku: v4::Solution - dfs\n\n");
+
+        run_solver_testcase<v4::Solver<SudokuTy>>(index);
     }
 
     printf("------------------------------------------\n\n");
@@ -326,6 +332,8 @@ int main(int argc, char * argv[])
     jtest::CPU::warmup(1000);
 
     Sudoku::initialize();
+
+    v4::Solver<Sudoku> solver;
 
     if (1)
     {

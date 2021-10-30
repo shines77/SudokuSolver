@@ -221,9 +221,9 @@ private:
 
     struct State {
         alignas(32) PackedBitSet3D<Boxes, BoxSize16, Numbers16>   box_cell_nums;    // [box][cell][num]
-        alignas(32) PackedBitSet3D<Numbers, Rows16, Cols16>       row_num_cols;     // [num][row][col]
-        alignas(32) PackedBitSet3D<Numbers, Cols16, Rows16>       col_num_rows;     // [num][col][row]
-        alignas(32) PackedBitSet3D<Numbers, Boxes16, BoxSize16>   box_num_cells;    // [num][box][cell]
+        alignas(32) PackedBitSet3D<Numbers, Rows16, Cols16>       num_row_cols;     // [num][row][col]
+        alignas(32) PackedBitSet3D<Numbers, Cols16, Rows16>       num_col_rows;     // [num][col][row]
+        alignas(32) PackedBitSet3D<Numbers, Boxes16, BoxSize16>   num_box_cells;    // [num][box][cell]
     };
 
     struct RecoverState {
@@ -311,10 +311,10 @@ private:
 
 #if V3E_ENABLE_OLD_ALGORITHM
 #if defined(__SSE4_1__)
-    alignas(16) literal_info_t literal_info_[TotalLiterals];
+    alignas(32) literal_info_t literal_info_[TotalLiterals];
 #else
-    alignas(16) uint8_t literal_count_[TotalLiterals];
-    alignas(16) uint8_t literal_enable_[TotalLiterals];
+    alignas(32) uint8_t literal_count_[TotalLiterals];
+    alignas(32) uint8_t literal_enable_[TotalLiterals];
 #endif
 #endif
 
@@ -322,7 +322,7 @@ private:
 
     std::vector<Board>  answers_;
 
-    static bool is_mask_inited;
+    static bool mask_is_inited;
     static std::vector<neighbor_boxes_t> neighbor_boxes;
 
     static PackedBitSet2D<BoardSize, Rows16 * Cols16>     neighbor_cells_mask;
@@ -335,9 +335,9 @@ private:
 
 public:
     Solver() : empties_(0) {
-        if (!is_mask_inited) {
+        if (!mask_is_inited) {
             init_mask();
-            is_mask_inited = true;
+            mask_is_inited = true;
         }
     }
     ~Solver() {}
@@ -575,9 +575,9 @@ private:
         this->box_num_cells_.fill(kAllBoxSizeBits);
 #endif
         this->state_.box_cell_nums.fill(kAllNumbersBits);
-        this->state_.row_num_cols.fill(kAllColsBits);
-        this->state_.col_num_rows.fill(kAllRowsBits);
-        this->state_.box_num_cells.fill(kAllBoxSizeBits);
+        this->state_.num_row_cols.fill(kAllColsBits);
+        this->state_.num_col_rows.fill(kAllRowsBits);
+        this->state_.num_box_cells.fill(kAllBoxSizeBits);
 
         num_guesses = 0;
         num_unique_candidate = 0;
@@ -1968,12 +1968,12 @@ private:
     inline void doFillNum(size_t pos, size_t row, size_t col,
                           size_t box, size_t cell, size_t num) {
         assert(this->state_.box_cell_nums[box][cell].test(num));
-        assert(this->state_.row_num_cols[num][row].test(col));
-        assert(this->state_.col_num_rows[num][col].test(row));
-        assert(this->state_.box_num_cells[num][box].test(cell));
+        assert(this->state_.num_row_cols[num][row].test(col));
+        assert(this->state_.num_col_rows[num][col].test(row));
+        assert(this->state_.num_box_cells[num][box].test(cell));
 
         PackedBitSet<Numbers16> cell_num_bits = this->state_.box_cell_nums[box][cell];
-        //this->state_.box_cell_nums[box][cell].fill(kAllNumbersBit);
+        //this->state_.box_cell_nums[box][cell].fill(kAllNumbersBits);
         this->state_.box_cell_nums[box][cell].reset();
 
         //this->state_.row_num_cols[num][row].reset(col);
@@ -1998,13 +1998,13 @@ private:
             size_t _num = BitUtils::bsf(num_bit);
             num_bits ^= num_bit;
 
-            assert(this->state_.row_num_cols[_num][row].test(col));
-            assert(this->state_.col_num_rows[_num][col].test(row));
-            assert(this->state_.box_num_cells[_num][box].test(cell));
+            assert(this->state_.num_row_cols[_num][row].test(col));
+            assert(this->state_.num_col_rows[_num][col].test(row));
+            assert(this->state_.num_box_cells[_num][box].test(cell));
 
-            this->state_.row_num_cols[_num][row].reset(col);
-            this->state_.col_num_rows[_num][col].reset(row);
-            this->state_.box_num_cells[_num][box].reset(cell);
+            this->state_.num_row_cols[_num][row].reset(col);
+            this->state_.num_col_rows[_num][col].reset(row);
+            this->state_.num_box_cells[_num][box].reset(cell);
         }
     }
 
@@ -2018,9 +2018,9 @@ private:
         }
         //this->state_.box_cell_nums[box] &= neighbors_mask[box];
 
-        this->state_.row_num_cols[num] &= row_neighbors_mask[fill_pos];
-        this->state_.col_num_rows[num] &= col_neighbors_mask[fill_pos];
-        this->state_.box_num_cells[num] &= box_num_neighbors_mask[fill_pos];
+        this->state_.num_row_cols[num] &= row_neighbors_mask[fill_pos];
+        this->state_.num_col_rows[num] &= col_neighbors_mask[fill_pos];
+        this->state_.num_box_cells[num] &= box_num_neighbors_mask[fill_pos];
     }
 
     inline void doFillNum(size_t pos, size_t row, size_t col,
@@ -2028,9 +2028,9 @@ private:
                           PackedBitSet<Numbers16> & save_num_bits,
                           RecoverState & recover_state) {
         assert(this->state_.box_cell_nums[box][cell].test(num));
-        assert(this->state_.row_num_cols[num][row].test(col));
-        assert(this->state_.col_num_rows[num][col].test(row));
-        assert(this->state_.box_num_cells[num][box].test(cell));
+        assert(this->state_.num_row_cols[num][row].test(col));
+        assert(this->state_.num_col_rows[num][col].test(row));
+        assert(this->state_.num_box_cells[num][box].test(cell));
 
         PackedBitSet<Numbers16> cell_num_bits = this->state_.box_cell_nums[box][cell];
         // Save cell num bits
@@ -2068,13 +2068,13 @@ private:
             size_t _num = BitUtils::bsf(num_bit);
             num_bits ^= num_bit;
 
-            assert(this->state_.row_num_cols[_num][row].test(col));
-            assert(this->state_.col_num_rows[_num][col].test(row));
-            assert(this->state_.box_num_cells[_num][box].test(cell));
+            assert(this->state_.num_row_cols[_num][row].test(col));
+            assert(this->state_.num_col_rows[_num][col].test(row));
+            assert(this->state_.num_box_cells[_num][box].test(cell));
 
-            this->state_.row_num_cols[_num][row].reset(col);
-            this->state_.col_num_rows[_num][col].reset(row);
-            this->state_.box_num_cells[_num][box].reset(cell);
+            this->state_.num_row_cols[_num][row].reset(col);
+            this->state_.num_col_rows[_num][col].reset(row);
+            this->state_.num_box_cells[_num][box].reset(cell);
 
             recover_state.counts.row_nums[_num] = this->count_.counts.row_nums[_num];
             recover_state.counts.col_nums[_num] = this->count_.counts.col_nums[_num];
@@ -2128,13 +2128,13 @@ private:
             size_t _num = BitUtils::bsf(num_bit);
             num_bits ^= num_bit;
 
-            assert(!this->state_.row_num_cols[_num][row].test(col));
-            assert(!this->state_.col_num_rows[_num][col].test(row));
-            assert(!this->state_.box_num_cells[_num][box].test(cell));
+            assert(!this->state_.num_row_cols[_num][row].test(col));
+            assert(!this->state_.num_col_rows[_num][col].test(row));
+            assert(!this->state_.num_box_cells[_num][box].test(cell));
 
-            this->state_.row_num_cols[_num][row].set(col);
-            this->state_.col_num_rows[_num][col].set(row);
-            this->state_.box_num_cells[_num][box].set(cell);
+            this->state_.num_row_cols[_num][row].set(col);
+            this->state_.num_col_rows[_num][col].set(row);
+            this->state_.num_box_cells[_num][box].set(cell);
 
             this->count_.counts.row_nums[_num] = recover_state.counts.row_nums[_num];
             this->count_.counts.col_nums[_num] = recover_state.counts.col_nums[_num];
@@ -2220,7 +2220,7 @@ private:
         // Row literal
         // recover_state.row_cols = this->state_.row_num_cols[num];
         BitVec16x16 row_num_cols;
-        row_num_cols.loadAligned(&this->state_.row_num_cols[num]);
+        row_num_cols.loadAligned(&this->state_.num_row_cols[num]);
         row_num_cols.saveAligned(&recover_state.row_cols);
 
         // this->state_.row_num_cols[num] &= row_neighbors_mask[fill_pos];
@@ -2230,13 +2230,13 @@ private:
         //hasChanged = (new_row_num_cols != row_num_cols);
         //recover_state.changed.row_nums[num] = hasChanged;
         if (hasChanged) {
-            row_num_cols.saveAligned(&this->state_.row_num_cols[num]);
+            row_num_cols.saveAligned(&this->state_.num_row_cols[num]);
         }
 
         // Col literal
         // recover_state.col_rows = this->state_.col_num_rows[num];
         BitVec16x16 col_num_rows;
-        col_num_rows.loadAligned(&this->state_.col_num_rows[num]);
+        col_num_rows.loadAligned(&this->state_.num_col_rows[num]);
         col_num_rows.saveAligned(&recover_state.col_rows);
 
         // this->state_.col_num_rows[num] &= col_neighbors_mask[fill_pos];
@@ -2246,13 +2246,13 @@ private:
         //hasChanged = (new_col_num_rows != col_num_rows);
         //recover_state.changed.col_nums[num] = hasChanged;
         if (hasChanged) {
-            col_num_rows.saveAligned(&this->state_.col_num_rows[num]);
+            col_num_rows.saveAligned(&this->state_.num_col_rows[num]);
         }
 
         // Box-cell literal
         // recover_state.box_cells = this->state_.box_num_cells[num];
         BitVec16x16 box_num_cells;
-        box_num_cells.loadAligned(&this->state_.box_num_cells[num]);
+        box_num_cells.loadAligned(&this->state_.num_box_cells[num]);
         box_num_cells.saveAligned(&recover_state.box_cells);
 
         // this->state_.box_num_cells[num] &= box_num_neighbors_mask[fill_pos];
@@ -2262,7 +2262,7 @@ private:
         //hasChanged = (new_box_num_cells != box_num_cells);
         //recover_state.changed.box_nums[num] = hasChanged;
         if (hasChanged) {
-            box_num_cells.saveAligned(&this->state_.box_num_cells[num]);
+            box_num_cells.saveAligned(&this->state_.num_box_cells[num]);
         }
     }
 
@@ -2287,19 +2287,19 @@ private:
         // Row literal
         // this->state_.row_num_cols[num] = recover_state.row_cols;
         //if (recover_state.changed.row_nums[num]) {
-            BitVec16x16::copyAligned(&recover_state.row_cols, &this->state_.row_num_cols[num]);
+            BitVec16x16::copyAligned(&recover_state.row_cols, &this->state_.num_row_cols[num]);
         //}
 
         // Col literal
         // this->state_.col_num_rows[num] = recover_state.col_rows;
         //if (recover_state.changed.col_nums[num]) {
-            BitVec16x16::copyAligned(&recover_state.col_rows, &this->state_.col_num_rows[num]);
+            BitVec16x16::copyAligned(&recover_state.col_rows, &this->state_.num_col_rows[num]);
         //}
 
         // Box-cell literal
         // this->state_.box_num_cells[num] = recover_state.box_cells;
         //if (recover_state.changed.box_nums[num]) {
-            BitVec16x16::copyAligned(&recover_state.box_cells, &this->state_.box_num_cells[num]);
+            BitVec16x16::copyAligned(&recover_state.box_cells, &this->state_.num_box_cells[num]);
         //}
     }
 
@@ -2324,16 +2324,16 @@ private:
         //this->state_.box_cell_nums[box] &= neighbors_mask[box];        
 
         // Row literal
-        recover_state.row_cols = this->state_.row_num_cols[num];
-        this->state_.row_num_cols[num] &= row_neighbors_mask[fill_pos];
+        recover_state.row_cols = this->state_.num_row_cols[num];
+        this->state_.num_row_cols[num] &= row_neighbors_mask[fill_pos];
 
         // Col literal
-        recover_state.col_rows = this->state_.col_num_rows[num];
-        this->state_.col_num_rows[num] &= col_neighbors_mask[fill_pos];
+        recover_state.col_rows = this->state_.num_col_rows[num];
+        this->state_.num_col_rows[num] &= col_neighbors_mask[fill_pos];
 
         // Box-cell literal
-        recover_state.box_cells = this->state_.box_num_cells[num];
-        this->state_.box_num_cells[num] &= box_num_neighbors_mask[fill_pos];
+        recover_state.box_cells = this->state_.num_box_cells[num];
+        this->state_.num_box_cells[num] &= box_num_neighbors_mask[fill_pos];
     }
 
     inline void restoreNeighborCellsEffect(const RecoverState & recover_state,
@@ -2351,13 +2351,13 @@ private:
         //this->state_.box_cell_nums[box] = recover_state.boxes[boxesCount];
 
         // Row literal
-        this->state_.row_num_cols[num] = recover_state.row_cols;
+        this->state_.num_row_cols[num] = recover_state.row_cols;
 
         // Col literal
-        this->state_.col_num_rows[num] = recover_state.col_rows;
+        this->state_.num_col_rows[num] = recover_state.col_rows;
 
         // Box-cell literal
-        this->state_.box_num_cells[num] = recover_state.box_cells;
+        this->state_.num_box_cells[num] = recover_state.box_cells;
     }
 
 #endif // V3E_USE_SMID_COPY_BOARD
@@ -2401,7 +2401,7 @@ private:
         uint32_t min_row_index = uint32_t(-1);
         for (size_t num = 0; num < Numbers; num++) {
             const PackedBitSet2D<Rows16, Cols16> * bitset;
-            bitset = &this->state_.row_num_cols[num];
+            bitset = &this->state_.num_row_cols[num];
             bitboard.loadAligned(bitset);
 
             BitVec16x16 popcnt16 = bitboard.popcount16<Cols>();
@@ -2432,7 +2432,7 @@ private:
         uint32_t min_col_index = uint32_t(-1);
         for (size_t num = 0; num < Numbers; num++) {
             const PackedBitSet2D<Cols16, Rows16> * bitset;
-            bitset = &this->state_.col_num_rows[num];
+            bitset = &this->state_.num_col_rows[num];
             bitboard.loadAligned(bitset);
 
             BitVec16x16 popcnt16 = bitboard.popcount16<Rows>();
@@ -2463,7 +2463,7 @@ private:
         uint32_t min_box_index = uint32_t(-1);
         for (size_t num = 0; num < Numbers; num++) {
             const PackedBitSet2D<Boxes16, BoxSize16> * bitset;
-            bitset = &this->state_.box_num_cells[num];
+            bitset = &this->state_.num_box_cells[num];
             bitboard.loadAligned(bitset);
 
             BitVec16x16 popcnt16 = bitboard.popcount16<BoxSize>();
@@ -2594,7 +2594,7 @@ private:
             num_bits ^= num_bit;
 
             const PackedBitSet2D<Rows16, Cols16> * bitset;
-            bitset = &this->state_.row_num_cols[num];
+            bitset = &this->state_.num_row_cols[num];
             bitboard.loadAligned(bitset);
 
             BitVec16x16 popcnt16 = bitboard.popcount16<Cols>();
@@ -2625,7 +2625,7 @@ private:
         min_row_index = this->count_.indexs.row_nums[num_index];
         if (min_row_index == uint32_t(uint16_t(-1))) {
             const PackedBitSet2D<Rows16, Cols16> * bitset;
-            bitset = &this->state_.row_num_cols[num_index];
+            bitset = &this->state_.num_row_cols[num_index];
             bitboard.loadAligned(bitset);
 
             BitVec16x16 popcnt16 = bitboard.popcount16<Cols>();
@@ -2661,7 +2661,7 @@ private:
             num_bits ^= num_bit;
 
             const PackedBitSet2D<Cols16, Rows16> * bitset;
-            bitset = &this->state_.col_num_rows[num];
+            bitset = &this->state_.num_col_rows[num];
             bitboard.loadAligned(bitset);
 
             BitVec16x16 popcnt16 = bitboard.popcount16<Rows>();
@@ -2691,7 +2691,7 @@ private:
         min_col_index = this->count_.indexs.col_nums[num_index];
         if (min_col_index == uint32_t(uint16_t(-1))) {
             const PackedBitSet2D<Cols16, Rows16> * bitset;
-            bitset = &this->state_.col_num_rows[num_index];
+            bitset = &this->state_.num_col_rows[num_index];
             bitboard.loadAligned(bitset);
 
             BitVec16x16 popcnt16 = bitboard.popcount16<Rows>();
@@ -2727,7 +2727,7 @@ private:
             num_bits ^= num_bit;
 
             const PackedBitSet2D<Boxes16, BoxSize16> * bitset;
-            bitset = &this->state_.box_num_cells[num];
+            bitset = &this->state_.num_box_cells[num];
             bitboard.loadAligned(bitset);
 
             BitVec16x16 popcnt16 = bitboard.popcount16<BoxSize>();
@@ -2757,7 +2757,7 @@ private:
         min_box_index = this->count_.indexs.box_nums[num_index];
         if (min_box_index == uint32_t(uint16_t(-1))) {
             const PackedBitSet2D<Boxes16, BoxSize16> * bitset;
-            bitset = &this->state_.box_num_cells[num_index];
+            bitset = &this->state_.num_box_cells[num_index];
             bitboard.loadAligned(bitset);
 
             BitVec16x16 popcnt16 = bitboard.popcount16<BoxSize>();
@@ -2811,9 +2811,9 @@ private:
         return true;
 #endif
         bool is_correct1 = (this->state_.box_cell_nums == this->box_cell_nums_);
-        bool is_correct2 = (this->state_.row_num_cols == this->row_num_cols_);
-        bool is_correct3 = (this->state_.col_num_rows == this->col_num_rows_);
-        bool is_correct4 = (this->state_.box_num_cells == this->box_num_cells_);
+        bool is_correct2 = (this->state_.num_row_cols == this->row_num_cols_);
+        bool is_correct3 = (this->state_.num_col_rows == this->col_num_rows_);
+        bool is_correct4 = (this->state_.num_box_cells == this->box_num_cells_);
         return (is_correct1 && is_correct2 && is_correct3 && is_correct4);
     }
 #endif
@@ -3052,9 +3052,9 @@ public:
                     num = literal / Rows16;
                     row = literal % Rows16;
 
-                    size_t col_bits = this->state_.row_num_cols[num][row].to_ulong();
+                    size_t col_bits = this->state_.num_row_cols[num][row].to_ulong();
 #if V3E_ENABLE_OLD_ALGORITHM
-                    assert(this->state_.row_num_cols[num][row].count() == old_get_literal_cnt(min_literal_id));
+                    assert(this->state_.num_row_cols[num][row].count() == old_get_literal_cnt(min_literal_id));
 #endif
                     while (col_bits != 0) {
                         size_t col_bit = BitUtils::ls1b(col_bits);
@@ -3140,9 +3140,9 @@ public:
                     num = literal / Cols16;
                     col = literal % Cols16;
 
-                    size_t row_bits = this->state_.col_num_rows[num][col].to_ulong();
+                    size_t row_bits = this->state_.num_col_rows[num][col].to_ulong();
 #if V3E_ENABLE_OLD_ALGORITHM
-                    assert(this->state_.col_num_rows[num][col].count() == old_get_literal_cnt(min_literal_id));
+                    assert(this->state_.num_col_rows[num][col].count() == old_get_literal_cnt(min_literal_id));
 #endif
                     while (row_bits != 0) {
                         size_t row_bit = BitUtils::ls1b(row_bits);
@@ -3228,9 +3228,9 @@ public:
                     num = literal / Boxes16;
                     box = literal % Boxes16;
 
-                    size_t cell_bits = this->state_.box_num_cells[num][box].to_ulong();
+                    size_t cell_bits = this->state_.num_box_cells[num][box].to_ulong();
 #if V3E_ENABLE_OLD_ALGORITHM
-                    assert(this->state_.box_num_cells[num][box].count() == old_get_literal_cnt(min_literal_id));
+                    assert(this->state_.num_box_cells[num][box].count() == old_get_literal_cnt(min_literal_id));
 #endif
                     while (cell_bits != 0) {
                         size_t cell_bit = BitUtils::ls1b(cell_bits);
@@ -3352,7 +3352,7 @@ public:
 };
 
 template <typename SudokuTy>
-bool Solver<SudokuTy>::is_mask_inited = false;
+bool Solver<SudokuTy>::mask_is_inited = false;
 
 template <typename SudokuTy>
 std::vector<typename Solver<SudokuTy>::neighbor_boxes_t>

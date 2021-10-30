@@ -228,7 +228,7 @@ private:
 
     std::vector<Board>  answers_;
 
-    static bool is_mask_inited;
+    static bool mask_is_inited;
 
     typedef NeighborBoxes<BoxCountX, BoxCountY>     neighbor_boxes_t;
     static std::vector<neighbor_boxes_t>            neighbor_boxes;
@@ -243,9 +243,9 @@ private:
 
 public:
     Solver() : empties_(0) {
-        if (!is_mask_inited) {
+        if (!mask_is_inited) {
             init_mask();
-            is_mask_inited = true;
+            mask_is_inited = true;
         }
     }
     ~Solver() {}
@@ -1949,7 +1949,7 @@ public:
 };
 
 template <typename SudokuTy>
-bool Solver<SudokuTy>::is_mask_inited = false;
+bool Solver<SudokuTy>::mask_is_inited = false;
 
 template <typename SudokuTy>
 std::vector<typename Solver<SudokuTy>::neighbor_boxes_t>

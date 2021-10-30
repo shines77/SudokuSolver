@@ -841,6 +841,7 @@ struct BitVec16x16 {
 
         if (MaxBits <= 8) {
             this->low._minpos16<MaxBitsLow>(minpos.low);
+            result = minpos.low;
         }
         else if (MaxBits == 9) {
             this->low._minpos16<MaxBitsLow>(minpos.low);
