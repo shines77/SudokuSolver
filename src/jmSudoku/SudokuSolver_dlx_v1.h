@@ -18,6 +18,7 @@
 #include <vector>
 #include <bitset>
 
+#include "BasicSolver.h"
 #include "Sudoku.h"
 #include "BitSet.h"
 #include "BitMatrix.h"
@@ -528,9 +529,10 @@ template <typename SudokuTy>
 size_t DancingLinks<SudokuTy>::num_failed_return = 0;
 
 template <typename SudokuTy = Sudoku>
-class Solver {
+class Solver : public BasicSolver<SudokuTy> {
 public:
-    typedef SudokuTy                        sudoku_type;
+    typedef SudokuTy                        sudoku_t;
+    typedef BasicSolver<SudokuTy>           basic_solver_t;
     typedef DancingLinks<SudokuTy>          solver_type;
     typedef typename SudokuTy::board_type   Board;
 
@@ -548,10 +550,6 @@ public:
         solver_.build(board);
         bool success = solver_.solve();
         return success;
-    }
-
-    void display_board(Board & board) {
-        SudokuTy::display_board(board, true);
     }
 
     void display_result(Board & board, double elapsed_time,

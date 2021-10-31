@@ -27,6 +27,7 @@
 #include <x86intrin.h>      // For SSE 4.1
 #endif // _MSC_VER
 
+#include "BasicSolver.h"
 #include "Sudoku.h"
 #include "StopWatch.h"
 #include "BitUtils.h"
@@ -59,35 +60,37 @@ namespace v3a {
 static const size_t kSearchMode = V3A_SEARCH_MODE;
 
 template <typename SudokuTy>
-class Solver {
+class Solver : public BasicSolver<SudokuTy> {
 public:
-    typedef SudokuTy                            sudoku_type;
+    typedef SudokuTy                            sudoku_t;
+    typedef BasicSolver<SudokuTy>               basic_solver_t;
     typedef Solver<SudokuTy>                    solver_type;
-    typedef typename SudokuTy::board_type       Board;
-    typedef typename SudokuTy::NeighborCells    NeighborCells;
-    typedef typename SudokuTy::CellInfo         CellInfo;
-    typedef typename SudokuTy::BoxesInfo        BoxesInfo;
 
-    typedef typename SudokuTy::BitMask          BitMask;
-    typedef typename SudokuTy::BitMaskTable     BitMaskTable;
+    typedef typename basic_solver_t::Board      Board;
+    typedef typename sudoku_t::NeighborCells    NeighborCells;
+    typedef typename sudoku_t::CellInfo         CellInfo;
+    typedef typename sudoku_t::BoxesInfo        BoxesInfo;
 
-    static const size_t kAlignment = SudokuTy::kAlignment;
-    static const size_t BoxCellsX = SudokuTy::BoxCellsX;      // 3
-    static const size_t BoxCellsY = SudokuTy::BoxCellsY;      // 3
-    static const size_t BoxCountX = SudokuTy::BoxCountX;      // 3
-    static const size_t BoxCountY = SudokuTy::BoxCountY;      // 3
-    static const size_t MinNumber = SudokuTy::MinNumber;      // 1
-    static const size_t MaxNumber = SudokuTy::MaxNumber;      // 9
+    typedef typename sudoku_t::BitMask          BitMask;
+    typedef typename sudoku_t::BitMaskTable     BitMaskTable;
 
-    static const size_t Rows = SudokuTy::Rows;
-    static const size_t Cols = SudokuTy::Cols;
-    static const size_t Boxes = SudokuTy::Boxes;
-    static const size_t BoxSize = SudokuTy::BoxSize;
-    static const size_t Numbers = SudokuTy::Numbers;
+    static const size_t kAlignment = sudoku_t::kAlignment;
+    static const size_t BoxCellsX = sudoku_t::BoxCellsX;      // 3
+    static const size_t BoxCellsY = sudoku_t::BoxCellsY;      // 3
+    static const size_t BoxCountX = sudoku_t::BoxCountX;      // 3
+    static const size_t BoxCountY = sudoku_t::BoxCountY;      // 3
+    static const size_t MinNumber = sudoku_t::MinNumber;      // 1
+    static const size_t MaxNumber = sudoku_t::MaxNumber;      // 9
 
-    static const size_t BoardSize = SudokuTy::BoardSize;
-    static const size_t TotalSize = SudokuTy::TotalSize;
-    static const size_t Neighbors = SudokuTy::Neighbors;
+    static const size_t Rows = sudoku_t::Rows;
+    static const size_t Cols = sudoku_t::Cols;
+    static const size_t Boxes = sudoku_t::Boxes;
+    static const size_t BoxSize = sudoku_t::BoxSize;
+    static const size_t Numbers = sudoku_t::Numbers;
+
+    static const size_t BoardSize = sudoku_t::BoardSize;
+    static const size_t TotalSize = sudoku_t::TotalSize;
+    static const size_t Neighbors = sudoku_t::Neighbors;
 
     static const size_t TotalCellLiterals = Rows * Cols;
     static const size_t TotalRowLiterals = Rows * Numbers;
@@ -123,13 +126,13 @@ public:
     static const size_t ColLiteralLast   = LiteralLast;
 #endif // (V3A_LITERAL_ORDER_MODE == 0)
 
-    static const size_t kAllRowsBits = SudokuTy::kAllRowsBits;
-    static const size_t kAllColsBits = SudokuTy::kAllColsBits;
-    static const size_t kAllBoxesBits = SudokuTy::kAllBoxesBits;
-    static const size_t kAllBoxSizeBits = SudokuTy::kAllBoxSizeBits;
-    static const size_t kAllNumbersBits = SudokuTy::kAllNumbersBits;
+    static const size_t kAllRowsBits = sudoku_t::kAllRowsBits;
+    static const size_t kAllColsBits = sudoku_t::kAllColsBits;
+    static const size_t kAllBoxesBits = sudoku_t::kAllBoxesBits;
+    static const size_t kAllBoxSizeBits = sudoku_t::kAllBoxSizeBits;
+    static const size_t kAllNumbersBits = sudoku_t::kAllNumbersBits;
 
-    static const bool kAllDimIsSame = SudokuTy::kAllDimIsSame;
+    static const bool kAllDimIsSame = sudoku_t::kAllDimIsSame;
 
     static const int kLiteralCntThreshold = 0;
 
@@ -138,10 +141,6 @@ public:
 
     static const size_t kEffectListReserveBytes1 = kEffectListAlignBytes - Neighbors * sizeof(uint8_t);
     static const size_t kEffectListReserveBytes  = (kEffectListReserveBytes1 != 0) ? kEffectListReserveBytes1 : kAlignment;
-
-    static size_t num_guesses;
-    static size_t num_unique_candidate;
-    static size_t num_failed_return;
 
 private:
 #if (V3A_LITERAL_ORDER_MODE == 0)
@@ -201,47 +200,12 @@ private:
     alignas(16) uint8_t literal_enable_[TotalLiterals];
 #endif
 
-    size_t empties_;
-
-    std::vector<Board>          answers_;
-
 public:
-    Solver() : empties_(0) {
+    Solver() {
     }
     ~Solver() {}
 
-    static size_t get_num_guesses() { return solver_type::num_guesses; }
-    static size_t get_num_unique_candidate() { return solver_type::num_unique_candidate; }
-    static size_t get_num_failed_return() { return solver_type::num_failed_return; }
-
-    static size_t get_total_search_counter() {
-        return (solver_type::num_guesses + solver_type::num_unique_candidate + solver_type::num_failed_return);
-    }
-
-    static double get_guess_percent() {
-        return calc_percent(solver_type::num_guesses, solver_type::get_total_search_counter());
-    }
-
-    static double get_failed_return_percent() {
-        return calc_percent(solver_type::num_failed_return, solver_type::get_total_search_counter());
-    }
-
-    static double get_unique_candidate_percent() {
-        return calc_percent(solver_type::num_unique_candidate, solver_type::get_total_search_counter());
-    }
-
 private:
-    size_t calc_empties(Board & board) {
-        size_t empties = 0;
-        for (size_t pos = 0; pos < BoardSize; pos++) {
-            unsigned char val = board.cells[pos];
-            if (val == '.') {
-                empties++;
-            }
-        }
-        return empties;
-    }
-
     void init_board(Board & board) {
         init_literal_info();
 
@@ -1222,7 +1186,7 @@ private:
     }
 
     inline void updateNeighborCellsEffect(size_t fill_pos, size_t num) {
-        const BitMask & neighborsMask = SudokuTy::neighbors_mask_tbl[fill_pos];
+        const BitMask & neighborsMask = sudoku_t::neighbors_mask_tbl[fill_pos];
         BitMask & digitCells = this->num_cells_[num];
 
         register BitMask effect_cells = digitCells & neighborsMask;
@@ -1233,7 +1197,7 @@ private:
             size_t bit_pos = BitUtils::bsf(cell_bit);
             effect_cells.reset_bit(index, cell_bit);
             size_t pos = index * effect_cells.unit_bits() + bit_pos;
-            const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+            const CellInfo & cellInfo = sudoku_t::cell_info[pos];
             size_t box_pos = cellInfo.box_pos;
             if (this->box_cell_nums_[box_pos].test(num)) {
                 this->box_cell_nums_[box_pos].reset(num);
@@ -1374,7 +1338,7 @@ private:
 
     inline size_t updateNeighborCellsEffect(BitMask & save_effect_cells,
                                             size_t fill_pos, size_t num) {
-        const BitMask & neighborsMask = SudokuTy::neighbors_mask_tbl[fill_pos];
+        const BitMask & neighborsMask = sudoku_t::neighbors_mask_tbl[fill_pos];
         BitMask & digitCells = this->num_cells_[num];
 
         register BitMask effect_cells = digitCells & neighborsMask;
@@ -1387,7 +1351,7 @@ private:
             size_t bit_pos = BitUtils::bsf(cell_bit);
             effect_cells.reset_bit(index, cell_bit);
             size_t pos = index * effect_cells.unit_bits() + bit_pos;
-            const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+            const CellInfo & cellInfo = sudoku_t::cell_info[pos];
             size_t box_pos = cellInfo.box_pos;
             if (this->box_cell_nums_[box_pos].test(num)) {
                 this->box_cell_nums_[box_pos].reset(num);
@@ -1429,7 +1393,7 @@ private:
             effect_cells.reset_bit(index, cell_bit);
             size_t pos = index * effect_cells.unit_bits() + bit_pos;
 
-            const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+            const CellInfo & cellInfo = sudoku_t::cell_info[pos];
             size_t box_pos = cellInfo.box_pos;
 
             this->box_cell_nums_[box_pos].set(num);
@@ -1508,7 +1472,7 @@ public:
                     size_t cell_y = row % BoxCellsY;
                     cell = cell_y * BoxCellsX + cell_x;
 #else
-                    const BoxesInfo & boxesInfo = SudokuTy::boxes_info[box_pos];
+                    const BoxesInfo & boxesInfo = sudoku_t::boxes_info[box_pos];
                     row = boxesInfo.row;
                     col = boxesInfo.col;
                     box = boxesInfo.box;
@@ -1569,7 +1533,7 @@ public:
                         size_t cell_y = row % BoxCellsY;
                         cell = cell_y * BoxCellsX + cell_x;
 #else
-                        const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+                        const CellInfo & cellInfo = sudoku_t::cell_info[pos];
                         box = cellInfo.box;
                         cell = cellInfo.cell;
 #endif
@@ -1621,7 +1585,7 @@ public:
                         size_t cell_y = row % BoxCellsY;
                         cell = cell_y * BoxCellsX + cell_x;
 #else
-                        const CellInfo & cellInfo = SudokuTy::cell_info[pos];
+                        const CellInfo & cellInfo = sudoku_t::cell_info[pos];
                         box = cellInfo.box;
                         cell = cellInfo.cell;
 #endif
@@ -1669,7 +1633,7 @@ public:
                         col = (box % BoxCountX) * BoxCellsX + (cell % BoxCellsX);
                         pos = row * Cols + col;
 #else
-                        const BoxesInfo & boxesInfo = SudokuTy::boxes_info[box * BoxSize + cell];
+                        const BoxesInfo & boxesInfo = sudoku_t::boxes_info[box * BoxSize + cell];
                         row = boxesInfo.row;
                         col = boxesInfo.col;
                         pos = boxesInfo.pos;
@@ -1718,40 +1682,12 @@ public:
         return success;
     }
 
-    void display_board(Board & board) {
-        SudokuTy::display_board(board, true);
-    }
-
     void display_result(Board & board, double elapsed_time,
                         bool print_answer = true,
                         bool print_all_answers = true) {
-        if (print_answer) {
-            if (kSearchMode > SearchMode::OneAnswer)
-                SudokuTy::display_boards(this->answers_);
-            else
-                SudokuTy::display_board(board);
-        }
-        printf("elapsed time: %0.3f ms, recur_counter: %" PRIuPTR "\n\n"
-                "num_guesses: %" PRIuPTR ", num_failed_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
-                "guess %% = %0.1f %%, failed_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
-                elapsed_time, solver_type::get_total_search_counter(),
-                solver_type::get_num_guesses(),
-                solver_type::get_num_failed_return(),
-                solver_type::get_num_unique_candidate(),
-                solver_type::get_guess_percent(),
-                solver_type::get_failed_return_percent(),
-                solver_type::get_unique_candidate_percent());
+        basic_solver_t::display_result<kSearchMode>(board, elapsed_time, print_answer, print_all_answers);
     }
 };
-
-template <typename SudokuTy>
-size_t Solver<SudokuTy>::num_guesses = 0;
-
-template <typename SudokuTy>
-size_t Solver<SudokuTy>::num_unique_candidate = 0;
-
-template <typename SudokuTy>
-size_t Solver<SudokuTy>::num_failed_return = 0;
 
 } // namespace v3a
 } // namespace jmSudoku

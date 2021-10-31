@@ -159,6 +159,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\src\jmSudoku\BasicSolver.h" />
+    <ClInclude Include="..\..\..\src\jmSudoku\BasicSolver.hpp" />
     <ClInclude Include="..\..\..\src\jmSudoku\BitMatrix.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\BitSet.h" />
     <ClInclude Include="..\..\..\src\jmSudoku\BitUtils.h" />

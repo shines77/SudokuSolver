@@ -43,6 +43,7 @@
 #include "Sudoku.h"
 #include "TestCase.h"
 
+#include "BasicSolver.hpp"
 #include "SudokuSolver_dlx_v1.h"
 #include "SudokuSolver_dlx_v2.h"
 #include "SudokuSolver_dlx_v3.h"
@@ -136,7 +137,7 @@ size_t read_sudoku_board(typename SudokuTy::board_type & board, char line[256])
 template <typename SudokuSlover>
 void run_solver_testcase(size_t index)
 {
-    typedef typename SudokuSlover::sudoku_type  SudokuTy;
+    typedef typename SudokuSlover::sudoku_t     SudokuTy;
     typedef typename SudokuTy::board_type       Board;
 
     Board board;
@@ -231,9 +232,10 @@ void run_a_testcase(size_t index)
 template <typename SudokuSolver>
 void run_sudoku_test(const char * filename, const char * name)
 {
-    typedef typename SudokuSolver::solver_type  SloverTy;
-    typedef typename SudokuSolver::sudoku_type  SudokuTy;
-    typedef typename SudokuTy::board_type       Board;
+    typedef typename SudokuSolver::basic_solver_t   BasicSolverTy;
+    typedef typename SudokuSolver::solver_type      SolverTy;
+    typedef typename SudokuSolver::sudoku_t         SudokuTy;
+    typedef typename SudokuSolver::Board            Board;
 
     //printf("------------------------------------------\n\n");
     printf("jmSudoku: %s::Solver\n\n", name);
@@ -268,11 +270,11 @@ void run_sudoku_test(const char * filename, const char * name)
                     double elapsed_time = sw.getElapsedMillisec();
                     total_time += elapsed_time;
                     if (success) {
-                        total_guesses += SloverTy::num_guesses;
-                        total_unique_candidate += SloverTy::num_unique_candidate;
-                        total_failed_return += SloverTy::num_failed_return;
+                        total_guesses += BasicSolverTy::num_guesses;
+                        total_unique_candidate += BasicSolverTy::num_unique_candidate;
+                        total_failed_return += BasicSolverTy::num_failed_return;
 
-                        if (SloverTy::num_guesses == 0) {
+                        if (BasicSolverTy::num_guesses == 0) {
                             total_no_guess++;
                         }
 
