@@ -131,9 +131,9 @@ public:
     static const size_t ColLiteralLast   = LiteralLast;
 #endif // (V4_LITERAL_ORDER_MODE == 0)
 
-    static const size_t kAllRowsBits = SudokuTy::kAllRowsBit;
-    static const size_t kAllColsBits = SudokuTy::kAllColsBit;
-    static const size_t kAllBoxesBits = SudokuTy::kAllBoxesBit;
+    static const size_t kAllRowsBits = SudokuTy::kAllRowsBits;
+    static const size_t kAllColsBits = SudokuTy::kAllColsBits;
+    static const size_t kAllBoxesBits = SudokuTy::kAllBoxesBits;
     static const size_t kAllBoxSizeBits = SudokuTy::kAllBoxSizeBits;
     static const size_t kAllNumbersBits = SudokuTy::kAllNumbersBits;
 
@@ -176,16 +176,61 @@ private:
         alignas(32) PackedBitSet3D<Numbers, Boxes16, BoxSize16>   num_box_cells;    // [num][box][cell]
     };
 
+    struct Count {
+        alignas(16) uint8_t num_boxes[Numbers][Boxes16];
+        alignas(16) uint8_t num_rows[Numbers][Rows16];
+        alignas(16) uint8_t num_cols[Numbers][Cols16];
+    };
+
+    struct LiteralInfo {
+        uint32_t literal_index;
+        uint32_t literal_size;
+    };
+
+    union literal_count_t {
+        struct {
+            uint8_t count:7;
+            uint8_t enable:1;
+        };
+        uint8_t value;
+    };
+
 #pragma pack(pop)
 
-    State   state_;
+    template <size_t nBoxCountX, size_t nBoxCountY>
+    struct NeighborBoxes {
+        static const uint32_t kBoxesCount = (uint32_t)((nBoxCountX - 1) + (nBoxCountY - 1) + 1);
+        uint32_t boxes_count() const { return kBoxesCount; }
 
-    size_t  empties_;
+        int boxes[kBoxesCount];
+    };
+
+    template <size_t nBoxCountX, size_t nBoxCountY>
+    struct HVNeighborBoxes {
+        static const uint32_t kHorizontalBoxes = uint32_t(nBoxCountX - 1);
+        static const uint32_t kVerticalBoxes = uint32_t(nBoxCountX - 1);
+        uint32_t h_boxes_count() const { return kHorizontalBoxes; }
+        uint32_t v_boxes_count() const { return kVerticalBoxes; }
+
+        int h_boxes[kHorizontalBoxes];
+        int v_boxes[kVerticalBoxes];
+    };
+
+    typedef NeighborBoxes<BoxCountX, BoxCountY>     neighbor_boxes_t;
+    typedef HVNeighborBoxes<BoxCountX, BoxCountY>   hv_neighbor_boxes_t;
+
+    State           state_;
+    Count           count_;
+    LiteralInfo     min_info_;
+
+    alignas(32) literal_count_t literal_info_[TotalLiterals];
 
     std::vector<Board>  answers_;
+    size_t  empties_;
 
-    static bool is_mask_inited;
-    static std::vector<neighbor_boxes_t> neighbor_boxes;
+    static bool mask_is_inited;
+    static std::vector<neighbor_boxes_t>    neighbor_boxes;
+    static std::vector<hv_neighbor_boxes_t> hv_neighbor_boxes;
 
     static PackedBitSet2D<BoardSize, Rows16 * Cols16>     neighbor_cells_mask;
     static PackedBitSet2D<BoardSize, Boxes16 * BoxSize16> neighbor_boxes_mask;
@@ -197,9 +242,9 @@ private:
 
 public:
     Solver() : empties_(0) {
-        if (!is_mask_inited) {
+        if (!mask_is_inited) {
             init_mask();
-            is_mask_inited = true;
+            mask_is_inited = true;
         }
     }
     ~Solver() {}
@@ -373,18 +418,18 @@ private:
         for (size_t box_y = 0; box_y < BoxCellsY; box_y++) {
             size_t box_y_base = box_y * BoxCellsX;
             for (size_t box_x = 0; box_x < BoxCellsX; box_x++) {
-                size_t box = box_y_base + box_x;
+                uint32_t box = uint32_t(box_y_base + box_x);
                 size_t index = 0;
                 neighbor_boxes_t neighborBoxes;
                 neighborBoxes.boxes[index++] = box;
                 for (size_t box_i = 0; box_i < BoxCellsX; box_i++) {
                     if (box_i != box_x) {
-                        neighborBoxes.boxes[index++] = box_y * BoxCellsX + box_i;
+                        neighborBoxes.boxes[index++] = uint32_t(box_y * BoxCellsX + box_i);
                     }
                 }
                 for (size_t box_j = 0; box_j < BoxCellsY; box_j++) {
                     if (box_j != box_y) {
-                        neighborBoxes.boxes[index++] = box_j * BoxCellsX + box_x;
+                        neighborBoxes.boxes[index++] = uint32_t(box_j * BoxCellsX + box_x);
                     }
                 }
                 assert(index == neighborBoxes.boxes_count());
@@ -423,10 +468,10 @@ private:
 
 
     void init_board(Board & board) {
-        this->state_.box_cell_nums.fill(kAllNumbersBit);
-        this->state_.row_num_cols.fill(kAllColsBit);
-        this->state_.col_num_rows.fill(kAllRowsBit);
-        this->state_.box_num_cells.fill(kAllBoxSizeBit);
+        this->state_.box_cell_nums.fill(kAllNumbersBits);
+        this->state_.num_row_cols.fill(kAllColsBits);
+        this->state_.num_col_rows.fill(kAllRowsBits);
+        this->state_.num_box_cells.fill(kAllBoxSizeBits);
 
         num_guesses = 0;
         num_unique_candidate = 0;
@@ -435,7 +480,7 @@ private:
             this->answers_.clear();
         }
 
-        size_t empties = calc_empties(board);
+        size_t empties = this->calc_empties(board);
         this->empties_ = empties;
 
         size_t pos = 0;
@@ -450,31 +495,308 @@ private:
                     size_t cell_x = col % BoxCellsX;
                     size_t cell = cell_y + cell_x;
                     size_t num = val - '1';
-#if V3E_ENABLE_OLD_ALGORITHM
-                    this->old_doFillNum(pos, row, col, box, cell, num);
-                    this->old_updateNeighborCellsEffect(pos, num);
-#endif
-                    this->doFillNum(pos, row, col, box, cell, num);
-                    this->updateNeighborCellsEffect(pos, box, num);
+
+                    this->fillNum(this->state_, pos, row, col, box, cell, num);
+                    this->updateNeighborCellsEffect(this->state_, pos, box, num);
                 }
                 pos++;
             }
         }
+        assert(pos == BoardSize);
 
         uint32_t min_literal_index;
         uint32_t min_literal_size = this->count_all_literal_size(min_literal_index);
-        this->count_.min_literal_size = min_literal_size;
-        this->count_.min_literal_index = min_literal_index;
+        this->min_info_.literal_size = min_literal_size;
+        this->min_info_.literal_index = min_literal_index;
+    }
 
-#if V3E_ENABLE_OLD_ALGORITHM
-        bool is_correct = verify_bitboard_state();
-        assert(is_correct);
+    inline void fillNum(State & state, size_t pos, size_t row, size_t col,
+                        size_t box, size_t cell, size_t num) {
+        assert(state.box_cell_nums[box][cell].test(num));
+        assert(state.num_row_cols[num][row].test(col));
+        assert(state.num_col_rows[num][col].test(row));
+        assert(state.num_box_cells[num][box].test(cell));
 
-        bool size_is_correct = verify_literal_size();
-        assert(size_is_correct);
+        PackedBitSet<Numbers16> cell_num_bits = state.box_cell_nums[box][cell];
+        //state.box_cell_nums[box][cell].fill(kAllNumbersBits);
+        state.box_cell_nums[box][cell].reset();
+
+        //state.row_num_cols[num][row].reset(col);
+        //state.col_num_rows[num][col].reset(row);
+        //state.box_num_cells[num][box].reset(cell);
+
+        size_t box_pos = box * BoxSize16 + cell;
+        size_t row_idx = num * Rows16 + row;
+        size_t col_idx = num * Cols16 + col;
+        size_t box_idx = num * Boxes16 + box;
+
+        /*
+        disable_cell_literal(box_pos);
+        disable_row_literal(row_idx);
+        disable_col_literal(col_idx);
+        disable_box_literal(box_idx);
+        //*/
+
+        size_t num_bits = cell_num_bits.to_ulong();
+        // Exclude the current number, because it will be process later.
+        num_bits ^= (size_t(1) << num);
+        while (num_bits != 0) {
+            size_t num_bit = BitUtils::ls1b(num_bits);
+            size_t cur_num = BitUtils::bsf(num_bit);
+            num_bits ^= num_bit;
+
+            assert(this->state_.num_row_cols[cur_num][row].test(col));
+            assert(this->state_.num_col_rows[cur_num][col].test(row));
+            assert(this->state_.num_box_cells[cur_num][box].test(cell));
+
+            this->state_.num_row_cols[cur_num][row].reset(col);
+            this->state_.num_col_rows[cur_num][col].reset(row);
+            this->state_.num_box_cells[cur_num][box].reset(cell);
+        }
+    }
+
+    inline void updateNeighborCellsEffect(State & state, size_t fill_pos, size_t box, size_t num) {
+        const neighbor_boxes_t & neighborBoxes = neighbor_boxes[box];
+        const PackedBitSet3D<Boxes, BoxSize16, Numbers16> & neighbors_mask
+            = box_cell_neighbors_mask[fill_pos][num];
+        for (size_t i = 0; i < neighborBoxes.boxes_count(); i++) {
+            size_t box_idx = neighborBoxes.boxes[i];
+            state.box_cell_nums[box_idx] &= neighbors_mask[box_idx];
+        }
+        //state.box_cell_nums[box] &= neighbors_mask[box];
+
+        state.num_row_cols[num] &= row_neighbors_mask[fill_pos];
+        state.num_col_rows[num] &= col_neighbors_mask[fill_pos];
+        state.num_box_cells[num] &= box_num_neighbors_mask[fill_pos];
+    }
+
+    inline uint32_t count_all_literal_size(uint32_t & out_min_literal_index) {
+        BitVec16x16 bitboard;
+
+        // Position (Box-Cell) literal
+        uint32_t min_cell_size = 255;
+        uint32_t min_cell_index = uint32_t(-1);
+        for (size_t box = 0; box < Boxes; box++) {
+            const PackedBitSet2D<BoxSize16, Numbers16> * bitset;
+            bitset = &this->state_.box_cell_nums[box];
+            bitboard.loadAligned(bitset);
+
+            BitVec16x16 popcnt16 = bitboard.popcount16<Numbers>();
+#if V3E_SAVE_COUNT_SIZE
+            popcnt16.saveAligned(&this->count_.sizes.box_cells[box * BoxSize16]);
 #endif
+            BitVec16x16 enable_mask;
+            enable_mask.loadAligned(&this->count_.enabled.box_cells[box * BoxSize16]);
+            popcnt16 |= enable_mask;
+
+            int min_index = -1;
+            uint32_t min_size = popcnt16.minpos16<Numbers>(min_cell_size, min_index);
+            this->count_.counts.box_cells[box] = (uint16_t)min_size;
+            if (min_index == -1) {
+                this->count_.indexs.box_cells[box] = (uint16_t)min_index;
+            }
+            else {
+                size_t cell_index = box * BoxSize16 + min_index;
+                this->count_.indexs.box_cells[box] = (uint16_t)cell_index;
+                min_cell_index = (uint32_t)cell_index;
+            }
+        }
+        this->count_.total.min_literal_size[0] = (uint16_t)min_cell_size;
+        this->count_.total.min_literal_index[0] = (uint16_t)min_cell_index;
+
+        // Row literal
+        uint32_t min_row_size = 255;
+        uint32_t min_row_index = uint32_t(-1);
+        for (size_t num = 0; num < Numbers; num++) {
+            const PackedBitSet2D<Rows16, Cols16> * bitset;
+            bitset = &this->state_.num_row_cols[num];
+            bitboard.loadAligned(bitset);
+
+            BitVec16x16 popcnt16 = bitboard.popcount16<Cols>();
+#if V3E_SAVE_COUNT_SIZE
+            popcnt16.saveAligned(&this->count_.sizes.row_nums[num * Rows16]);
+#endif
+            BitVec16x16 enable_mask;
+            enable_mask.loadAligned(&this->count_.enabled.row_nums[num * Rows16]);
+            popcnt16 |= enable_mask;
+
+            int min_index = -1;
+            uint32_t min_size = popcnt16.minpos16<Cols>(min_row_size, min_index);
+            this->count_.counts.row_nums[num] = (uint16_t)min_size;
+            if (min_index == -1) {
+                this->count_.indexs.row_nums[num] = (uint16_t)min_index;
+            }
+            else {
+                size_t row_index = num * Rows16 + min_index;
+                this->count_.indexs.row_nums[num] = (uint16_t)row_index;
+                min_row_index = (uint32_t)row_index;
+            }
+        }
+        this->count_.total.min_literal_size[1] = (uint16_t)min_row_size;
+        this->count_.total.min_literal_index[1] = (uint16_t)min_row_index;
+
+        // Col literal
+        uint32_t min_col_size = 255;
+        uint32_t min_col_index = uint32_t(-1);
+        for (size_t num = 0; num < Numbers; num++) {
+            const PackedBitSet2D<Cols16, Rows16> * bitset;
+            bitset = &this->state_.num_col_rows[num];
+            bitboard.loadAligned(bitset);
+
+            BitVec16x16 popcnt16 = bitboard.popcount16<Rows>();
+#if V3E_SAVE_COUNT_SIZE
+            popcnt16.saveAligned(&this->count_.sizes.col_nums[num * Cols16]);
+#endif
+            BitVec16x16 enable_mask;
+            enable_mask.loadAligned(&this->count_.enabled.col_nums[num * Cols16]);
+            popcnt16 |= enable_mask;
+
+            int min_index = -1;
+            uint32_t min_size = popcnt16.minpos16<Rows>(min_col_size, min_index);
+            this->count_.counts.col_nums[num] = (uint16_t)min_size;
+            if (min_index == -1) {
+                this->count_.indexs.col_nums[num] = (uint16_t)min_index;
+            }
+            else {
+                size_t col_index = num * Cols16 + min_index;
+                this->count_.indexs.col_nums[num] = (uint16_t)col_index;
+                min_col_index = (uint32_t)col_index;
+            }
+        }
+        this->count_.total.min_literal_size[2] = (uint16_t)min_col_size;
+        this->count_.total.min_literal_index[2] = (uint16_t)min_col_index;
+
+        // Box-Cell literal
+        uint32_t min_box_size = 255;
+        uint32_t min_box_index = uint32_t(-1);
+        for (size_t num = 0; num < Numbers; num++) {
+            const PackedBitSet2D<Boxes16, BoxSize16> * bitset;
+            bitset = &this->state_.num_box_cells[num];
+            bitboard.loadAligned(bitset);
+
+            BitVec16x16 popcnt16 = bitboard.popcount16<BoxSize>();
+#if V3E_SAVE_COUNT_SIZE
+            popcnt16.saveAligned(&this->count_.sizes.box_nums[num * Boxes16]);
+#endif
+            BitVec16x16 enable_mask;
+            enable_mask.loadAligned(&this->count_.enabled.box_nums[num * Boxes16]);
+            popcnt16 |= enable_mask;
+
+            int min_index = -1;
+            uint32_t min_size = popcnt16.minpos16<BoxSize>(min_box_size, min_index);
+            this->count_.counts.box_nums[num] = (uint16_t)min_size;
+            if (min_index == -1) {
+                this->count_.indexs.box_nums[num] = (uint16_t)min_index;
+            }
+            else {
+                size_t box_index = num * Boxes16 + min_index;
+                this->count_.indexs.box_nums[num] = (uint16_t)box_index;
+                min_box_index = (uint32_t)box_index;
+            }
+        }
+        this->count_.total.min_literal_size[3] = (uint16_t)min_box_size;
+        this->count_.total.min_literal_index[3] = (uint16_t)min_box_index;
+
+        int min_literal_type;
+
+        BitVec16x16 min_literal;
+        min_literal.loadAligned(&this->count_.total.min_literal_size[0]);
+        uint32_t min_literal_size = min_literal.minpos16_and_index<4>(min_literal_type);
+        uint32_t min_literal_index = min_literal_type * uint32_t(BoardSize16) +
+                                     this->count_.total.min_literal_index[min_literal_type];
+
+        out_min_literal_index = min_literal_index;
+        return min_literal_size;
+    }
+
+public:
+    bool solve(Board & board, size_t empties, uint32_t min_literal_size, uint32_t min_literal_index) {
+        if (empties == 0) {
+            if (kSearchMode > SearchMode::OneAnswer) {
+                this->answers_.push_back(board);
+                if (kSearchMode == SearchMode::MoreThanOneAnswer) {
+                    if (this->answers_.size() > 1)
+                        return true;
+                }
+            }
+            else {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    bool solve(Board & board) {
+        this->init_board(board);
+        bool success = this->solve(board, this->empties_,
+                                   this->min_info_.literal_size,
+                                   this->min_info_.literal_index);
+        return success;
+    }
+
+    void display_board(Board & board) {
+        SudokuTy::display_board(board, true);
+    }
+
+    void display_result(Board & board, double elapsed_time,
+                        bool print_answer = true,
+                        bool print_all_answers = true) {
+        if (print_answer) {
+            if (kSearchMode > SearchMode::OneAnswer)
+                SudokuTy::display_boards(this->answers_);
+            else
+                SudokuTy::display_board(board);
+        }
+        printf("elapsed time: %0.3f ms, recur_counter: %" PRIuPTR "\n\n"
+                "num_guesses: %" PRIuPTR ", num_failed_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
+                "guess %% = %0.1f %%, failed_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
+                elapsed_time, solver_type::get_total_search_counter(),
+                solver_type::get_num_guesses(),
+                solver_type::get_num_failed_return(),
+                solver_type::get_num_unique_candidate(),
+                solver_type::get_guess_percent(),
+                solver_type::get_failed_return_percent(),
+                solver_type::get_unique_candidate_percent());
     }
 };
+
+template <typename SudokuTy>
+bool Solver<SudokuTy>::mask_is_inited = false;
+
+template <typename SudokuTy>
+std::vector<typename Solver<SudokuTy>::neighbor_boxes_t>
+Solver<SudokuTy>::neighbor_boxes;
+
+template <typename SudokuTy>
+alignas(32)
+PackedBitSet2D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::Rows16 * Solver<SudokuTy>::Cols16>
+Solver<SudokuTy>::neighbor_cells_mask;
+
+template <typename SudokuTy>
+alignas(32)
+PackedBitSet2D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::Boxes16 * Solver<SudokuTy>::BoxSize16>
+Solver<SudokuTy>::neighbor_boxes_mask;
+
+template <typename SudokuTy>
+alignas(32)
+PackedBitSet3D<Solver<SudokuTy>::Boxes, Solver<SudokuTy>::BoxSize16, Solver<SudokuTy>::Numbers16>
+Solver<SudokuTy>::box_cell_neighbors_mask[Solver<SudokuTy>::BoardSize][Solver<SudokuTy>::Numbers];
+
+template <typename SudokuTy>
+alignas(32)
+PackedBitSet3D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::Rows16, Solver<SudokuTy>::Cols16>
+Solver<SudokuTy>::row_neighbors_mask;
+
+template <typename SudokuTy>
+alignas(32)
+PackedBitSet3D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::Cols16, Solver<SudokuTy>::Rows16>
+Solver<SudokuTy>::col_neighbors_mask;
+
+template <typename SudokuTy>
+alignas(32)
+PackedBitSet3D<Solver<SudokuTy>::BoardSize, Solver<SudokuTy>::Boxes16, Solver<SudokuTy>::BoxSize16>
+Solver<SudokuTy>::box_num_neighbors_mask;
 
 template <typename SudokuTy>
 size_t Solver<SudokuTy>::num_guesses = 0;
