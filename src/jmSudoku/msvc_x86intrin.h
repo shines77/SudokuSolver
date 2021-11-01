@@ -30,6 +30,12 @@
 // See: https://sites.uclouvain.be/SystInfo/usr/include/x86intrin.h.html
 //
 
+//
+// Intel Intrinsics Guide (SIMD)
+//
+// https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.htm
+//
+
 #ifdef __MMX__
 #include <mmintrin.h>
 #endif

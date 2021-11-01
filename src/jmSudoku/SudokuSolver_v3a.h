@@ -126,11 +126,11 @@ public:
     static const size_t ColLiteralLast   = LiteralLast;
 #endif // (V3A_LITERAL_ORDER_MODE == 0)
 
-    static const size_t kAllRowsBits = sudoku_t::kAllRowsBits;
-    static const size_t kAllColsBits = sudoku_t::kAllColsBits;
-    static const size_t kAllBoxesBits = sudoku_t::kAllBoxesBits;
-    static const size_t kAllBoxSizeBits = sudoku_t::kAllBoxSizeBits;
-    static const size_t kAllNumbersBits = sudoku_t::kAllNumbersBits;
+    static const size_t kAllRowBits = sudoku_t::kAllRowBits;
+    static const size_t kAllColBits = sudoku_t::kAllColBits;
+    static const size_t kAllBoxBits = sudoku_t::kAllBoxBits;
+    static const size_t kAllBoxCellBits = sudoku_t::kAllBoxCellBits;
+    static const size_t kAllNumberBits = sudoku_t::kAllNumberBits;
 
     static const bool kAllDimIsSame = sudoku_t::kAllDimIsSame;
 
@@ -211,10 +211,10 @@ private:
 
         this->num_cells_.set();
 
-        this->box_cell_nums_.fill(kAllNumbersBits);
-        this->row_nums_.fill(kAllColsBits);
-        this->col_nums_.fill(kAllRowsBits);
-        this->box_nums_.fill(kAllBoxSizeBits);
+        this->box_cell_nums_.fill(kAllNumberBits);
+        this->row_nums_.fill(kAllColBits);
+        this->col_nums_.fill(kAllRowBits);
+        this->box_nums_.fill(kAllBoxCellBits);
 
         num_guesses = 0;
         num_unique_candidate = 0;

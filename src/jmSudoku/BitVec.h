@@ -39,6 +39,12 @@
             _mm256_testc_si256((val), _mm256_cmpeq_epi32((val), (val)))
 #endif // _MSC_VER
 
+//
+// Intel Intrinsics Guide (SIMD)
+//
+// https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.htm
+//
+
 namespace jmSudoku {
 
 union alignas(16) IntVec128 {

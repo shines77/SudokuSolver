@@ -161,11 +161,11 @@ public:
     static const size_t ColLiteralLast   = LiteralLast;
 #endif // (V3B_LITERAL_ORDER_MODE == 0)
 
-    static const size_t kAllRowsBits = sudoku_t::kAllRowsBits;
-    static const size_t kAllColsBits = sudoku_t::kAllColsBits;
-    static const size_t kAllBoxesBits = sudoku_t::kAllBoxesBits;
-    static const size_t kAllBoxSizeBits = sudoku_t::kAllBoxSizeBits;
-    static const size_t kAllNumbersBits = sudoku_t::kAllNumbersBits;
+    static const size_t kAllRowBits = sudoku_t::kAllRowBits;
+    static const size_t kAllColBits = sudoku_t::kAllColBits;
+    static const size_t kAllBoxBits = sudoku_t::kAllBoxBits;
+    static const size_t kAllBoxCellBits = sudoku_t::kAllBoxCellBits;
+    static const size_t kAllNumberBits = sudoku_t::kAllNumberBits;
 
     static const bool kAllDimIsSame = sudoku_t::kAllDimIsSame;
 
@@ -415,16 +415,16 @@ private:
 
 #if defined(WIN64) || defined(_WIN64) || defined(_M_X64) || defined(_M_AMD64) \
  || defined(_M_IA64) || defined(__amd64__) || defined(__x86_64__)
-        size_t kBoxSize64 = kAllBoxSizeBits | (kAllBoxSizeBits << 16U) | (kAllBoxSizeBits << 32U) | (kAllBoxSizeBits << 48U);
+        size_t kBoxSize64 = kAllBoxCellBits | (kAllBoxCellBits << 16U) | (kAllBoxCellBits << 32U) | (kAllBoxCellBits << 48U);
 #else
-        size_t kBoxSize64 = kAllBoxSizeBits | (kAllBoxSizeBits << 16U);
+        size_t kBoxSize64 = kAllBoxCellBits | (kAllBoxCellBits << 16U);
 #endif
         this->num_cells_.fill(kBoxSize64);
 
-        this->box_cell_nums_.fill(kAllNumbersBits);
-        this->row_num_cols_.fill(kAllColsBits);
-        this->col_num_rows_.fill(kAllRowsBits);
-        this->box_num_cells_.fill(kAllBoxSizeBits);
+        this->box_cell_nums_.fill(kAllNumberBits);
+        this->row_num_cols_.fill(kAllColBits);
+        this->col_num_rows_.fill(kAllRowBits);
+        this->box_num_cells_.fill(kAllBoxCellBits);
 
         num_guesses = 0;
         num_unique_candidate = 0;

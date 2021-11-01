@@ -85,7 +85,9 @@ public:
     static const size_t BoardSize = sudoku_t::BoardSize;
     static const size_t TotalSize = sudoku_t::TotalSize;
     static const size_t Neighbors = sudoku_t::Neighbors;
+    static const size_t MaxConfig = 6;
 
+    static const size_t Config8 = AlignedTo<MaxConfig, 8>::value;
     static const size_t Rows16 = AlignedTo<Rows, 16>::value;
     static const size_t Cols16 = AlignedTo<Cols, 16>::value;
     static const size_t Numbers16 = AlignedTo<Numbers, 16>::value;
@@ -134,11 +136,13 @@ public:
     static const size_t ColLiteralLast   = LiteralLast;
 #endif // (V4_LITERAL_ORDER_MODE == 0)
 
-    static const size_t kAllRowsBits = sudoku_t::kAllRowsBits;
-    static const size_t kAllColsBits = sudoku_t::kAllColsBits;
-    static const size_t kAllBoxesBits = sudoku_t::kAllBoxesBits;
-    static const size_t kAllBoxSizeBits = sudoku_t::kAllBoxSizeBits;
-    static const size_t kAllNumbersBits = sudoku_t::kAllNumbersBits;
+    static const size_t kAllRowBits = sudoku_t::kAllRowBits;
+    static const size_t kAllColBits = sudoku_t::kAllColBits;
+    static const size_t kAllBoxBits = sudoku_t::kAllBoxBits;
+    static const size_t kAllBoxCellBits = sudoku_t::kAllBoxCellBits;
+    static const size_t kAllNumberBits = sudoku_t::kAllNumberBits;
+
+    static const size_t kDisableNumberMask = 0x8000U;
 
     static const bool kAllDimIsSame = sudoku_t::kAllDimIsSame;
 
@@ -146,7 +150,7 @@ public:
     static const uint32_t kLiteralCntThreshold2 = 0;
 
 private:
-#if (V3_LITERAL_ORDER_MODE == 0)
+#if (V4_LITERAL_ORDER_MODE == 0)
     enum LiteralType {
         CellNums,
         RowNums,
@@ -162,17 +166,45 @@ private:
         ColNums,
         MaxLiteralType
     };
-#endif // (V3_LITERAL_ORDER_MODE == 0)
+#endif // (V4_LITERAL_ORDER_MODE == 0)
 
 private:
 
 #pragma pack(push, 1)
 
-    struct State {
+    struct BandConfigure {
+        alignas(32) PackedBitSet2D<Config8, Numbers16> config;          // Band[config][num]
+        alignas(16) PackedBitSet2D<Config8, Numbers16> exclude;         // Band[config][num]
+    };
+
+    struct Box {
+        alignas(32) PackedBitSet2D<BoxSize16, Numbers16> nums;          // Boxes[cell][num]
+    };
+
+    struct Row {
+        alignas(32) PackedBitSet2D<Rows16, Cols16> cols;                // Number[row][col]
+    };
+
+    struct Col {
+        alignas(32) PackedBitSet2D<Rows16, Cols16> rows;                // Number[col][row]
+    };
+
+    struct BoxCell {
+        alignas(32) PackedBitSet2D<Boxes16, BoxSize16> cells;           // Number[box][cell]
+    };
+
+    struct InitState {
         alignas(32) PackedBitSet3D<Boxes, BoxSize16, Numbers16>   box_cell_nums;    // [box][cell][num]
         alignas(32) PackedBitSet3D<Numbers, Rows16, Cols16>       num_row_cols;     // [num][row][col]
         alignas(32) PackedBitSet3D<Numbers, Cols16, Rows16>       num_col_rows;     // [num][col][row]
         alignas(32) PackedBitSet3D<Numbers, Boxes16, BoxSize16>   num_box_cells;    // [num][box][cell]
+    };
+
+    struct State {
+        BandConfigure h_band[BoxCountX];
+        BandConfigure v_band[BoxCountY];
+
+        alignas(32) PackedBitSet3D<Boxes, BoxSize16, Numbers16>   box_cell_nums;    // [box][cell][num]
     };
 
     struct Count {
@@ -181,17 +213,17 @@ private:
         alignas(16) uint8_t num_cols[Numbers][Cols16];
     };
 
-    struct LiteralInfo {
-        uint32_t literal_index;
-        uint32_t literal_size;
-    };
-
     union literal_count_t {
         struct {
             uint8_t count:7;
             uint8_t enable:1;
         };
         uint8_t value;
+    };
+
+    struct LiteralInfo {
+        uint32_t literal_index;
+        uint32_t literal_size;
     };
 
 #pragma pack(pop)
@@ -218,6 +250,7 @@ private:
     typedef NeighborBoxes<BoxCountX, BoxCountY>     neighbor_boxes_t;
     typedef HVNeighborBoxes<BoxCountX, BoxCountY>   hv_neighbor_boxes_t;
 
+    InitState       init_state_;
     State           state_;
     Count           count_;
     LiteralInfo     min_info_;
@@ -431,64 +464,15 @@ private:
         box_num_neighbors_mask.flip();
     }
 
-
-    void init_board(Board & board) {
-        this->state_.box_cell_nums.fill(kAllNumbersBits);
-        this->state_.num_row_cols.fill(kAllColsBits);
-        this->state_.num_col_rows.fill(kAllRowsBits);
-        this->state_.num_box_cells.fill(kAllBoxSizeBits);
-
-        num_guesses = 0;
-        num_unique_candidate = 0;
-        num_failed_return = 0;
-        if (kSearchMode > SEARCH_MODE_ONE_ANSWER) {
-            this->answers_.clear();
-        }
-
-        size_t empties = this->calc_empties(board);
-        this->empties_ = empties;
-
-        size_t pos = 0;
-        for (size_t row = 0; row < Rows; row++) {
-            size_t box_y = (row / BoxCellsY) * BoxCountX;
-            size_t cell_y = (row % BoxCellsY) * BoxCellsX;
-            for (size_t col = 0; col < Cols; col++) {
-                unsigned char val = board.cells[pos];
-                if (val != '.') {
-                    size_t box_x = col / BoxCellsX;
-                    size_t box = box_y + box_x;
-                    size_t cell_x = col % BoxCellsX;
-                    size_t cell = cell_y + cell_x;
-                    size_t num = val - '1';
-
-                    this->fillNum(this->state_, pos, row, col, box, cell, num);
-                    this->updateNeighborCellsEffect(this->state_, pos, box, num);
-                }
-                pos++;
-            }
-        }
-        assert(pos == BoardSize);
-
-        uint32_t min_literal_index;
-        uint32_t min_literal_size = this->count_all_literal_size(min_literal_index);
-        this->min_info_.literal_size = min_literal_size;
-        this->min_info_.literal_index = min_literal_index;
-    }
-
-    inline void fillNum(State & state, size_t pos, size_t row, size_t col,
-                        size_t box, size_t cell, size_t num) {
+    inline void initFillNum(InitState & state, size_t pos, size_t row, size_t col,
+                            size_t box, size_t cell, size_t num) {
         assert(state.box_cell_nums[box][cell].test(num));
         assert(state.num_row_cols[num][row].test(col));
         assert(state.num_col_rows[num][col].test(row));
         assert(state.num_box_cells[num][box].test(cell));
 
         PackedBitSet<Numbers16> cell_num_bits = state.box_cell_nums[box][cell];
-        //state.box_cell_nums[box][cell].fill(kAllNumbersBits);
-        state.box_cell_nums[box][cell].reset();
-
-        //state.row_num_cols[num][row].reset(col);
-        //state.col_num_rows[num][col].reset(row);
-        //state.box_num_cells[num][box].reset(cell);
+        state.box_cell_nums[box][cell].fill(kDisableNumberMask);
 
         size_t box_pos = box * BoxSize16 + cell;
         size_t row_idx = num * Rows16 + row;
@@ -510,17 +494,17 @@ private:
             size_t cur_num = BitUtils::bsf(num_bit);
             num_bits ^= num_bit;
 
-            assert(this->state_.num_row_cols[cur_num][row].test(col));
-            assert(this->state_.num_col_rows[cur_num][col].test(row));
-            assert(this->state_.num_box_cells[cur_num][box].test(cell));
+            assert(state.num_row_cols[cur_num][row].test(col));
+            assert(state.num_col_rows[cur_num][col].test(row));
+            assert(state.num_box_cells[cur_num][box].test(cell));
 
-            this->state_.num_row_cols[cur_num][row].reset(col);
-            this->state_.num_col_rows[cur_num][col].reset(row);
-            this->state_.num_box_cells[cur_num][box].reset(cell);
+            state.num_row_cols[cur_num][row].reset(col);
+            state.num_col_rows[cur_num][col].reset(row);
+            state.num_box_cells[cur_num][box].reset(cell);
         }
     }
 
-    inline void updateNeighborCellsEffect(State & state, size_t fill_pos, size_t box, size_t num) {
+    inline void initUpdateNeighborCells(InitState & state, size_t fill_pos, size_t box, size_t num) {
         const neighbor_boxes_t & neighborBoxes = neighbor_boxes[box];
         const PackedBitSet3D<Boxes, BoxSize16, Numbers16> & neighbors_mask
             = box_cell_neighbors_mask[fill_pos][num];
@@ -528,7 +512,6 @@ private:
             size_t box_idx = neighborBoxes.boxes[i];
             state.box_cell_nums[box_idx] &= neighbors_mask[box_idx];
         }
-        //state.box_cell_nums[box] &= neighbors_mask[box];
 
         state.num_row_cols[num] &= row_neighbors_mask[fill_pos];
         state.num_col_rows[num] &= col_neighbors_mask[fill_pos];
@@ -676,6 +659,62 @@ private:
 #else
         return 0;
 #endif
+    }
+
+    void init_board(Board & board) {
+        this->init_state_.box_cell_nums.fill(kAllNumberBits);
+        this->init_state_.num_row_cols.fill(kAllColBits);
+        this->init_state_.num_col_rows.fill(kAllRowBits);
+        this->init_state_.num_box_cells.fill(kAllBoxCellBits);
+
+        std::memset((void *)&this->count_.num_boxes[0], 0, sizeof(this->count_.num_boxes));
+        std::memset((void *)&this->count_.num_rows[0], 0, sizeof(this->count_.num_rows));
+        std::memset((void *)&this->count_.num_cols[0], 0, sizeof(this->count_.num_cols));
+
+        for (size_t num = 0; num < Numbers; num++) {
+            for (size_t box = 0; box < Boxes; box++) {
+                this->count_.num_boxes[num][box] = Numbers;
+            }
+            for (size_t row = 0; row < Rows; row++) {
+                this->count_.num_rows[num][row] = Numbers;
+            }
+            for (size_t col = 0; col < Cols; col++) {
+                this->count_.num_cols[num][col] = Numbers;
+            }
+        }
+
+        if (kSearchMode > SEARCH_MODE_ONE_ANSWER) {
+            this->answers_.clear();
+        }
+
+        size_t empties = this->calc_empties(board);
+        this->empties_ = empties;
+
+        size_t pos = 0;
+        for (size_t row = 0; row < Rows; row++) {
+            size_t box_y = (row / BoxCellsY) * BoxCountX;
+            size_t cell_y = (row % BoxCellsY) * BoxCellsX;
+            for (size_t col = 0; col < Cols; col++) {
+                unsigned char val = board.cells[pos];
+                if (val != '.') {
+                    size_t box_x = col / BoxCellsX;
+                    size_t box = box_y + box_x;
+                    size_t cell_x = col % BoxCellsX;
+                    size_t cell = cell_y + cell_x;
+                    size_t num = val - '1';
+
+                    this->initFillNum(this->init_state_, pos, row, col, box, cell, num);
+                    this->initUpdateNeighborCells(this->init_state_, pos, box, num);
+                }
+                pos++;
+            }
+        }
+        assert(pos == BoardSize);
+
+        uint32_t min_literal_index;
+        uint32_t min_literal_size = this->count_all_literal_size(min_literal_index);
+        this->min_info_.literal_size = min_literal_size;
+        this->min_info_.literal_index = min_literal_index;
     }
 
 public:

@@ -429,11 +429,11 @@ struct BasicSudoku {
     static const size_t BoxLiteralFirst  = ColLiteralFirst + TotalColLiterals;
     static const size_t LiteralLast      = BoxLiteralFirst + TotalBoxLiterals;
 
-    static const size_t kAllRowsBits = (size_t(1) << Rows) - 1;
-    static const size_t kAllColsBits = (size_t(1) << Cols) - 1;
-    static const size_t kAllBoxesBits = (size_t(1) << Boxes) - 1;
-    static const size_t kAllBoxSizeBits = (size_t(1) << BoxSize) - 1;
-    static const size_t kAllNumbersBits = (size_t(1) << Numbers) - 1;
+    static const size_t kAllRowBits = (size_t(1) << Rows) - 1;
+    static const size_t kAllColBits = (size_t(1) << Cols) - 1;
+    static const size_t kAllBoxBits = (size_t(1) << Boxes) - 1;
+    static const size_t kAllBoxCellBits = (size_t(1) << BoxSize) - 1;
+    static const size_t kAllNumberBits = (size_t(1) << Numbers) - 1;
 
     static const bool kAllDimIsSame = ((Numbers == BoxSize) && (Rows == Cols) && (Numbers == Rows));
 
