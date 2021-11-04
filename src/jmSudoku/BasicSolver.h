@@ -101,9 +101,9 @@ public:
     }
 
     template <size_t nSearchMode = SearchMode::OneAnswer>
-    void display_result_impl(Board & board, double elapsed_time,
-                             bool print_answer,
-                             bool print_all_answers) {
+    void display_result(Board & board, double elapsed_time,
+                        bool print_answer,
+                        bool print_all_answers) {
         if (print_answer) {
             if (nSearchMode == SearchMode::OneAnswer)
                 sudoku_t::display_board(board);
