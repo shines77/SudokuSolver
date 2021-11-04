@@ -215,9 +215,6 @@ private:
         this->col_nums_.set();
         this->box_nums_.set();
 
-        num_guesses = 0;
-        basic_solver_t::num_unique_candidate = 0;
-        basic_solver_t::num_failed_return = 0;
         if (kSearchMode > SEARCH_MODE_ONE_ANSWER) {
             this->answers_.clear();
         }
@@ -1432,7 +1429,7 @@ public:
             if (min_literal_cnt == 1)
                 basic_solver_t::num_unique_candidate++;
             else
-                num_guesses++;
+                basic_solver_t::num_guesses++;
 
             bitset_type save_bits;
             size_t pos, row, col, box, cell, num;
@@ -1671,7 +1668,7 @@ public:
     void display_result(Board & board, double elapsed_time,
                         bool print_answer = true,
                         bool print_all_answers = true) {
-        basic_solver_t::display_result<kSearchMode>(board, elapsed_time, print_answer, print_all_answers);
+        basic_solver_t::display_result_impl<>(board, elapsed_time, print_answer, print_all_answers);
     }
 };
 

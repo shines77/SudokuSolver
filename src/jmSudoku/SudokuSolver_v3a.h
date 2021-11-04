@@ -1443,7 +1443,7 @@ public:
         assert(min_literal_id < TotalLiterals);
         if (min_literal_cnt > 0) {
             if (min_literal_cnt == 1)
-                basic_solver_t::basic_solver_t::num_unique_candidate++;
+                basic_solver_t::num_unique_candidate++;
             else
                 basic_solver_t::num_guesses++;
 
@@ -1667,7 +1667,7 @@ public:
             }
         }
         else {
-            basic_solver_t::basic_solver_t::num_failed_return++;
+            basic_solver_t::num_failed_return++;
         }
 
         return false;
@@ -1682,7 +1682,7 @@ public:
     void display_result(Board & board, double elapsed_time,
                         bool print_answer = true,
                         bool print_all_answers = true) {
-        basic_solver_t::display_result<kSearchMode>(board, elapsed_time, print_answer, print_all_answers);
+        basic_solver_t::display_result_impl<>(board, elapsed_time, print_answer, print_all_answers);
     }
 };
 

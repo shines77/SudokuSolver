@@ -22,7 +22,7 @@ template <typename SudokuTy>
 class BasicSolver {
 public:
     typedef SudokuTy                            sudoku_t;
-    typedef BasicSolver<SudokuTy>               basic_solver_t;
+    typedef BasicSolver<SudokuTy>               this_type;
     typedef typename sudoku_t::board_type       Board;
 
     static const size_t kAlignment = sudoku_t::kAlignment;
@@ -57,24 +57,24 @@ public:
     }
     ~BasicSolver() {}
 
-    static size_t get_num_guesses() { return basic_solver_t::num_guesses; }
-    static size_t get_num_unique_candidate() { return basic_solver_t::num_unique_candidate; }
-    static size_t get_num_failed_return() { return basic_solver_t::num_failed_return; }
+    static size_t get_num_guesses() { return this_type::num_guesses; }
+    static size_t get_num_unique_candidate() { return this_type::num_unique_candidate; }
+    static size_t get_num_failed_return() { return this_type::num_failed_return; }
 
     static size_t get_total_search_counter() {
-        return (basic_solver_t::num_guesses + basic_solver_t::num_unique_candidate + basic_solver_t::num_failed_return);
+        return (this_type::num_guesses + this_type::num_unique_candidate + this_type::num_failed_return);
     }
 
     static double get_guess_percent() {
-        return calc_percent(basic_solver_t::num_guesses, basic_solver_t::get_total_search_counter());
+        return calc_percent(this_type::num_guesses, this_type::get_total_search_counter());
     }
 
     static double get_failed_return_percent() {
-        return calc_percent(basic_solver_t::num_failed_return, basic_solver_t::get_total_search_counter());
+        return calc_percent(this_type::num_failed_return, this_type::get_total_search_counter());
     }
 
     static double get_unique_candidate_percent() {
-        return calc_percent(basic_solver_t::num_unique_candidate, basic_solver_t::get_total_search_counter());
+        return calc_percent(this_type::num_unique_candidate, this_type::get_total_search_counter());
     }
 
 private:
@@ -101,9 +101,9 @@ public:
     }
 
     template <size_t nSearchMode = SearchMode::OneAnswer>
-    void display_result(Board & board, double elapsed_time,
-                        bool print_answer = true,
-                        bool print_all_answers = true) {
+    void display_result_impl(Board & board, double elapsed_time,
+                             bool print_answer,
+                             bool print_all_answers) {
         if (print_answer) {
             if (nSearchMode == SearchMode::OneAnswer)
                 sudoku_t::display_board(board);
@@ -114,13 +114,13 @@ public:
                "num_guesses: %" PRIuPTR ", num_failed_return: %" PRIuPTR ", num_unique_candidate: %" PRIuPTR "\n"
                "guess %% = %0.1f %%, failed_return %% = %0.1f %%, unique_candidate %% = %0.1f %%\n\n",
                 elapsed_time,
-                basic_solver_t::get_total_search_counter(),
-                basic_solver_t::get_num_guesses(),
-                basic_solver_t::get_num_failed_return(),
-                basic_solver_t::get_num_unique_candidate(),
-                basic_solver_t::get_guess_percent(),
-                basic_solver_t::get_failed_return_percent(),
-                basic_solver_t::get_unique_candidate_percent());
+                this_type::get_total_search_counter(),
+                this_type::get_num_guesses(),
+                this_type::get_num_failed_return(),
+                this_type::get_num_unique_candidate(),
+                this_type::get_guess_percent(),
+                this_type::get_failed_return_percent(),
+                this_type::get_unique_candidate_percent());
     }
 };
 
