@@ -687,7 +687,7 @@ private:
             this->answers_.clear();
         }
 
-        size_t empties = this->calc_empties(board);
+        size_t empties = this->basic_solver_t::calc_empties(board);
         this->empties_ = empties;
 
         size_t pos = 0;

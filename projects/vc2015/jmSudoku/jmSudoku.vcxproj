@@ -185,7 +185,7 @@
     <ClInclude Include="..\..\..\src\jmSudoku\msvc_x86intrin.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\src\jmSudoku\jmSudokuMain.cpp" />
+    <ClCompile Include="..\..\..\src\jmSudoku\SudokuMain.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

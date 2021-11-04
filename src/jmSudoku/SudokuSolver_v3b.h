@@ -426,14 +426,14 @@ private:
         this->col_num_rows_.fill(kAllRowBits);
         this->box_num_cells_.fill(kAllBoxCellBits);
 
-        num_guesses = 0;
-        num_unique_candidate = 0;
-        num_failed_return = 0;
+        basic_solver_t::num_guesses = 0;
+        basic_solver_t::num_unique_candidate = 0;
+        basic_solver_t::num_failed_return = 0;
         if (kSearchMode > SEARCH_MODE_ONE_ANSWER) {
             this->answers_.clear();
         }
 
-        size_t empties = calc_empties(board);
+        size_t empties = basic_solver_t::calc_empties(board);
         this->empties_ = empties;
 
         size_t pos = 0;
@@ -1650,9 +1650,9 @@ public:
         assert(min_literal_id < TotalLiterals);
         if (min_literal_cnt > 0) {
             if (min_literal_cnt == 1)
-                num_unique_candidate++;
+                basic_solver_t::num_unique_candidate++;
             else
-                num_guesses++;
+                basic_solver_t::num_guesses++;
 
             PackedBitSet<Numbers16> save_bits;
             PackedBitSet<BoardSize16> save_effect_cells;
@@ -1874,7 +1874,7 @@ public:
             }
         }
         else {
-            num_failed_return++;
+            basic_solver_t::num_failed_return++;
         }
 
         return false;

@@ -216,14 +216,11 @@ private:
         this->col_nums_.fill(kAllRowBits);
         this->box_nums_.fill(kAllBoxCellBits);
 
-        num_guesses = 0;
-        num_unique_candidate = 0;
-        num_failed_return = 0;
         if (kSearchMode > SEARCH_MODE_ONE_ANSWER) {
             this->answers_.clear();
         }
 
-        size_t empties = calc_empties(board);
+        size_t empties = basic_solver_t::calc_empties(board);
         this->empties_ = empties;
 
         BitMask save_effect_cells;
@@ -1446,9 +1443,9 @@ public:
         assert(min_literal_id < TotalLiterals);
         if (min_literal_cnt > 0) {
             if (min_literal_cnt == 1)
-                num_unique_candidate++;
+                basic_solver_t::basic_solver_t::num_unique_candidate++;
             else
-                num_guesses++;
+                basic_solver_t::num_guesses++;
 
             bitset_type save_bits;
             BitMask save_effect_cells;
@@ -1670,7 +1667,7 @@ public:
             }
         }
         else {
-            num_failed_return++;
+            basic_solver_t::basic_solver_t::num_failed_return++;
         }
 
         return false;

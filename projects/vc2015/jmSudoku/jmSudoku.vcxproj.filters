@@ -81,7 +81,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\src\jmSudoku\jmSudokuMain.cpp">
+    <ClCompile Include="..\..\..\src\jmSudoku\SudokuMain.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>
