@@ -1682,7 +1682,7 @@ public:
     void display_result(Board & board, double elapsed_time,
                         bool print_answer = true,
                         bool print_all_answers = true) {
-        template basic_solver_t::display_result<kSearchMode>(board, elapsed_time, print_answer, print_all_answers);
+        basic_solver_t::template display_result<kSearchMode>(board, elapsed_time, print_answer, print_all_answers);
     }
 };
 
