@@ -2894,6 +2894,180 @@ private:
 #endif
 
 public:
+    bool do_unique_literal(Board & board, uint32_t & min_literal_size, uint32_t & min_literal_index) {
+        bool success = true;
+        uint32_t min_literal_id = min_literal_index;
+        {
+            basic_solver_t::num_unique_candidate++;
+
+#if V3_ENABLE_OLD_ALGORITHM
+            PackedBitSet<Numbers16> save_bits;
+            PackedBitSet<BoardSize16> save_effect_cells;
+#endif
+            PackedBitSet<Numbers16> save_num_bits;
+            RecoverState recover_state;
+            size_t pos, row, col, box, cell, num;
+            uint32_t next_min_literal_size = 255, next_min_literal_index = (uint32_t)-1;
+
+            uint32_t literal_type = min_literal_id / (uint32_t)BoardSize16;
+            assert(literal_type < LiteralType::MaxLiteralType);
+            switch (literal_type) {
+                case LiteralType::CellNums:
+                {
+                    size_t box_pos = (size_t)min_literal_id - CellLiteralFirst;
+                    assert(min_literal_id >= CellLiteralFirst);
+                    assert(box_pos < Boxes * BoxSize16);
+
+                    const BoxesInfo & boxesInfo = sudoku_t::boxes_info16[box_pos];
+                    row = boxesInfo.row;
+                    col = boxesInfo.col;
+                    box = boxesInfo.box;
+                    cell = boxesInfo.cell;
+                    pos = boxesInfo.pos;
+
+                    size_t num_bits = this->state_.box_cell_nums[box][cell].to_ulong();
+                    if (num_bits != 0) {
+                        size_t num_bit = BitUtils::ls1b(num_bits);
+                        num = BitUtils::bsf(num_bit);
+                        num_bits ^= num_bit;
+
+                        doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
+                        updateNeighborCellsEffect(recover_state, pos, box, num);
+
+                        board.cells[pos] = (char)(num + '1');
+
+                        next_min_literal_size = count_delta_literal_size(next_min_literal_index, recover_state, save_num_bits, box);
+                        //next_min_literal_size = count_all_literal_size(next_min_literal_index);
+                        assert(next_min_literal_size >= 0 && next_min_literal_size != 255);
+                        assert(next_min_literal_index >= 0 && next_min_literal_index != uint32_t(uint16_t(-1)));
+                    }
+
+                    min_literal_size = next_min_literal_size;
+                    min_literal_index = next_min_literal_index;
+
+                    break;
+                }
+
+                case LiteralType::RowNums:
+                {
+                    size_t literal = (size_t)min_literal_id - RowLiteralFirst;
+                    assert(min_literal_id >= RowLiteralFirst);
+                    assert(literal < Numbers * Rows16);
+                    num = literal / Rows16;
+                    row = literal % Rows16;
+
+                    size_t col_bits = this->state_.row_num_cols[num][row].to_ulong();
+                    if (col_bits != 0) {
+                        size_t col_bit = BitUtils::ls1b(col_bits);
+                        col = BitUtils::bsf(col_bits);
+                        col_bits ^= col_bit;
+                        pos = row * Cols + col;
+
+                        const CellInfo & cellInfo = sudoku_t::cell_info[pos];
+                        box = cellInfo.box;
+                        cell = cellInfo.cell;
+
+                        doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
+                        updateNeighborCellsEffect(recover_state, pos, box, num);
+
+                        board.cells[pos] = (char)(num + '1');
+
+                        next_min_literal_size = count_delta_literal_size(next_min_literal_index, recover_state, save_num_bits, box);
+                        //next_min_literal_size = count_all_literal_size(next_min_literal_index);
+                        assert(next_min_literal_size >= 0 && next_min_literal_size != 255);
+                        assert(next_min_literal_index >= 0 && next_min_literal_index != uint32_t(uint16_t(-1)));
+                    }
+
+                    min_literal_size = next_min_literal_size;
+                    min_literal_index = next_min_literal_index;
+
+                    break;
+                }
+
+                case LiteralType::ColNums:
+                {
+                    size_t literal = (size_t)min_literal_id - ColLiteralFirst;
+                    assert(min_literal_id >= ColLiteralFirst);
+                    assert(literal < Numbers * Cols16);
+                    num = literal / Cols16;
+                    col = literal % Cols16;
+
+                    size_t row_bits = this->state_.col_num_rows[num][col].to_ulong();
+                    if (row_bits != 0) {
+                        size_t row_bit = BitUtils::ls1b(row_bits);
+                        row = BitUtils::bsf(row_bits);
+                        row_bits ^= row_bit;
+                        pos = row * Cols + col;
+
+                        const CellInfo & cellInfo = sudoku_t::cell_info[pos];
+                        box = cellInfo.box;
+                        cell = cellInfo.cell;
+
+                        doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
+                        updateNeighborCellsEffect(recover_state, pos, box, num);
+
+                        board.cells[pos] = (char)(num + '1');
+
+                        next_min_literal_size = count_delta_literal_size(next_min_literal_index, recover_state, save_num_bits, box);
+                        //next_min_literal_size = count_all_literal_size(next_min_literal_index);
+                        assert(next_min_literal_size >= 0 && next_min_literal_size != 255);
+                        assert(next_min_literal_index >= 0 && next_min_literal_index != uint32_t(uint16_t(-1)));
+                    }
+
+                    min_literal_size = next_min_literal_size;
+                    min_literal_index = next_min_literal_index;
+
+                    break;
+                }
+
+               case LiteralType::BoxNums:
+                {
+                    size_t literal = (size_t)min_literal_id - BoxLiteralFirst;
+                    assert(min_literal_id >= BoxLiteralFirst);
+                    assert(literal < Numbers * Boxes16);
+                    num = literal / Boxes16;
+                    box = literal % Boxes16;
+
+                    size_t cell_bits = this->state_.box_num_cells[num][box].to_ulong();
+                    if (cell_bits != 0) {
+                        size_t cell_bit = BitUtils::ls1b(cell_bits);
+                        cell = BitUtils::bsf(cell_bits);
+                        cell_bits ^= cell_bit;
+
+                        const BoxesInfo & boxesInfo = sudoku_t::boxes_info16[box * BoxSize16 + cell];
+                        row = boxesInfo.row;
+                        col = boxesInfo.col;
+                        pos = boxesInfo.pos;
+
+                        doFillNum(pos, row, col, box, cell, num, save_num_bits, recover_state);
+                        updateNeighborCellsEffect(recover_state, pos, box, num);
+
+                        board.cells[pos] = (char)(num + '1');
+
+                        next_min_literal_size = count_delta_literal_size(next_min_literal_index, recover_state, save_num_bits, box);
+                        //next_min_literal_size = count_all_literal_size(next_min_literal_index);
+                        assert(next_min_literal_size >= 0 && next_min_literal_size != 255);
+                        assert(next_min_literal_index >= 0 && next_min_literal_index != uint32_t(uint16_t(-1)));
+                    }
+
+                    min_literal_size = next_min_literal_size;
+                    min_literal_index = next_min_literal_index;
+
+                    break;
+                }
+
+                default:
+                    assert(false);
+                    min_literal_size = next_min_literal_size;
+                    min_literal_index = next_min_literal_index;
+                    success = false;
+                    break;
+            }
+        }
+
+        return success;
+    }
+
     bool solve(Board & board, size_t empties, uint32_t min_literal_size, uint32_t min_literal_index) {
         if (empties == 0) {
             if (kSearchMode > SearchMode::OneAnswer) {
@@ -3291,10 +3465,24 @@ public:
 
     bool solve(Board & board) {
         this->init_board(board);
+#if 1
         bool success = this->solve(board, this->empties_,
                                    this->count_.min_literal_size,
                                    this->count_.min_literal_index);
         return success;
+#else
+        size_t empties = basic_solver_t::calc_empties(board);
+        uint32_t min_literal_size = this->count_.min_literal_size;
+        uint32_t min_literal_index = this->count_.min_literal_index;
+        while (min_literal_size == 1) {
+            bool success = this->do_unique_literal(board, min_literal_size, min_literal_index);
+            empties--;
+            if (!success || empties == 0) {
+                break;
+            }
+        }
+        return (empties == 0);
+#endif
     }
 
     void display_result(Board & board, double elapsed_time,

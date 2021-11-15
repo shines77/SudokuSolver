@@ -246,6 +246,7 @@ void run_sudoku_test(const char * filename, const char * name)
     size_t total_no_guess = 0;
 
     size_t puzzleCount = 0;
+    size_t puzzleSolved = 0;
     double total_time = 0.0;
 
     std::ifstream ifs;
@@ -278,12 +279,14 @@ void run_sudoku_test(const char * filename, const char * name)
                             total_no_guess++;
                         }
 
-                        puzzleCount++;
-#ifndef NDEBUG
-                        if (puzzleCount > 100000)
-                            break;
-#endif
+                        puzzleSolved++;
                     }
+
+                    puzzleCount++;
+#ifndef NDEBUG
+                    if (puzzleCount > 1000)
+                        break;
+#endif
                 }
             }
             ifs.close();
@@ -299,8 +302,8 @@ void run_sudoku_test(const char * filename, const char * name)
     double guesses_percent = calc_percent(total_guesses, total_recur_counter);
     double no_guess_percent = calc_percent(total_no_guess, puzzleCount);
 
-    printf("Total puzzle count = %u, total_no_guess: %" PRIuPTR ", no_guess %% = %0.1f %%\n\n",
-           (uint32_t)puzzleCount, total_no_guess, no_guess_percent);
+    printf("Total puzzle count = %u, puzzle solved = %u, total_no_guess: %" PRIuPTR ", no_guess %% = %0.1f %%\n\n",
+           (uint32_t)puzzleCount, (uint32_t)puzzleSolved, total_no_guess, no_guess_percent);
     printf("Total elapsed time: %0.3f ms\n\n", total_time);
     printf("recur_counter: %" PRIuPTR "\n\n"
            "total_guesses: %" PRIuPTR ", total_failed_return: %" PRIuPTR ", total_unique_candidate: %" PRIuPTR "\n\n"
@@ -344,7 +347,7 @@ int main(int argc, char * argv[])
         }
     }
 
-    if (1)
+    if (0)
     {
         if (filename != nullptr) {
 #ifdef NDEBUG
@@ -358,6 +361,14 @@ int main(int argc, char * argv[])
             run_sudoku_test<v3a::Solver<Sudoku>>(filename, "dfs::v3a");
             run_sudoku_test<v3b::Solver<Sudoku>>(filename, "dfs::v3b");
             run_sudoku_test<v3e::Solver<Sudoku>>(filename, "dfs::v3e");
+            run_sudoku_test<v3::Solver<Sudoku>>(filename, "dfs::v3");
+        }
+    }
+    else
+    {
+        if (filename != nullptr) {
+            run_sudoku_test<v3a::Solver<Sudoku>>(filename, "dfs::v3a");
+            run_sudoku_test<v3b::Solver<Sudoku>>(filename, "dfs::v3b");
             run_sudoku_test<v3::Solver<Sudoku>>(filename, "dfs::v3");
         }
     }
