@@ -229,7 +229,7 @@ void run_a_testcase(size_t index)
     printf("------------------------------------------\n\n");
 }
 
-template <typename SudokuSolver>
+template <typename SudokuSolver, bool TestOutput = false>
 void run_sudoku_test(const char * filename, const char * name)
 {
     typedef typename SudokuSolver::basic_solver_t   BasicSolverTy;
@@ -249,8 +249,14 @@ void run_sudoku_test(const char * filename, const char * name)
     size_t puzzleSolved = 0;
     double total_time = 0.0;
 
+    BasicSolver<SudokuTy> basicSolver;
+
     std::ifstream ifs;
+    std::ofstream ofs;
     try {
+        if (TestOutput) {
+            ofs.open("noguess_output.txt", std::ios::out | std::ios::trunc);
+        }
         ifs.open(filename, std::ios::in);
         if (ifs.good()) {
             SudokuSolver solver;
@@ -287,9 +293,16 @@ void run_sudoku_test(const char * filename, const char * name)
                     if (puzzleCount > 1000)
                         break;
 #endif
+                    if (TestOutput) {
+                        ofs << "#" << puzzleCount << ", " << basicSolver.calc_empties(board)
+                            << " empties" << std::endl;
+                    }
                 }
             }
             ifs.close();
+        }
+        if (TestOutput) {
+            ofs.close();
         }
     }
     catch (std::exception & ex) {
@@ -369,7 +382,7 @@ int main(int argc, char * argv[])
         if (filename != nullptr) {
             run_sudoku_test<v3a::Solver<Sudoku>>(filename, "dfs::v3a");
             run_sudoku_test<v3b::Solver<Sudoku>>(filename, "dfs::v3b");
-            run_sudoku_test<v3::Solver<Sudoku>>(filename, "dfs::v3");
+            run_sudoku_test<v3::Solver<Sudoku>, true>(filename, "dfs::v3");
         }
     }
 

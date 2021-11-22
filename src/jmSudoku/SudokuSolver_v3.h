@@ -3465,7 +3465,7 @@ public:
 
     bool solve(Board & board) {
         this->init_board(board);
-#if 1
+#if 0
         bool success = this->solve(board, this->empties_,
                                    this->count_.min_literal_size,
                                    this->count_.min_literal_index);

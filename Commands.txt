@@ -2,11 +2,9 @@
 Windows:
 
 jmSudoku.exe ..\..\..\data\puzzles_17_clue_49151
-
 jmSudoku.exe ..\..\..\data\puzzles2_17_clue
 
 Linux:
 
 ./jmSudoku ./data/puzzles_17_clue_49151
-
 ./jmSudoku ./data/puzzles2_17_clue
